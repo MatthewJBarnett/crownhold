@@ -43,7 +43,7 @@ const Models = {
     const g = x.createRadialGradient(32, 84, 4, 32, 70, 60);
     g.addColorStop(0, 'rgba(255,255,220,1)'); g.addColorStop(0.25, 'rgba(255,200,80,0.95)'); g.addColorStop(0.55, 'rgba(255,110,20,0.55)'); g.addColorStop(1, 'rgba(200,40,0,0)');
     x.fillStyle = g; x.beginPath(); x.ellipse(32, 72, 30, 56, 0, 0, Math.PI * 2); x.fill();
-    const t = new THREE.CanvasTexture(c); this._flame = t; return t;
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; this._flame = t; return t;
   },
   flameSprite(scale = 1, color = 0xffffff) {
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.flameTexture(), color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
@@ -201,6 +201,15 @@ const Models = {
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
     const m = new THREE.Line(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false }));
     m.renderOrder = 3; return m;
+  },
+  breathCone(range) {
+    const geo = new THREE.ConeGeometry(range * 0.32, range, 18, 1, true);
+    geo.translate(0, -range / 2, 0); geo.rotateX(-Math.PI / 2);   // apex at the origin, base along +z
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xff7020, transparent: true, opacity: 0.28, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, map: this.flameTexture() }));
+    const core = new THREE.Mesh(new THREE.ConeGeometry(range * 0.12, range * 0.9, 12, 1, true).translate(0, -range * 0.45, 0).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffe080, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+    m.add(core); m.userData.core = core;
+    m.renderOrder = 6; m.visible = false;
+    return m;
   },
   missionObject(kind) {
     const g = new THREE.Group(), gold = this.mat(0xe8c060, { emissive: 0x604000, emissiveIntensity: 0.4 }), wood = this.mat(0x6a4a2a), stone = this.mat(0x7a7a72);

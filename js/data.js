@@ -499,7 +499,7 @@ DATA.mapTypes = {
   volcanic:  { zenith: 0x4a2a2a, label: 'Ashlands', desc: 'Black ash, a river of lava and molten pools; rock spires are the only cover.', rocks: [5, 8], forests: [0, 0], hills: 1.6, ruins: 10, decor: 'dead',
                palette: { grass: 0x3a3a3a, grass2: 0x5a5048, dry: 0x6a5a50, sky: 0x8a6a5a, water: 0xff6a10, waterGlow: 0xff3000, road: 0x4a4038, marsh: 0x3a3a30, leaves: [0x4a3a30, 0x5a4a3a, 0x3a2a20, 0x6a5a4a] } },
 };
-DATA.build = '2026-09-07 00:00';
+DATA.build = '2026-09-07 02:55';
 // experiments only: never listed in the hero menu, never unique, never bought. Immortal, splash attacks at range, very fast, abilities on a tenth of the cooldown
 DATA.testChampion = {
   key: 'champion', name: 'The Test Champion', title: 'of the Experiments', role: 'Testing',

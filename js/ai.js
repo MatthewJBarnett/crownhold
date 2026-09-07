@@ -431,12 +431,18 @@ Unit.prototype.updateSpecials = function (dt) {
     if (this.team === 'enemy') for (const b of game.buildingsNear(this.pos.x, this.pos.z, R + 2)) {
       if (inCone(b.pos.x, b.pos.y + b.height * 0.5, b.pos.z)) b.takeDamage(def.breath.dps * 1.5 * dt, this);
     }
-    for (let k = 0; k < 2; k++) {
-      const sp = U.rand(8, 16), yawS = this.yaw + U.rand(-0.3, 0.3), pitchS = pitch + U.rand(-0.15, 0.15);
+    // the cone itself, drawn in world space along the pitched direction
+    if (!this.breathCone) { this.breathCone = Models.breathCone(R); game.scene.add(this.breathCone); }
+    const mouth = new THREE.Vector3(this.pos.x + fx * 2.2, oy + fy * 2.2, this.pos.z + fz * 2.2);
+    this.breathCone.visible = true; this.breathCone.position.copy(mouth); this.breathCone.lookAt(mouth.x + fx, mouth.y + fy, mouth.z + fz);
+    const pulse = 0.9 + 0.15 * Math.sin(game.time * 25); this.breathCone.scale.set(pulse, pulse, 1); this.breathCone.material.opacity = 0.2 + 0.1 * Math.sin(game.time * 31);
+    this.breathCone.material.map.offset.y -= dt * 1.5;
+    for (let k = 0; k < 5; k++) {
+      const sp = U.rand(9, 18), yawS = this.yaw + U.rand(-0.32, 0.32), pitchS = pitch + U.rand(-0.22, 0.22);
       const vx = Math.sin(yawS) * Math.cos(pitchS) * sp, vy = Math.sin(pitchS) * sp, vz = Math.cos(yawS) * Math.cos(pitchS) * sp;
-      game.effects.spawn('flame', this.pos.x + fx * 3.5, oy + fy * 3.5, this.pos.z + fz * 3.5, { vel: new THREE.Vector3(vx, vy - 0.5, vz), grounded: true });
+      game.effects.spawn('flame', mouth.x + fx * 0.8, mouth.y + fy * 0.8, mouth.z + fz * 0.8, { vel: new THREE.Vector3(vx, vy, vz), grounded: true, grow: 2.2 });
     }
-  }
+  } else if (this.breathCone && this.breathCone.visible) this.breathCone.visible = false;
   if (this.team !== 'enemy') return;
   if (this.chargeHit) this.landCharge();
   this.specialTimer -= dt;

@@ -39,6 +39,7 @@ class UI {
       this.$('difficulty').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
     }));
     this.$('startbtn').addEventListener('click', () => { SFX.init(); SFX.resume(); this.hideMenu(); this.game.newGame(this.selectedHero, this.difficulty); });
+    setTimeout(() => this.checkForNewerBuild(), 1500);
     document.querySelectorAll('.settings').forEach(r => this.bindSettings(r));
     this.refreshSettings();
     this.$('settingsbtn').addEventListener('click', () => this.toggleSettings());
@@ -189,6 +190,19 @@ class UI {
     return `Could not ${what}: ${m}`;
   }
   onConnected() { this.$('connecting').classList.add('hidden'); this.toast('Connected. Your hero is at the keep: select them and press C to take control.', 'good', 7000); }
+  // GitHub Pages caches index.html for ten minutes: compare our build stamp with the one on the server
+  checkForNewerBuild() {
+    if (!/^https?:/.test(location.protocol) || location.hostname === '127.0.0.1' || location.hostname === 'localhost') return;
+    fetch('js/data.js?nocache=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '').then(txt => {
+      const m = txt.match(/DATA\.build = '([^']+)'/);
+      if (!m || !DATA.build || m[1] === DATA.build) return;
+      const el = document.createElement('div');
+      el.className = 'banner'; el.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:200;cursor:pointer';
+      el.innerHTML = `A newer build is on the server (${m[1]}); this page is from ${DATA.build}. <b>Click to reload the latest.</b>`;
+      el.addEventListener('click', () => { location.href = location.pathname + '?r=' + Date.now() + location.hash; });
+      document.body.appendChild(el);
+    }).catch(() => {});
+  }
   onGameStart() {
     if (this.game.coop) setTimeout(() => { if (this.game.started) this.localToast(`Co-op: rings and pennants show who owns what. You are <span class="sw" style="background:${this.game.cssColor(this.game.playerColor(this.game.localPlayer))}"></span>. Gold crowns mark what everyone shares.`, 'good', 8000); }, 1500);
     this.$('hud').classList.remove('hidden');

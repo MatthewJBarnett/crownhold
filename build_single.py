@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """Bundle index.html + css + js into a single self-contained crownhold.html."""
 import re, pathlib
+
+import datetime as _dt, re as _re
+_p = 'js/data.js'
+_s = open(_p).read()
+_s = _re.sub(r"DATA\.build = '[^']*'", "DATA.build = '%s'" % _dt.datetime.now().strftime('%Y-%m-%d %H:%M'), _s, count=1)
+open(_p, 'w').write(_s)
 root = pathlib.Path(__file__).parent
 html = (root / 'index.html').read_text()
 css = (root / 'css/style.css').read_text()

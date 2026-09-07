@@ -542,6 +542,7 @@ class Unit {
     this.removed = true;
     this.game.scene.remove(this.group);
     this.game.scene.remove(this.ring);
+    if (this.breathCone) { this.game.scene.remove(this.breathCone); this.breathCone = null; }
     this.group.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
     for (const m of this.mats) m.dispose();
   }
@@ -1147,7 +1148,7 @@ class Effects {
       s.position.set(x, y, z);
       const vel = o.vel ? o.vel.clone() : new THREE.Vector3(U.rand(-0.6, 0.6), U.rand(1.2, 2.4), U.rand(-0.6, 0.6));
       scene.add(s);
-      this.list.push({ mesh: s, vel, life: 0, max: type === 'flame' ? 0.7 : 0.55, grav: o.grounded ? 0 : 1.5, shrink: true, sprite: true, base: s.scale.y, grounded: !!o.grounded });
+      this.list.push({ mesh: s, vel, life: 0, max: type === 'flame' ? 0.7 : 0.55, grav: o.grounded ? 0 : 1.5, shrink: true, sprite: true, base: s.scale.y, grounded: !!o.grounded, swell: o.grow || 0 });
     } else if (type === 'hit' || type === 'heal_p') {
       const n = type === 'hit' ? 6 : 1;
       for (let k = 0; k < n; k++) {
@@ -1198,7 +1199,7 @@ class Effects {
         if (e.grounded) { const gy = this.game.groundY(e.mesh.position.x, e.mesh.position.z) + 0.3; if (e.mesh.position.y < gy) { e.mesh.position.y = gy; e.vel.y = 0; e.vel.multiplyScalar(0.9); } }
         if (e.mesh.position.y < 0.05 && e.grav < 0) { e.mesh.position.y = 0.05; e.vel.set(0, 0, 0); }
         e.mesh.material.opacity = 1 - p;
-        if (e.shrink && e.sprite) { const f = (1 - p * 0.6) * (0.9 + 0.2 * Math.sin(e.life * 40)); e.mesh.scale.set(0.5 * f * e.base, 1.0 * f * e.base, 1); }
+        if (e.shrink && e.sprite) { const f = (e.swell ? (0.6 + e.swell * p) * (1 - p * 0.4) : (1 - p * 0.6)) * (0.9 + 0.2 * Math.sin(e.life * 40)); e.mesh.scale.set(0.5 * f * e.base, 1.0 * f * e.base, 1); }
         else if (e.shrink) e.mesh.scale.setScalar(1 - p * 0.7);
       }
       if (e.grow) { e.mesh.scale.setScalar(0.3 + e.grow * p); e.mesh.material.opacity = 0.8 * (1 - p); }

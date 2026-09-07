@@ -935,7 +935,7 @@ DATA.mapTypes = {
   volcanic:  { zenith: 0x4a2a2a, label: 'Ashlands', desc: 'Black ash, a river of lava and molten pools; rock spires are the only cover.', rocks: [5, 8], forests: [0, 0], hills: 1.6, ruins: 10, decor: 'dead',
                palette: { grass: 0x3a3a3a, grass2: 0x5a5048, dry: 0x6a5a50, sky: 0x8a6a5a, water: 0xff6a10, waterGlow: 0xff3000, road: 0x4a4038, marsh: 0x3a3a30, leaves: [0x4a3a30, 0x5a4a3a, 0x3a2a20, 0x6a5a4a] } },
 };
-DATA.build = '2026-09-07 00:00';
+DATA.build = '2026-09-07 02:55';
 // experiments only: never listed in the hero menu, never unique, never bought. Immortal, splash attacks at range, very fast, abilities on a tenth of the cooldown
 DATA.testChampion = {
   key: 'champion', name: 'The Test Champion', title: 'of the Experiments', role: 'Testing',
@@ -2277,7 +2277,7 @@ const Models = {
     const g = x.createRadialGradient(32, 84, 4, 32, 70, 60);
     g.addColorStop(0, 'rgba(255,255,220,1)'); g.addColorStop(0.25, 'rgba(255,200,80,0.95)'); g.addColorStop(0.55, 'rgba(255,110,20,0.55)'); g.addColorStop(1, 'rgba(200,40,0,0)');
     x.fillStyle = g; x.beginPath(); x.ellipse(32, 72, 30, 56, 0, 0, Math.PI * 2); x.fill();
-    const t = new THREE.CanvasTexture(c); this._flame = t; return t;
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; this._flame = t; return t;
   },
   flameSprite(scale = 1, color = 0xffffff) {
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.flameTexture(), color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
@@ -2435,6 +2435,15 @@ const Models = {
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
     const m = new THREE.Line(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false }));
     m.renderOrder = 3; return m;
+  },
+  breathCone(range) {
+    const geo = new THREE.ConeGeometry(range * 0.32, range, 18, 1, true);
+    geo.translate(0, -range / 2, 0); geo.rotateX(-Math.PI / 2);   // apex at the origin, base along +z
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xff7020, transparent: true, opacity: 0.28, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, map: this.flameTexture() }));
+    const core = new THREE.Mesh(new THREE.ConeGeometry(range * 0.12, range * 0.9, 12, 1, true).translate(0, -range * 0.45, 0).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffe080, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+    m.add(core); m.userData.core = core;
+    m.renderOrder = 6; m.visible = false;
+    return m;
   },
   missionObject(kind) {
     const g = new THREE.Group(), gold = this.mat(0xe8c060, { emissive: 0x604000, emissiveIntensity: 0.4 }), wood = this.mat(0x6a4a2a), stone = this.mat(0x7a7a72);
@@ -3880,6 +3889,7 @@ class Unit {
     this.removed = true;
     this.game.scene.remove(this.group);
     this.game.scene.remove(this.ring);
+    if (this.breathCone) { this.game.scene.remove(this.breathCone); this.breathCone = null; }
     this.group.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
     for (const m of this.mats) m.dispose();
   }
@@ -4485,7 +4495,7 @@ class Effects {
       s.position.set(x, y, z);
       const vel = o.vel ? o.vel.clone() : new THREE.Vector3(U.rand(-0.6, 0.6), U.rand(1.2, 2.4), U.rand(-0.6, 0.6));
       scene.add(s);
-      this.list.push({ mesh: s, vel, life: 0, max: type === 'flame' ? 0.7 : 0.55, grav: o.grounded ? 0 : 1.5, shrink: true, sprite: true, base: s.scale.y, grounded: !!o.grounded });
+      this.list.push({ mesh: s, vel, life: 0, max: type === 'flame' ? 0.7 : 0.55, grav: o.grounded ? 0 : 1.5, shrink: true, sprite: true, base: s.scale.y, grounded: !!o.grounded, swell: o.grow || 0 });
     } else if (type === 'hit' || type === 'heal_p') {
       const n = type === 'hit' ? 6 : 1;
       for (let k = 0; k < n; k++) {
@@ -4536,7 +4546,7 @@ class Effects {
         if (e.grounded) { const gy = this.game.groundY(e.mesh.position.x, e.mesh.position.z) + 0.3; if (e.mesh.position.y < gy) { e.mesh.position.y = gy; e.vel.y = 0; e.vel.multiplyScalar(0.9); } }
         if (e.mesh.position.y < 0.05 && e.grav < 0) { e.mesh.position.y = 0.05; e.vel.set(0, 0, 0); }
         e.mesh.material.opacity = 1 - p;
-        if (e.shrink && e.sprite) { const f = (1 - p * 0.6) * (0.9 + 0.2 * Math.sin(e.life * 40)); e.mesh.scale.set(0.5 * f * e.base, 1.0 * f * e.base, 1); }
+        if (e.shrink && e.sprite) { const f = (e.swell ? (0.6 + e.swell * p) * (1 - p * 0.4) : (1 - p * 0.6)) * (0.9 + 0.2 * Math.sin(e.life * 40)); e.mesh.scale.set(0.5 * f * e.base, 1.0 * f * e.base, 1); }
         else if (e.shrink) e.mesh.scale.setScalar(1 - p * 0.7);
       }
       if (e.grow) { e.mesh.scale.setScalar(0.3 + e.grow * p); e.mesh.material.opacity = 0.8 * (1 - p); }
@@ -4983,12 +4993,18 @@ Unit.prototype.updateSpecials = function (dt) {
     if (this.team === 'enemy') for (const b of game.buildingsNear(this.pos.x, this.pos.z, R + 2)) {
       if (inCone(b.pos.x, b.pos.y + b.height * 0.5, b.pos.z)) b.takeDamage(def.breath.dps * 1.5 * dt, this);
     }
-    for (let k = 0; k < 2; k++) {
-      const sp = U.rand(8, 16), yawS = this.yaw + U.rand(-0.3, 0.3), pitchS = pitch + U.rand(-0.15, 0.15);
+    // the cone itself, drawn in world space along the pitched direction
+    if (!this.breathCone) { this.breathCone = Models.breathCone(R); game.scene.add(this.breathCone); }
+    const mouth = new THREE.Vector3(this.pos.x + fx * 2.2, oy + fy * 2.2, this.pos.z + fz * 2.2);
+    this.breathCone.visible = true; this.breathCone.position.copy(mouth); this.breathCone.lookAt(mouth.x + fx, mouth.y + fy, mouth.z + fz);
+    const pulse = 0.9 + 0.15 * Math.sin(game.time * 25); this.breathCone.scale.set(pulse, pulse, 1); this.breathCone.material.opacity = 0.2 + 0.1 * Math.sin(game.time * 31);
+    this.breathCone.material.map.offset.y -= dt * 1.5;
+    for (let k = 0; k < 5; k++) {
+      const sp = U.rand(9, 18), yawS = this.yaw + U.rand(-0.32, 0.32), pitchS = pitch + U.rand(-0.22, 0.22);
       const vx = Math.sin(yawS) * Math.cos(pitchS) * sp, vy = Math.sin(pitchS) * sp, vz = Math.cos(yawS) * Math.cos(pitchS) * sp;
-      game.effects.spawn('flame', this.pos.x + fx * 3.5, oy + fy * 3.5, this.pos.z + fz * 3.5, { vel: new THREE.Vector3(vx, vy - 0.5, vz), grounded: true });
+      game.effects.spawn('flame', mouth.x + fx * 0.8, mouth.y + fy * 0.8, mouth.z + fz * 0.8, { vel: new THREE.Vector3(vx, vy, vz), grounded: true, grow: 2.2 });
     }
-  }
+  } else if (this.breathCone && this.breathCone.visible) this.breathCone.visible = false;
   if (this.team !== 'enemy') return;
   if (this.chargeHit) this.landCharge();
   this.specialTimer -= dt;
@@ -6968,6 +6984,7 @@ class UI {
       this.$('difficulty').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
     }));
     this.$('startbtn').addEventListener('click', () => { SFX.init(); SFX.resume(); this.hideMenu(); this.game.newGame(this.selectedHero, this.difficulty); });
+    setTimeout(() => this.checkForNewerBuild(), 1500);
     document.querySelectorAll('.settings').forEach(r => this.bindSettings(r));
     this.refreshSettings();
     this.$('settingsbtn').addEventListener('click', () => this.toggleSettings());
@@ -7118,6 +7135,19 @@ class UI {
     return `Could not ${what}: ${m}`;
   }
   onConnected() { this.$('connecting').classList.add('hidden'); this.toast('Connected. Your hero is at the keep: select them and press C to take control.', 'good', 7000); }
+  // GitHub Pages caches index.html for ten minutes: compare our build stamp with the one on the server
+  checkForNewerBuild() {
+    if (!/^https?:/.test(location.protocol) || location.hostname === '127.0.0.1' || location.hostname === 'localhost') return;
+    fetch('js/data.js?nocache=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '').then(txt => {
+      const m = txt.match(/DATA\.build = '([^']+)'/);
+      if (!m || !DATA.build || m[1] === DATA.build) return;
+      const el = document.createElement('div');
+      el.className = 'banner'; el.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:200;cursor:pointer';
+      el.innerHTML = `A newer build is on the server (${m[1]}); this page is from ${DATA.build}. <b>Click to reload the latest.</b>`;
+      el.addEventListener('click', () => { location.href = location.pathname + '?r=' + Date.now() + location.hash; });
+      document.body.appendChild(el);
+    }).catch(() => {});
+  }
   onGameStart() {
     if (this.game.coop) setTimeout(() => { if (this.game.started) this.localToast(`Co-op: rings and pennants show who owns what. You are <span class="sw" style="background:${this.game.cssColor(this.game.playerColor(this.game.localPlayer))}"></span>. Gold crowns mark what everyone shares.`, 'good', 8000); }, 1500);
     this.$('hud').classList.remove('hidden');
