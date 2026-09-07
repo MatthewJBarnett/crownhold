@@ -310,9 +310,9 @@ class Controls {
     if (!found.length && !additive) { this.clearSelection(); return; }
     if (additive) for (const u of found) this.addToSelection(u); else this.setSelection(found);
   }
-  selectAllSoldiers() { const lp = this.game.localPlayer; this.setSelection(this.game.units.filter(u => u.isSoldier && !u.dead && !u.possessed && (!u.owner || u.owner === lp))); }
+  selectAllSoldiers() { const lp = this.game.localPlayer; this.setSelection(this.game.units.filter(u => u.isSoldier && !u.def.repair && !u.dead && !u.possessed && (!u.owner || u.owner === lp))); }
   selectKing() { if (this.game.king && !this.game.king.dead) { this.setSelection([this.game.king]); this.focusOnSelection(); } }
-  selectArmy() { const lp = this.game.localPlayer; const list = this.game.units.filter(u => (u.isSoldier || u.isHero) && !u.dead && !u.possessedBy && (!u.owner || u.owner === lp)); if (list.length) { this.setSelection(list); this.focusOnSelection(); } }
+  selectArmy() { const lp = this.game.localPlayer; const list = this.game.units.filter(u => (u.isSoldier || u.isHero) && !u.def.repair && !u.dead && !u.possessedBy && (!u.owner || u.owner === lp)); if (list.length) { this.setSelection(list); this.focusOnSelection(); } }
   selectHeroes() { const lp = this.game.localPlayer; const hs = this.game.units.filter(u => u.isHero && !u.dead && (!u.owner || u.owner === lp)); if (hs.length) { this.setSelection(hs); this.focusOnSelection(); } }
   focusOnSelection() {
     const list = [...this.selected];
@@ -327,7 +327,7 @@ class Controls {
     const game = this.game;
     let units = this.selectedUnits();
     // nothing selected: the order goes to the whole army, soldiers and heroes alike
-    if (!units.length) { const lp = game.localPlayer; units = game.units.filter(u => (u.isSoldier || u.isHero) && !u.dead && !u.possessed && !u.possessedBy && (!u.owner || u.owner === lp)); if (!units.length) return; game.ui.toast(`Whole army: ${units.length} units ordered`, 'info', 1500); }
+    if (!units.length) { const lp = game.localPlayer; units = game.units.filter(u => (u.isSoldier || u.isHero) && !u.def.repair && !u.dead && !u.possessed && !u.possessedBy && (!u.owner || u.owner === lp)); if (!units.length) return; game.ui.toast(`Whole army: ${units.length} units ordered`, 'info', 1500); }
     const t = this.pickUnit(x, y);
     if (t && t.team === 'enemy') { game.commandAttack(units, t); game.ui.flashMarker(t.pos.x, t.pos.z, 0xff5050); return; }
     if (t && t.team === 'player' && !units.includes(t)) { game.commandFollow(units, t); game.ui.flashMarker(t.pos.x, t.pos.z, 0x50a0ff); return; }
