@@ -1,0 +1,530 @@
+'use strict';
+
+const Models = {
+  _mats: new Map(),
+  mat(color, opts = {}) {
+    const key = color + '|' + (opts.emissive || 0) + '|' + (opts.emissiveIntensity || 0) + '|' + (opts.transparent ? 'T' + opts.opacity : '');
+    let m = this._mats.get(key);
+    if (!m) {
+      m = new THREE.MeshLambertMaterial({ color });
+      if (opts.emissive) { m.emissive = new THREE.Color(opts.emissive); m.emissiveIntensity = opts.emissiveIntensity || 1; }
+      if (opts.transparent) { m.transparent = true; m.opacity = opts.opacity; }
+      this._mats.set(key, m);
+    }
+    return m;
+  },
+  freshMat(color) { return new THREE.MeshLambertMaterial({ color }); },
+  box(w, h, d, mat, x = 0, y = 0, z = 0, shadow = true) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z);
+    m.castShadow = shadow; m.receiveShadow = shadow;
+    return m;
+  },
+  cyl(rt, rb, h, mat, x = 0, y = 0, z = 0, seg = 10, shadow = true) {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat);
+    m.position.set(x, y, z);
+    m.castShadow = shadow; m.receiveShadow = shadow;
+    return m;
+  },
+  cone(r, h, mat, x = 0, y = 0, z = 0, seg = 8) {
+    const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, seg), mat);
+    m.position.set(x, y, z);
+    m.castShadow = true; m.receiveShadow = true;
+    return m;
+  },
+  sphere(r, mat, x = 0, y = 0, z = 0, seg = 10) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(r, seg, Math.max(6, seg - 2)), mat);
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    return m;
+  },
+
+  // ------------------------------------------------------------- weapons
+  weapon(kind, mat) {
+    const g = new THREE.Group();
+    const steel = this.mat(0xcfd6dd), wood = this.mat(0x6b4a2a), gold = this.mat(0xd8b040);
+    switch (kind) {
+      case 'sword':
+        g.add(this.box(0.07, 0.07, 0.9, steel, 0, 0, 0.55));
+        g.add(this.box(0.28, 0.06, 0.06, gold, 0, 0, 0.1));
+        g.add(this.box(0.06, 0.06, 0.22, wood, 0, 0, -0.06));
+        break;
+      case 'dagger':
+        g.add(this.box(0.05, 0.05, 0.45, steel, 0, 0, 0.3));
+        g.add(this.box(0.16, 0.05, 0.05, wood, 0, 0, 0.06));
+        break;
+      case 'axe':
+        g.add(this.box(0.06, 0.06, 0.9, wood, 0, 0, 0.35));
+        g.add(this.box(0.05, 0.36, 0.28, steel, 0.0, 0.0, 0.7));
+        break;
+      case 'club':
+        g.add(this.cyl(0.14, 0.06, 1.0, wood, 0, 0, 0.45).rotateX(Math.PI / 2));
+        break;
+      case 'hammer':
+        g.add(this.box(0.06, 0.06, 0.7, wood, 0, 0, 0.3));
+        g.add(this.box(0.16, 0.16, 0.3, steel, 0, 0, 0.62));
+        break;
+      case 'mace':
+        g.add(this.box(0.05, 0.05, 0.7, wood, 0, 0, 0.3));
+        g.add(this.sphere(0.14, steel, 0, 0, 0.7, 6));
+        break;
+      case 'pike':
+        g.add(this.box(0.05, 0.05, 2.2, wood, 0, 0, 0.9));
+        g.add(this.cone(0.07, 0.4, steel, 0, 0, 2.15).rotateX(Math.PI / 2));
+        break;
+      case 'bow': {
+        const bow = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.03, 5, 10, Math.PI), wood);
+        bow.rotation.y = Math.PI / 2; bow.rotation.z = -Math.PI / 2;
+        bow.castShadow = true;
+        g.add(bow);
+        const str = this.box(0.01, 1.0, 0.01, this.mat(0xeeeeee), 0, 0, 0);
+        g.add(str);
+        break;
+      }
+      case 'staff':
+        g.add(this.box(0.06, 0.06, 1.6, wood, 0, 0, 0.5));
+        g.add(this.sphere(0.13, mat || this.mat(0xff8040, { emissive: 0xff5010, emissiveIntensity: 0.8 }), 0, 0, 1.35, 8));
+        break;
+    }
+    return g;
+  },
+
+  // ------------------------------------------------------------- humanoid
+  humanoid(def, team) {
+    const g = new THREE.Group();
+    const parts = {};
+    const cloth = this.freshMat(def.cloth || (team === 'enemy' ? 0x5a3a2a : 0x3a5a9a));
+    const armor = this.freshMat(def.color || 0x888888);
+    const skin = this.freshMat(def.skin || 0xe8c39e);
+    const mats = [cloth, armor, skin];
+    const dark = this.mat(0x222222);
+    const s = def.scale || 1;
+
+    // legs
+    const legMat = def.skeleton ? skin : (def.robe ? cloth : this.mat(0x3a3a3a));
+    for (const side of [-1, 1]) {
+      const hip = new THREE.Group(); hip.position.set(side * 0.15, 0.72, 0);
+      const leg = this.box(0.2, 0.7, 0.22, legMat, 0, -0.36, 0);
+      hip.add(leg); g.add(hip);
+      parts[side < 0 ? 'legL' : 'legR'] = hip;
+      if (def.robe) hip.visible = false;
+    }
+    if (def.robe) {
+      const robe = this.cyl(0.32, 0.5, 1.0, cloth, 0, 0.5, 0, 8);
+      g.add(robe); parts.robe = robe;
+    }
+    // torso
+    const torso = this.box(0.56, 0.66, 0.34, def.skeleton ? skin : cloth, 0, 1.05, 0);
+    g.add(torso); parts.body = torso;
+    if (!def.robe && !def.skeleton) {
+      const chest = this.box(0.6, 0.4, 0.38, armor, 0, 1.12, 0); g.add(chest); parts.chest = chest;
+    }
+    if (def.skeleton) {
+      for (let r = 0; r < 3; r++) g.add(this.box(0.6, 0.05, 0.36, dark, 0, 0.85 + r * 0.16, 0, false));
+    }
+    // head
+    const head = this.box(0.34, 0.34, 0.34, skin, 0, 1.56, 0);
+    g.add(head); parts.head = head;
+    // eyes
+    const eyeMat = def.skeleton ? this.mat(0xff3020, { emissive: 0xff2010, emissiveIntensity: 1 }) : dark;
+    g.add(this.box(0.06, 0.06, 0.03, eyeMat, -0.08, 1.6, 0.17, false));
+    g.add(this.box(0.06, 0.06, 0.03, eyeMat, 0.08, 1.6, 0.17, false));
+    if (def.helmet) {
+      g.add(this.box(0.4, 0.22, 0.4, armor, 0, 1.68, 0));
+      g.add(this.box(0.1, 0.16, 0.42, armor, 0, 1.55, 0.02));
+    }
+    if (def.hood) {
+      g.add(this.cone(0.32, 0.5, cloth, 0, 1.85, 0, 6));
+    }
+    if (def.hat) {
+      g.add(this.cyl(0.42, 0.42, 0.06, cloth, 0, 1.75, 0, 10));
+      g.add(this.cone(0.24, 0.8, cloth, 0, 2.1, 0, 8));
+    }
+    if (def.crown) {
+      const gold = this.mat(0xffd54a, { emissive: 0x806000, emissiveIntensity: 0.4 });
+      g.add(this.cyl(0.2, 0.2, 0.14, gold, 0, 1.78, 0, 8));
+      for (let k = 0; k < 5; k++) {
+        const a = k / 5 * Math.PI * 2;
+        g.add(this.box(0.06, 0.16, 0.06, gold, Math.sin(a) * 0.18, 1.9, Math.cos(a) * 0.18, false));
+      }
+    }
+    // arms
+    for (const side of [-1, 1]) {
+      const sh = new THREE.Group(); sh.position.set(side * 0.38, 1.32, 0);
+      const arm = this.box(0.17, 0.6, 0.18, def.skeleton ? skin : cloth, 0, -0.28, 0);
+      sh.add(arm);
+      const hand = this.box(0.14, 0.14, 0.14, skin, 0, -0.6, 0, false);
+      sh.add(hand);
+      g.add(sh);
+      parts[side < 0 ? 'armL' : 'armR'] = sh;
+    }
+    if (def.weapon) {
+      const w = this.weapon(def.weapon, def.weapon === 'staff' ? this.mat(def.magic || def.abilities ? 0xff8040 : 0x60c0ff, { emissive: def.color || 0xff5010, emissiveIntensity: 0.7 }) : null);
+      w.position.set(0, -0.6, 0.05);
+      parts.armR.add(w); parts.weapon = w;
+      if (def.weapon === 'bow') { w.position.set(0, -0.6, 0.15); w.rotation.y = 0; }
+      if (def.weapon === 'staff') { w.rotation.x = -Math.PI / 2; w.position.set(0, -0.3, 0.1); }
+    }
+    if (def.shield) {
+      const sh = this.box(0.08, 0.6, 0.45, armor, -0.12, -0.4, 0.1);
+      parts.armL.add(sh);
+    }
+    if (def.isKing) {
+      const cape = this.box(0.6, 0.9, 0.06, this.mat(0x7a1030), 0, 0.95, -0.2);
+      g.add(cape);
+    }
+    g.scale.setScalar(s);
+    return { group: g, parts, mats, eyeHeight: 1.62 * s, height: 1.8 * s, mesh: torso };
+  },
+
+  wolf(def) {
+    const g = new THREE.Group();
+    const fur = this.freshMat(def.color || 0x6a6a6a), dark = this.mat(0x2a2a2a);
+    const parts = {};
+    const body = this.box(0.5, 0.45, 1.1, fur, 0, 0.62, 0); g.add(body); parts.body = body;
+    const head = this.box(0.36, 0.34, 0.5, fur, 0, 0.8, 0.72); g.add(head); parts.head = head;
+    g.add(this.box(0.2, 0.16, 0.26, dark, 0, 0.72, 1.02, false));
+    for (const s of [-1, 1]) g.add(this.box(0.1, 0.16, 0.06, fur, s * 0.12, 1.02, 0.62, false));
+    const eye = this.mat(0xffd040, { emissive: 0xffa000, emissiveIntensity: 0.8 });
+    for (const s of [-1, 1]) g.add(this.box(0.06, 0.06, 0.04, eye, s * 0.1, 0.86, 0.96, false));
+    const tail = this.box(0.1, 0.1, 0.5, fur, 0, 0.78, -0.75); tail.rotation.x = 0.5; g.add(tail);
+    // legs: front pair swing like arms, back pair like legs so the humanoid animation works unchanged
+    for (const [name, x, z] of [['armL', -0.18, 0.38], ['armR', 0.18, 0.38], ['legL', -0.18, -0.38], ['legR', 0.18, -0.38]]) {
+      const hip = new THREE.Group(); hip.position.set(x, 0.45, z);
+      hip.add(this.box(0.13, 0.45, 0.14, fur, 0, -0.22, 0));
+      g.add(hip); parts[name] = hip;
+    }
+    return { group: g, parts, mats: [fur], eyeHeight: 0.85, height: 1.0, mesh: body };
+  },
+  catapult(def) {
+    const g = new THREE.Group();
+    const wood = this.freshMat(0x6b4a2a), dark = this.mat(0x3a2a1a);
+    const parts = {};
+    g.add(this.box(1.6, 0.3, 2.4, wood, 0, 0.6, 0));
+    g.add(this.box(0.2, 0.9, 0.2, wood, -0.6, 1.1, -0.4)); g.add(this.box(0.2, 0.9, 0.2, wood, 0.6, 1.1, -0.4));
+    for (const [x, z] of [[-0.9, 0.9], [0.9, 0.9], [-0.9, -0.9], [0.9, -0.9]]) {
+      const wheel = this.cyl(0.4, 0.4, 0.2, dark, x, 0.4, z, 10);
+      wheel.rotation.z = Math.PI / 2; g.add(wheel);
+    }
+    const armPivot = new THREE.Group(); armPivot.position.set(0, 1.5, -0.4);
+    const arm = this.box(0.16, 0.16, 2.4, wood, 0, 0, 0.9); armPivot.add(arm);
+    const bucket = this.box(0.5, 0.25, 0.5, dark, 0, 0.1, 2.05); armPivot.add(bucket);
+    armPivot.rotation.x = -0.9;
+    g.add(armPivot); parts.arm = armPivot;
+    parts.body = arm;
+    return { group: g, parts, mats: [wood], eyeHeight: 1.8, height: 2.6, mesh: arm };
+  },
+
+  dragon(def) {
+    const g = new THREE.Group();
+    const bodyMat = this.freshMat(def.color || 0x8a1a1a), belly = this.mat(0xd8a060), wingMat = this.freshMat(0x5a1010);
+    const parts = {};
+    const body = this.sphere(1.0, bodyMat, 0, 0, 0, 10); body.scale.set(1.2, 1, 2.2); g.add(body); parts.body = body;
+    { const b = this.sphere(0.7, belly, 0, -0.4, 0.2, 8); b.scale.set(1.0, 0.6, 1.8); g.add(b); }
+    const neck = this.cyl(0.35, 0.5, 2.0, bodyMat, 0, 0.9, 2.4, 8); neck.rotation.x = -0.9; g.add(neck);
+    const head = this.box(0.7, 0.6, 1.3, bodyMat, 0, 1.7, 3.3); g.add(head); parts.head = head;
+    const eye = this.mat(0xffe040, { emissive: 0xffc000, emissiveIntensity: 1 });
+    g.add(this.box(0.12, 0.12, 0.1, eye, -0.25, 1.85, 3.9, false)); g.add(this.box(0.12, 0.12, 0.1, eye, 0.25, 1.85, 3.9, false));
+    for (const s of [-1, 1]) g.add(this.cone(0.1, 0.5, belly, s * 0.25, 2.1, 2.9, 5));
+    const tail = this.cone(0.4, 3.5, bodyMat, 0, 0.1, -3.4, 6); tail.rotation.x = -Math.PI / 2 - 0.2; g.add(tail);
+    for (const s of [-1, 1]) {
+      const pivot = new THREE.Group(); pivot.position.set(s * 0.8, 0.5, 0.2);
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.08, 2.6), wingMat);
+      wing.position.set(s * 2.1, 0, -0.3); wing.castShadow = true;
+      pivot.add(wing);
+      const bone = this.box(4.2, 0.16, 0.16, bodyMat, s * 2.1, 0.05, 0.9, false); pivot.add(bone);
+      g.add(pivot); parts[s < 0 ? 'wingL' : 'wingR'] = pivot;
+    }
+    for (const [x, z] of [[-0.7, 1.0], [0.7, 1.0], [-0.8, -1.0], [0.8, -1.0]]) g.add(this.box(0.35, 0.9, 0.35, bodyMat, x, -0.8, z));
+    return { group: g, parts, mats: [bodyMat, wingMat], eyeHeight: 2.0, height: 3.0, mesh: body };
+  },
+
+  // ------------------------------------------------------------- buildings
+  stone: null, stoneDark: null, wood: null, roof: null,
+  initMats() {
+    this.stone = this.mat(0x9a9a92); this.stoneDark = this.mat(0x6f6f68); this.wood = this.mat(0x7a5a38);
+    this.roof = this.mat(0x8a3a30); this.plaster = this.mat(0xd8cfb8); this.gold = this.mat(0xe0b040, { emissive: 0x604000, emissiveIntensity: 0.3 });
+  },
+  merlons(g, w, d, y, step = 1.0) {
+    const m = this.stoneDark;
+    const hw = w / 2, hd = d / 2;
+    for (let x = -hw + 0.25; x <= hw - 0.25 + 1e-3; x += step) { g.add(this.box(0.5, 0.5, 0.5, m, x, y, -hd + 0.25)); g.add(this.box(0.5, 0.5, 0.5, m, x, y, hd - 0.25)); }
+    for (let z = -hd + 0.25 + step; z <= hd - 0.25 - step + 1e-3; z += step) { g.add(this.box(0.5, 0.5, 0.5, m, -hw + 0.25, y, z)); g.add(this.box(0.5, 0.5, 0.5, m, hw - 0.25, y, z)); }
+  },
+  flag(g, x, y, z, color = 0xc02030) {
+    g.add(this.cyl(0.04, 0.04, 2.2, this.mat(0x4a3a2a), x, y + 1.1, z, 5, false));
+    g.add(this.box(0.9, 0.5, 0.04, this.mat(color), x + 0.45, y + 1.9, z, false));
+  },
+  building(def, level = 1) {
+    if (!this.stone) this.initMats();
+    const g = new THREE.Group();
+    const W = def.w * DATA.CELL, D = def.d * DATA.CELL;
+    const st = this.stone, sd = this.stoneDark, wd = this.wood;
+    switch (def.key) {
+      case 'wall':
+        g.add(this.box(2, 3.2, 2, st, 0, 1.6, 0));
+        for (const [x, z] of [[-0.7, -0.7], [0.7, -0.7], [-0.7, 0.7], [0.7, 0.7]]) g.add(this.box(0.55, 0.55, 0.55, sd, x, 3.45, z));
+        break;
+      case 'gate':
+        g.add(this.box(0.5, 4.0, 2, st, -0.75, 2.0, 0));
+        g.add(this.box(0.5, 4.0, 2, st, 0.75, 2.0, 0));
+        g.add(this.box(2, 0.8, 2, st, 0, 3.6, 0));
+        { const door = new THREE.Group();
+          door.add(this.box(1.1, 3.2, 0.35, wd, 0, 1.6, 0));
+          door.add(this.box(1.1, 0.1, 0.4, this.mat(0x3a3a3a), 0, 1.0, 0, false));
+          door.add(this.box(1.1, 0.1, 0.4, this.mat(0x3a3a3a), 0, 2.2, 0, false));
+          for (let k = -2; k <= 2; k++) door.add(this.box(0.08, 3.4, 0.1, this.mat(0x2a2a2a), k * 0.22, 1.6, 0.2, false));
+          g.add(door); g.userData.door = door; }
+        for (const x of [-0.7, 0.7]) g.add(this.box(0.55, 0.55, 0.55, sd, x, 4.25, 0));
+        break;
+      case 'arrow_tower':
+        g.add(this.cyl(1.6, 1.85, 6.5, st, 0, 3.25, 0, 10));
+        g.add(this.cyl(2.0, 1.8, 0.6, sd, 0, 6.8, 0, 10));
+        for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; g.add(this.box(0.5, 0.6, 0.5, sd, Math.sin(a) * 1.75, 7.4, Math.cos(a) * 1.75)); }
+        g.add(this.box(0.6, 1.0, 0.3, this.mat(0x2a2a2a), 0, 2.8, 1.78, false));
+        this.flag(g, 0, 7.1, 0, 0x3060c0);
+        break;
+      case 'ballista_tower':
+        g.add(this.box(3.4, 5.5, 3.4, st, 0, 2.75, 0));
+        g.add(this.box(3.8, 0.5, 3.8, sd, 0, 5.75, 0));
+        this.merlons(g, 3.8, 3.8, 6.25, 1.1);
+        { const b = new THREE.Group(); b.position.y = 6.2;
+          b.add(this.box(0.3, 0.3, 2.6, wd, 0, 0.5, 0)); b.add(this.box(2.4, 0.18, 0.18, wd, 0, 0.5, 1.0));
+          b.add(this.box(0.4, 0.5, 0.4, sd, 0, 0.2, -0.3)); g.add(b); g.userData.turret = b; }
+        break;
+      case 'mage_tower':
+        g.add(this.cyl(1.2, 1.5, 8.5, this.mat(0x5a4a6a), 0, 4.25, 0, 10));
+        g.add(this.cone(1.7, 2.4, this.mat(0x4a2a7a), 0, 9.6, 0, 10));
+        { const orb = this.sphere(0.7, this.mat(0xc080ff, { emissive: 0x8040ff, emissiveIntensity: 1 }), 0, 11.6, 0, 10); g.add(orb); g.userData.orb = orb; }
+        for (let k = 0; k < 3; k++) g.add(this.box(0.4, 0.7, 0.2, this.mat(0xffc060, { emissive: 0xff8000, emissiveIntensity: 0.6 }), Math.sin(k * 2.1) * 1.36, 3 + k * 2, Math.cos(k * 2.1) * 1.36, false));
+        break;
+      case 'frost_tower':
+        g.add(this.cyl(1.3, 1.6, 6.0, this.mat(0x8aa0b8), 0, 3.0, 0, 8));
+        g.add(this.cyl(1.8, 1.5, 0.5, this.mat(0x6a8098), 0, 6.2, 0, 8));
+        { const c = new THREE.Mesh(new THREE.OctahedronGeometry(1.1, 0), this.mat(0x90e0ff, { emissive: 0x40b0ff, emissiveIntensity: 1 })); c.position.y = 7.8; c.castShadow = true; g.add(c); g.userData.orb = c; }
+        for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2 + 0.4; const s = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), this.mat(0xc0f0ff, { emissive: 0x60c0ff, emissiveIntensity: 0.6 })); s.position.set(Math.sin(a) * 1.5, 6.7, Math.cos(a) * 1.5); g.add(s); }
+        break;
+      case 'barracks':
+        g.add(this.box(5.4, 3.2, 5.4, this.plaster, 0, 1.6, 0));
+        g.add(this.box(5.6, 1.0, 5.6, wd, 0, 0.5, 0));
+        { const r = this.cone(4.4, 2.4, this.roof, 0, 4.4, 0, 4); r.rotation.y = Math.PI / 4; g.add(r); }
+        g.add(this.box(1.2, 2.0, 0.3, wd, 0, 1.0, 2.75));
+        for (const x of [-1.8, 1.8]) g.add(this.box(0.8, 0.8, 0.2, this.mat(0x3a5a8a), x, 2.0, 2.75, false));
+        this.flag(g, 2.2, 5.0, 2.2, 0x3060c0);
+        { const rack = this.box(2.0, 1.2, 0.2, wd, -1.6, 0.6, -2.9); g.add(rack); for (let k = 0; k < 4; k++) g.add(this.box(0.06, 1.0, 0.06, this.mat(0xcfd6dd), -2.3 + k * 0.45, 0.9, -3.05, false)); }
+        break;
+      case 'farm':
+        g.add(this.box(2.2, 2.0, 2.2, this.plaster, -1.6, 1.0, -1.6));
+        { const r = this.cone(1.8, 1.4, this.roof, -1.6, 2.7, -1.6, 4); r.rotation.y = Math.PI / 4; g.add(r); }
+        for (let row = 0; row < 4; row++) g.add(this.box(3.2, 0.35, 0.5, this.mat(row % 2 ? 0xb8a040 : 0x8aa040), 1.2, 0.18, -1.9 + row * 0.9, false));
+        for (let row = 0; row < 3; row++) g.add(this.box(0.5, 0.35, 2.6, this.mat(row % 2 ? 0xb8a040 : 0x8aa040), -2.0 + row * 0.8, 0.18, 1.6, false));
+        for (let k = 0; k < 6; k++) g.add(this.box(0.12, 0.8, 0.12, wd, -2.8 + k * 1.1, 0.4, 2.85, false));
+        g.add(this.box(5.6, 0.08, 0.08, wd, 0, 0.7, 2.85, false));
+        break;
+      case 'mine':
+        g.add(this.sphere(2.2, this.mat(0x7a6a5a), 0, -0.6, -0.3, 8));
+        g.add(this.box(0.3, 2.2, 0.3, wd, -0.9, 1.1, 1.5)); g.add(this.box(0.3, 2.2, 0.3, wd, 0.9, 1.1, 1.5));
+        g.add(this.box(2.2, 0.3, 0.3, wd, 0, 2.2, 1.5));
+        g.add(this.box(1.5, 1.9, 0.2, this.mat(0x1a1410), 0, 0.95, 1.4, false));
+        for (let k = 0; k < 4; k++) { const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.28, 0), this.gold); c.position.set(-1.3 + k * 0.9, 1.4 + (k % 2) * 0.4, -0.8 + (k % 2) * 0.5); g.add(c); }
+        g.add(this.box(0.7, 0.5, 0.9, wd, 1.8, 0.25, 1.9));
+        break;
+      case 'blacksmith':
+        g.add(this.box(5.0, 3.0, 4.6, sd, 0, 1.5, 0));
+        { const r = this.cone(4.0, 2.0, this.mat(0x3a3a40), 0, 4.0, 0, 4); r.rotation.y = Math.PI / 4; g.add(r); }
+        g.add(this.box(0.8, 5.5, 0.8, st, 1.6, 2.75, -1.2));
+        g.add(this.box(1.6, 1.0, 1.0, this.mat(0xff7020, { emissive: 0xff4000, emissiveIntensity: 1.0 }), -1.6, 0.9, 2.6, false));
+        g.add(this.box(0.9, 0.5, 0.5, this.mat(0x2a2a2a), 1.0, 0.75, 2.6)); g.add(this.box(0.4, 0.5, 0.4, wd, 1.0, 0.25, 2.6));
+        g.add(this.box(1.6, 1.4, 0.2, wd, 0, 0.7, 2.35));
+        break;
+      case 'shrine':
+        g.add(this.cyl(1.9, 1.9, 0.4, this.mat(0xe8e4d8), 0, 0.2, 0, 12));
+        for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2 + Math.PI / 4; g.add(this.cyl(0.22, 0.22, 3.0, this.mat(0xf0ecdc), Math.sin(a) * 1.4, 1.9, Math.cos(a) * 1.4, 8)); }
+        g.add(this.cyl(1.9, 1.9, 0.3, this.mat(0xe8e4d8), 0, 3.5, 0, 12));
+        { const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.6, 0), this.mat(0xa0ffc0, { emissive: 0x40ff80, emissiveIntensity: 1 })); c.position.y = 1.7; g.add(c); g.userData.orb = c; }
+        break;
+      case 'icewall': {
+        const ice = new THREE.MeshLambertMaterial({ color: 0xa8e0ff, emissive: 0x2060a0, emissiveIntensity: 0.35, transparent: true, opacity: 0.75 });
+        g.add(this.box(2, 2.8, 1.6, ice, 0, 1.4, 0));
+        for (let k = 0; k < 3; k++) { const s = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), ice); s.position.set(-0.6 + k * 0.6, 2.9 + (k % 2) * 0.25, 0); g.add(s); }
+        break;
+      }
+      case 'keep': {
+        const H = 9;
+        g.add(this.box(6, H, 0.8, st, 0, H / 2, -2.6));           // north
+        g.add(this.box(0.8, H, 6, st, -2.6, H / 2, 0));           // west
+        g.add(this.box(0.8, H, 6, st, 2.6, H / 2, 0));            // east
+        g.add(this.box(2, H, 0.8, st, -2, H / 2, 2.6));           // south-west
+        g.add(this.box(2, H, 0.8, st, 2, H / 2, 2.6));            // south-east
+        g.add(this.box(2, H - 3.8, 0.8, st, 0, 3.8 + (H - 3.8) / 2, 2.6)); // lintel above door
+        for (const [x, z] of [[-2.3, -2.3], [2.3, -2.3], [-2.3, 2.3], [2.3, 2.3]]) {
+          g.add(this.cyl(0.6, 0.7, H + 1.5, sd, x, (H + 1.5) / 2, z, 10));
+          g.add(this.cone(0.95, 1.5, this.mat(0x3a4a8a), x, H + 2.2, z, 10));
+        }
+        this.merlons(g, 6, 6, H + 0.25, 1.0);
+        g.add(this.box(5.2, 0.2, 5.2, this.mat(0x7a7268), 0, 0.1, 0, false));
+        g.add(this.box(1.4, 0.05, 5.0, this.mat(0x7a1030), 0, 0.23, 0.2, false));
+        g.add(this.box(1.2, 0.5, 1.0, this.gold, 0, 0.45, -1.4)); g.add(this.box(1.2, 1.6, 0.25, this.gold, 0, 1.3, -1.8));
+        this.flag(g, 0, H + 0.5, -2.6, 0xc02030);
+        break;
+      }
+    }
+    // level bands for towers
+    if (def.tower && level > 1) {
+      for (let l = 2; l <= level; l++) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(Math.max(W, D) / 2 + 0.1, 0.12, 6, 16), this.gold);
+        ring.rotation.x = Math.PI / 2; ring.position.y = 1.2 + (l - 2) * 0.8; g.add(ring);
+      }
+    }
+    return g;
+  },
+
+  ghost(def, rot) {
+    const g = this.building(def, 1);
+    g.traverse(o => { if (o.isMesh) { o.material = this.mat(0x40ff80, { transparent: true, opacity: 0.45 }); o.castShadow = false; o.receiveShadow = false; } });
+    return g;
+  },
+  setGhostValid(g, ok, site = false) {
+    const m = this.mat(ok ? (site ? 0xffb347 : 0x40ff80) : 0xff4040, { transparent: true, opacity: 0.45 });
+    g.traverse(o => { if (o.isMesh) o.material = m; });
+  },
+
+  // ------------------------------------------------------------- projectiles
+  projectile(model, color) {
+    switch (model) {
+      case 'arrow': {
+        const g = new THREE.Group();
+        g.add(this.cyl(0.03, 0.03, 0.9, this.mat(0x9a7a4a), 0, 0, 0, 4, false).rotateX(Math.PI / 2));
+        g.add(this.cone(0.06, 0.2, this.mat(0xcfd6dd), 0, 0, 0.5, 4).rotateX(Math.PI / 2));
+        return g;
+      }
+      case 'ballista': {
+        const g = new THREE.Group();
+        g.add(this.cyl(0.07, 0.07, 1.8, this.mat(0x5a4a3a), 0, 0, 0, 5, false).rotateX(Math.PI / 2));
+        g.add(this.cone(0.14, 0.4, this.mat(0xcfd6dd), 0, 0, 1.0, 5).rotateX(Math.PI / 2));
+        return g;
+      }
+      case 'fireball': {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.38, 8, 6), this.mat(0xffa040, { emissive: 0xff4000, emissiveIntensity: 1.2 }));
+        return m;
+      }
+      case 'boulder': {
+        const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55, 0), this.mat(0x6a655c));
+        m.castShadow = true; return m;
+      }
+      case 'bolt':
+      default: {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.22, 6, 5), this.mat(color || 0x80ff80, { emissive: color || 0x40ff40, emissiveIntensity: 1.3 }));
+        return m;
+      }
+    }
+  },
+
+  // ------------------------------------------------------------- misc
+  _barGeo: null,
+  _barVert: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  _barFrag: `
+    uniform float frac; uniform vec3 color; uniform float aspect; uniform float alpha;
+    varying vec2 vUv;
+    float rbox(vec2 p, vec2 b, float r) { vec2 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
+    void main() {
+      vec2 p = (vUv - 0.5) * vec2(aspect, 1.0);
+      float rad = 0.42;
+      float dO = rbox(p, vec2(aspect * 0.5, 0.5), rad);
+      float aa = max(fwidth(dO), 0.004) * 1.1;
+      float outer = 1.0 - smoothstep(-aa, aa, dO);
+      if (outer < 0.01) discard;
+      float bw = 0.15;
+      float dI = rbox(p, vec2(aspect * 0.5 - bw, 0.5 - bw), rad - bw);
+      float inner = 1.0 - smoothstep(-aa, aa, dI);
+      float fillEdge = frac * aspect - (p.x + aspect * 0.5);
+      float fillMask = smoothstep(-aa, aa, fillEdge);
+      vec3 border = vec3(0.05, 0.04, 0.06);
+      vec3 empty = vec3(0.20, 0.10, 0.10);
+      vec3 fill = color * (0.78 + 0.45 * vUv.y);
+      vec3 col = mix(border, mix(empty, fill, fillMask), inner);
+      gl_FragColor = vec4(col, outer * alpha);
+    }`,
+  // crisp rounded health pill drawn in a shader: one plane, per-bar uniforms
+  healthBar(width = 1.2, height = 0.17) {
+    if (!this._barGeo) this._barGeo = new THREE.PlaneGeometry(1, 1);
+    const g = new THREE.Group();
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { frac: { value: 1 }, color: { value: new THREE.Color(0x5ee07a) }, aspect: { value: width / height }, alpha: { value: 0.96 } },
+      vertexShader: this._barVert, fragmentShader: this._barFrag, transparent: true, depthTest: false, depthWrite: false,
+      extensions: { derivatives: true },
+    });
+    const mesh = new THREE.Mesh(this._barGeo, mat);
+    mesh.scale.set(width, height, 1); mesh.renderOrder = 999;
+    g.add(mesh);
+    const bar = { group: g, mesh, mat, width, frac: 1, depth: false,
+      set(f) { f = Math.max(0, Math.min(1, f)); this.frac = f; mat.uniforms.frac.value = f; },
+      setColor(hex) { if (this._col !== hex) { this._col = hex; mat.uniforms.color.value.setHex(hex); } },
+      face(q) { g.quaternion.copy(q); },
+      setDepth(on) { if (on === this.depth) return; this.depth = on; mat.depthTest = on; mat.needsUpdate = true; } };
+    return bar;
+  },
+  ring(radius, color, opacity = 0.85) {
+    const m = new THREE.Mesh(new THREE.RingGeometry(radius * 0.8, radius, 24), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide }));
+    m.rotation.x = -Math.PI / 2; m.position.y = 0.06; m.renderOrder = 5;
+    return m;
+  },
+  disc(radius, color, opacity = 0.35) {
+    const m = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2; m.position.y = 0.05; m.renderOrder = 4;
+    return m;
+  },
+  tree() {
+    const g = new THREE.Group();
+    const h = U.rand(0.8, 1.4);
+    g.add(this.cyl(0.18, 0.28, 1.6 * h, this.mat(0x5a3a22), 0, 0.8 * h, 0, 6));
+    const leaf = this.mat(U.choice([0x2f6b2f, 0x3a7a35, 0x2a5a30]));
+    g.add(this.cone(1.5 * h, 2.4 * h, leaf, 0, 2.2 * h, 0, 7));
+    g.add(this.cone(1.1 * h, 2.0 * h, leaf, 0, 3.4 * h, 0, 7));
+    g.rotation.y = Math.random() * Math.PI * 2;
+    return g;
+  },
+  rock() {
+    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(U.rand(0.5, 1.4), 0), this.mat(U.choice([0x777770, 0x8a8a80, 0x6a6a64])));
+    m.scale.set(U.rand(0.7, 1.4), U.rand(0.5, 0.9), U.rand(0.7, 1.4));
+    m.rotation.set(Math.random(), Math.random() * 3, Math.random());
+    m.position.y = 0.1; m.castShadow = true; m.receiveShadow = true;
+    return m;
+  },
+  ground() {
+    const size = 200, seg = 100;
+    const geo = new THREE.PlaneGeometry(size, size, seg, seg);
+    geo.rotateX(-Math.PI / 2);
+    const pos = geo.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    const c = new THREE.Color();
+    for (let k = 0; k < pos.count; k++) {
+      const x = pos.getX(k), z = pos.getZ(k);
+      const n = U.smoothNoise(x * 0.08 + 50, z * 0.08 + 50) * 0.6 + U.smoothNoise(x * 0.3, z * 0.3) * 0.4;
+      const r = Math.max(Math.abs(x), Math.abs(z));
+      let base = new THREE.Color(0x4f8a3a).lerp(new THREE.Color(0x7aa14a), n);
+      if (r > DATA.BUILD_RADIUS + 1) base.lerp(new THREE.Color(0x5a7a3a), 0.35);
+      if (r > 78) base.lerp(new THREE.Color(0x3a5a2a), 0.5);
+      c.copy(base);
+      colors[k * 3] = c.r; colors[k * 3 + 1] = c.g; colors[k * 3 + 2] = c.b;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    mesh.receiveShadow = true;
+    return mesh;
+  },
+  // first-person view model attached to the camera
+  viewWeapon(kind) {
+    const g = new THREE.Group();
+    const w = this.weapon(kind, this.mat(0xff8040, { emissive: 0xff5010, emissiveIntensity: 0.8 }));
+    w.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+    if (kind === 'bow') { w.rotation.set(0.1, -0.55, 0.25); w.position.set(-0.22, -0.28, -0.75); w.scale.setScalar(0.42); }
+    else if (kind === 'staff') { w.rotation.set(0.25, Math.PI + 0.25, 0.15); w.position.set(0.3, -0.42, -0.55); w.scale.setScalar(0.45); }
+    else if (kind === 'pike') { w.rotation.set(0.12, Math.PI + 0.12, 0.05); w.position.set(0.28, -0.3, -0.45); w.scale.setScalar(0.45); }
+    else { w.rotation.set(0.3, Math.PI - 0.35, 0.25); w.position.set(0.28, -0.18, -0.55); w.scale.setScalar(0.55); }
+    g.add(w);
+    g.userData.weapon = w;
+    g.userData.base = { pos: w.position.clone(), rot: w.rotation.clone() };
+    return g;
+  },
+};

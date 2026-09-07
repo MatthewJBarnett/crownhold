@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crownhold</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="game"></div>
+
+<!-- ===================== main menu ===================== -->
+<div id="menu" class="overlay">
+  <div class="menu-box">
+    <h1 class="title">Crownhold</h1>
+    <p class="subtitle">Hold the fortress. Keep the King alive.</p>
+    <div class="menu-row">
+      <label>Difficulty</label>
+      <div class="seg" id="difficulty">
+        <button data-d="easy">Easy</button><button data-d="normal" class="on">Normal</button><button data-d="hard">Hard</button>
+      </div>
+    </div>
+    <h2 class="section">Choose your starting hero</h2>
+    <div id="herocards" class="hero-cards"></div>
+    <button id="startbtn" class="big">Begin the Siege</button>
+    <div class="mp">
+      <h2 class="section">Play together</h2>
+      <div id="mpblocked" class="hint hidden"></div>
+      <div class="mp-row" id="mprow">
+        <input id="mpname" maxlength="16" placeholder="Your name">
+        <button id="hostbtn">Host a game</button>
+        <span class="or">or</span>
+        <input id="joincode" maxlength="6" placeholder="Room code" autocapitalize="characters">
+        <button id="joinbtn">Join</button>
+      </div>
+      <p id="mpstatus" class="hint"></p>
+      <p class="hint">Everyone defends the same fortress, shares the gold, and can build, give orders or take control of any free unit. The host runs the game and shows a room code at the top of the screen. Each player who joins arrives with the hero they picked above. Play from the game files on your computer, since this needs a direct connection between players.</p>
+    </div>
+    <p class="hint">Overview: left-drag selects, right-click orders. Select any unit and press <b>C</b> (or Tab) to take control of it in first person. <b>?</b> shows all controls.</p>
+  </div>
+</div>
+
+<!-- ===================== HUD ===================== -->
+<div id="hud" class="hidden">
+  <div id="topbar">
+    <div class="stat gold"><span class="ico">◆</span><span id="gold">0</span></div>
+    <div class="stat"><span class="lbl">Wave</span><span id="wave">0</span></div>
+    <div class="stat"><span class="lbl">Enemies</span><span id="enemies">0</span></div>
+    <div class="stat"><span class="lbl">Soldiers</span><span id="soldiers">0/0</span></div>
+    <div class="stat kingstat"><span class="lbl">King</span><div class="bar"><div id="kinghp" class="fill"></div></div></div>
+    <div id="bossbar" class="hidden"><span id="bossname"></span><div class="bar boss"><div id="bosshp" class="fill"></div></div></div>
+    <div id="roomstat" class="stat hidden"></div>
+    <div class="spacer"></div>
+    <div class="seg small" id="speed"><button data-s="1" class="on">1×</button><button data-s="2">2×</button><button data-s="3">3×</button></div>
+    <button id="pausebtn" class="icon" title="Pause (P)">❚❚</button>
+    <button id="helpbtn" class="icon" title="Controls (?)">?</button>
+    <button id="mutebtn" class="icon" title="Mute (M)">♪</button>
+    <button id="fsbtn" class="icon" title="Fullscreen">⛶</button>
+  </div>
+
+  <div id="left">
+    <div class="tabs">
+      <button data-tab="build" class="on">Build <kbd>B</kbd></button>
+      <button data-tab="recruit">Recruit</button>
+      <button data-tab="upgrade">Upgrades</button>
+    </div>
+    <div id="panel-build" class="panel"></div>
+    <div id="panel-recruit" class="panel hidden"></div>
+    <div id="panel-upgrade" class="panel hidden"></div>
+  </div>
+
+  <div id="right">
+    <canvas id="minimap" width="200" height="200"></canvas>
+    <button id="nextwave" class="big wave">Next Wave <kbd>N</kbd></button>
+    <div id="wavepreview"></div>
+    <button id="repairall" title="Repair every damaged building, most important first (R). Hover to see what is damaged.">Repair all</button>
+    <label id="autorepair" title="After each wave, spend gold repairing damaged buildings, most important first"><input type="checkbox" id="autorepairbox"> Auto-repair after each wave</label>
+    <div class="quick">
+      <button data-act="selectAll" title="Select all soldiers (Ctrl+A)">All soldiers</button>
+      <button data-act="selectKing" title="Select the King (K)">King</button>
+      <button data-act="selectHeroes" title="Select heroes (J)">Heroes</button>
+      <button data-act="selectEngineers" title="Select engineers">Engineers</button>
+    </div>
+  </div>
+
+  <div id="selpanel" class="hidden"></div>
+  <div id="buildhint" class="hidden"></div>
+  <div id="selbox" class="hidden"></div>
+
+  <div id="fpshud" class="hidden">
+    <div id="crosshair"></div>
+    <div id="fpsinfo">
+      <div id="fpsname"></div>
+      <div class="bar big"><div id="fpshp" class="fill"></div></div>
+      <div id="fpsabil"></div>
+      <div id="lockhint" class="hidden"></div>
+      <div id="fpshints">
+        <span><kbd>LMB</kbd> attack</span><span><kbd>WASD</kbd> move · arrows turn</span><span><kbd>[</kbd> <kbd>]</kbd> mouse sensitivity</span><span><kbd>RMB</kbd> tap/<kbd>G</kbd> soldiers attack there</span><span><kbd>F</kbd> follow me</span><span><kbd>H</kbd> hold</span><span><kbd>V</kbd> defend King</span><span><kbd>T</kbd> 3rd person</span><span><kbd>Tab</kbd> overview</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="toasts"></div>
+  <div id="tooltip" class="hidden"></div>
+</div>
+
+<!-- ===================== help ===================== -->
+<div id="help" class="overlay hidden">
+  <div class="menu-box wide">
+    <h2 class="title small">Controls</h2>
+    <div class="cols">
+      <div>
+        <h3>Overview (commander)</h3>
+        <ul>
+          <li><kbd>WASD</kbd> / arrows pan, <kbd>Q</kbd><kbd>E</kbd> rotate, wheel zoom, right-drag orbit, middle-drag pan</li>
+          <li>Left click / drag: select your units. <kbd>Shift</kbd> adds to the selection</li>
+          <li>Right click: move &amp; attack there, attack an enemy, or follow a friendly unit</li>
+          <li><kbd>C</kbd> or <kbd>Tab</kbd>: take control of the selected unit (any unit, even the King)</li>
+          <li><kbd>H</kbd> hold position, <kbd>F</kbd> follow the nearest hero (or the hovered unit)</li>
+          <li><kbd>Ctrl</kbd>+<kbd>1-9</kbd> save a control group, <kbd>1-9</kbd> recall it. <kbd>Ctrl</kbd>+<kbd>A</kbd> all soldiers, <kbd>K</kbd> King, <kbd>J</kbd> heroes</li>
+          <li><kbd>B</kbd> build panel. Pick a building, <kbd>R</kbd> rotates, click places. Drag to lay walls. Right click / <kbd>Esc</kbd> cancels</li>
+          <li>Click a building to repair, upgrade or sell it (<kbd>Del</kbd>). <kbd>R</kbd> repairs everything, or tick auto-repair. Engineers repair for free</li>
+          <li><kbd>N</kbd> / <kbd>Space</kbd> next wave, <kbd>P</kbd> pause, <kbd>=</kbd> fast forward, <kbd>M</kbd> mute</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Possessed unit (first person)</h3>
+        <ul>
+          <li>Mouse look (click the game once to capture the mouse), <kbd>WASD</kbd> move, arrow keys turn, <kbd>Shift</kbd> sprint, <kbd>[</kbd> <kbd>]</kbd> mouse sensitivity</li>
+          <li><kbd>LMB</kbd> attack (hold to keep swinging / shooting)</li>
+          <li><kbd>Q</kbd> <kbd>E</kbd> hero abilities, aimed where you look</li>
+          <li><kbd>RMB</kbd> tap or <kbd>G</kbd>: send your soldiers to attack where you aim. Without mouse capture, holding <kbd>RMB</kbd> and dragging looks around without limits</li>
+          <li><kbd>F</kbd> soldiers follow you, <kbd>H</kbd> hold, <kbd>V</kbd> defend the King</li>
+          <li><kbd>T</kbd> toggle third person, <kbd>Tab</kbd> / <kbd>Esc</kbd> back to the overview</li>
+          <li>Soldiers selected before taking control become your squad. Otherwise you command all of them</li>
+        </ul>
+        <h3>Tips</h3>
+        <ul>
+          <li>Between waves you build and repair instantly. During a wave a new building is only a construction site until an Engineer finishes it (or the wave ends), and only Engineers can repair</li>
+          <li>Enemies path to the King and will break through the cheapest walls in their way. Funnel them into your gate and tower fire</li>
+          <li>The Keep shelters units inside from ranged attacks. The King fights back if enemies get in</li>
+          <li>Catapults out-range your towers: send a hero or cavalry of swordsmen to kill them</li>
+          <li>Fallen heroes return after the wave. A fallen King ends the game</li>
+        </ul>
+      </div>
+    </div>
+    <button id="helpclose" class="big">Back to the battle</button>
+  </div>
+</div>
+
+<div id="connecting" class="overlay hidden"><div class="menu-box"><h2 class="title small">Joining the defence…</h2><p class="subtitle">Waiting for the host to send the battlefield.</p></div></div>
+
+<!-- ===================== game over ===================== -->
+<div id="gameover" class="overlay hidden">
+  <div class="menu-box">
+    <h2 class="title small">The King has fallen</h2>
+    <p id="gostats"></p>
+    <button id="restartbtn" class="big">Rise again</button>
+  </div>
+</div>
+
+<div id="errlog" class="hidden"></div>
+<script>
+// error capture (shown only with ?test or ?debug in the URL; always available as window.__errors)
+window.__errors = [];
+window.addEventListener('error', function (e) {
+  var msg = (e.message || 'error') + ' @ ' + (e.filename || '').split('/').pop() + ':' + e.lineno + ':' + e.colno + (e.error && e.error.stack ? '\n' + e.error.stack : '');
+  window.__errors.push(msg);
+  var el = document.getElementById('errlog');
+  if (el && /[?&](test|debug)/.test(location.search)) { el.classList.remove('hidden'); el.textContent += msg + '\n'; }
+});
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script src="js/data.js"></script>
+<script src="js/util.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/grid.js"></script>
+<script src="js/models.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/abilities.js"></script>
+<script src="js/waves.js"></script>
+<script src="js/controls.js"></script>
+<script src="js/net.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
