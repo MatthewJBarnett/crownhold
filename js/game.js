@@ -65,6 +65,7 @@ class Game {
     // sky dome with a zenith-to-horizon gradient, and a few drifting clouds
     this.sky = Models.skyDome(); scene.add(this.sky);
     this.clouds = Models.clouds(14); scene.add(this.clouds);
+    this.sunDisc = Models.sunDisc(); this.sunDisc.position.copy(this.sunOffset).normalize().multiplyScalar(820); scene.add(this.sunDisc);
     this.decor = new THREE.Group(); scene.add(this.decor);
     this.buildDecor();
     const gh = new THREE.GridHelper(DATA.BUILD_RADIUS * 2 + 2, DATA.BUILD_RADIUS + 1, 0x335533, 0x335533);
@@ -140,7 +141,30 @@ class Game {
     this.rangeRing.visible = true;
   }
   towerRangeFor(def, level = 1) { return def.range * (1 + 0.08 * (this.upgrades.towers || 0)) * Math.pow(DATA.towerUpgrade.range, level - 1); }
-  groundY(x, z) { return this.world ? this.world.heightAt(x, z) : 0; }
+  groundY(x, z) { return this.world ? this.world.walkY(x, z) : 0; }
+  setBloom(on) { this.bloomOn = !!on; this.savePref('bloom', on ? '1' : '0'); }
+  // draws the frame, through the bloom/grading pipeline when it is on
+  renderFrame() {
+    if (this.bloomOn && typeof Post !== 'undefined') {
+      try { if (!this.post) this.post = new Post(this.renderer); this.post.render(this.scene, this.camera); return; }
+      catch (e) { console.warn('post-processing off:', e); this.bloomOn = false; this.renderer.setRenderTarget(null); }
+    }
+    this.renderer.render(this.scene, this.camera);
+  }
+  // experiments: an immortal, absurdly strong hero for reaching late waves. Not a real hero: never unique, never bought back
+  spawnTestChampion() {
+    if (!this.started || this.over) { this.ui.toast('Start a game first', 'error'); return; }
+    if (this.replica) { this.ui.toast('Only the host can spawn a test champion', 'error'); return; }
+    const def = DATA.testChampion;
+    const near = this.king ? this.king.pos : { x: 0, z: 14 };
+    const sp = this.findSpawnSpot(near.x + 3, near.z + 3);
+    const u = this.spawnUnit(def, 'player', sp.x, sp.z, { hero: true, heroKey: 'champion', owner: this.actor });
+    u.immortal = true; u.testChampion = true;
+    this.effects.spawn('ring', sp.x, 0.3, sp.z, { radius: 4, color: 0xffd040, dur: 0.8 });
+    this.ui.toast('Test champion spawned (experiments)', 'good');
+    this.ui.dirty = true;
+    return u;
+  }
   // (re)build the world for a seed: terrain, obstacles and the border decoration
   setWorld(seed, type) {
     if (this.world) this.world.dispose(this.scene);
@@ -149,12 +173,46 @@ class Game {
     const pal = DATA.mapTypes[type].palette;
     this.scene.background.setHex(pal.sky); this.scene.fog.color.setHex(pal.sky);
     Models.tintSky(this.sky, pal.sky, DATA.mapTypes[type].zenith || 0x3f7fd0);
+    this.buildParticles(type);
     this.hemi.color.setHex(pal.sky); this.hemi.groundColor.setHex(pal.grass);
     this.worldType = type;
     this.world.applyToGrid(this.grid);
     this.world.buildScene(this.scene);
     this.scene.remove(this.decor); this.decor = new THREE.Group(); this.scene.add(this.decor); this.buildDecor();
     this.worldSeed = seed;
+  }
+  // drifting motes that suit the map: snow, embers, pollen, dust
+  buildParticles(type) {
+    if (this.motes) { this.scene.remove(this.motes); this.motes.geometry.dispose(); this.motes.material.dispose(); this.motes = null; }
+    const cfg = { frozen: { n: 1600, color: 0xffffff, size: 0.28, fall: 2.2, drift: 0.8, spread: 70, alt: 26, add: false },
+      volcanic: { n: 900, color: 0xff8030, size: 0.22, fall: -1.6, drift: 0.6, spread: 70, alt: 22, add: true },
+      darkwood: { n: 500, color: 0xc8ff80, size: 0.16, fall: 0.15, drift: 0.9, spread: 60, alt: 6, add: true },
+      valley: { n: 500, color: 0xfff0b0, size: 0.14, fall: 0.2, drift: 0.9, spread: 60, alt: 7, add: true },
+      badlands: { n: 700, color: 0xd8c090, size: 0.3, fall: 0.05, drift: 3.5, spread: 80, alt: 10, add: false },
+      highlands: { n: 500, color: 0xe8f0ff, size: 0.16, fall: 0.3, drift: 1.2, spread: 70, alt: 12, add: false } }[type] || { n: 400, color: 0xffffff, size: 0.15, fall: 0.2, drift: 1, spread: 60, alt: 8, add: false };
+    const pos = new Float32Array(cfg.n * 3);
+    for (let k = 0; k < cfg.n; k++) { pos[k * 3] = (Math.random() - 0.5) * cfg.spread * 2; pos[k * 3 + 1] = Math.random() * cfg.alt; pos[k * 3 + 2] = (Math.random() - 0.5) * cfg.spread * 2; }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.PointsMaterial({ color: cfg.color, size: cfg.size, map: Models.softDot(), transparent: true, opacity: 0.85, depthWrite: false, blending: cfg.add ? THREE.AdditiveBlending : THREE.NormalBlending, sizeAttenuation: true });
+    const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; pts.userData.cfg = cfg; pts.userData.seed = Math.random() * 100;
+    this.scene.add(pts); this.motes = pts;
+  }
+  tickParticles(dt) {
+    const m = this.motes; if (!m) return;
+    const cfg = m.userData.cfg, p = m.geometry.attributes.position.array, n = cfg.n;
+    const f = this.controls.mode === 'fps' ? this.controls.controlled.pos : this.controls.focus;
+    const t = this.time + m.userData.seed, S = cfg.spread;
+    for (let k = 0; k < n; k++) {
+      let x = p[k * 3], y = p[k * 3 + 1], z = p[k * 3 + 2];
+      x += Math.sin(t * 0.7 + k) * cfg.drift * dt + 0.3 * dt; z += Math.cos(t * 0.5 + k * 0.7) * cfg.drift * dt;
+      y -= cfg.fall * dt;
+      const ground = this.groundY(x, z);
+      if (y < ground + 0.2) y = ground + (cfg.fall > 0 ? cfg.alt : 0.3); else if (y > ground + cfg.alt) y = ground + 0.3;
+      if (x < f.x - S) x += 2 * S; else if (x > f.x + S) x -= 2 * S;
+      if (z < f.z - S) z += 2 * S; else if (z > f.z + S) z -= 2 * S;
+      p[k * 3] = x; p[k * 3 + 1] = y; p[k * 3 + 2] = z;
+    }
+    m.geometry.attributes.position.needsUpdate = true;
   }
   savePref(k, v) { try { localStorage.setItem('crownhold_' + k, v); } catch (e) {} }
   loadPref(k) { try { return localStorage.getItem('crownhold_' + k); } catch (e) { return null; } }
@@ -167,6 +225,7 @@ class Game {
   loadPrefs() {
     this.shadowsOn = this.loadPref('shadows') !== '0';
     if (!this.shadowsOn) this.renderer.shadowMap.enabled = false;
+    this.bloomOn = this.loadPref('bloom') !== '0';
     this.showFps = this.loadPref('showfps') === '1';
     this.controls.invertY = this.loadPref('inverty') === '1';
     const v = parseFloat(this.loadPref('volume')); if (!isNaN(v)) SFX.setVolume(v / 100);
@@ -308,8 +367,8 @@ class Game {
     const frac = initial ? 1 : b.hp / b.maxHp;
     b.maxHp = def.hp * hpMul; b.hp = b.maxHp * frac;
     if (def.tower) {
-      b.dmg = def.dmg * (1 + 0.2 * (up.towers || 0)) * Math.pow(DATA.towerUpgrade.dmg, b.level - 1);
-      b.range = def.range * (1 + 0.08 * (up.towers || 0)) * Math.pow(DATA.towerUpgrade.range, b.level - 1);
+      b.dmg = def.dmg * (1 + 0.2 * (up.towers || 0)) * Math.pow(DATA.towerUpgrade.dmg, b.level - 1) * (b.high ? 1.15 : 1);
+      b.range = def.range * (1 + 0.08 * (up.towers || 0)) * Math.pow(DATA.towerUpgrade.range, b.level - 1) * (b.high ? 1.3 : 1);
       b.cd = def.cd;
     }
   }
@@ -402,6 +461,11 @@ class Game {
   set heroesBought(v) { this.wallet(this.localPlayer).heroesBought = v; }
   heroInPlay(key) { return this.units.some(u => u.isHero && u.heroKey === key && !u.dead); }
   playerName(id) { const p = this.players[id]; return p ? p.name : 'a player'; }
+  get coop() { return this.playerOrder.length > 1; }
+  playerColor(id) { const k = this.playerOrder.indexOf(id); return k < 0 ? DATA.sharedColor : DATA.playerColors[k % DATA.playerColors.length]; }
+  ownerColor(o) { return o.owner ? this.playerColor(o.owner) : DATA.sharedColor; }
+  ownerLabel(o) { return !o.owner ? 'Shared' : (o.owner === this.localPlayer ? 'Yours' : `${this.playerName(o.owner)}'s`); }
+  cssColor(hex) { return '#' + hex.toString(16).padStart(6, '0'); }
   ownsOrShared(o) { return !o.owner || o.owner === this.actor; }
   hasBuilding(key, pid) { return this.buildings.some(b => b.def.key === key && !b.dead && (pid === undefined || !b.owner || b.owner === pid)); }
   hasActive(key, pid) { return this.buildings.some(b => b.def.key === key && b.active && (pid === undefined || !b.owner || b.owner === pid)); }
@@ -434,6 +498,8 @@ class Game {
     if (!free && !this.canAfford(cost)) { if (!quiet) { this.ui.toast('Not enough gold', 'error'); SFX.play('error'); } return null; }
     if (!free) this.spend(cost);
     const b = new Building(this, def, i, j, rot, res.cells);
+    b.high = res.cells.every(c => this.grid.natural[this.grid.idx(c.i, c.j)] === 9);
+    if (b.high) this.applyBuildingStats(b, true);
     b.paid = free ? 0 : cost;
     b.owner = free ? null : this.actor;
     this.grid.place(b);
@@ -728,7 +794,7 @@ class Game {
       this.updateVisualsOnly(realDt);
       this.ui.update(realDt);
     }
-    this.renderer.render(this.scene, this.camera);
+    this.renderFrame();
   }
   updateVisualsOnly(realDt) {
     // things that should keep moving while paused: shadows follow camera, command marker fade
@@ -747,7 +813,9 @@ class Game {
     t.addScaledVector(this.sunRight, sx).addScaledVector(this.sunUp, sy);
     this.sun.target.position.copy(t); this.sun.position.copy(t).add(this.sunOffset);
     if (this.clouds) { this.clouds.position.x = (this.clouds.position.x + realDt * 0.6) % 60; }
-    if (this.world && this.world.water && this.world.water.material.map) { const off = this.world.water.material.map.offset; off.x += realDt * 0.01; off.y += realDt * 0.006; }
+    if (this.world && this.world.water && this.world.water.material.map) { const off = this.world.water.material.map.offset; off.x += realDt * 0.01; off.y += realDt * 0.006; const bm = this.world.water.material.bumpMap; if (bm) { bm.offset.x -= realDt * 0.016; bm.offset.y += realDt * 0.011; } }
+    if (!this.paused) this.tickParticles(realDt * Math.min(1, this.timeScale || 1));
+    for (const b of this.buildings) { const tl = b.group && b.group.userData.torches; if (tl) for (const l of tl) { const fl = 0.75 + 0.25 * Math.sin(this.time * 17 + l.userData.phase) * Math.sin(this.time * 7.3 + l.userData.phase * 2); l.intensity = l.userData.base * fl; if (l.userData.flame) l.userData.flame.scale.setScalar(0.85 + 0.3 * fl); } }
     if (this.markerT > 0) { this.markerT -= realDt; this.marker.scale.setScalar(0.6 + (1 - this.markerT / 0.7) * 1.5); this.marker.material.opacity = Math.max(0, this.markerT); if (this.markerT <= 0) this.marker.visible = false; }
     this.effects.update(realDt * (this.paused ? 0 : this.timeScale));
   }
@@ -887,7 +955,8 @@ function runSelfTest(game, params) {
   window.onerror = (m, src, line, col, err) => { say('ERROR: ' + m + ' @' + src + ':' + line + ':' + col + '\n' + (err && err.stack)); };
   try {
     game.ui.hideMenu();
-    game.newGame(params.get('hero') || 'knight', 'normal');
+    game.newGame(params.get('hero') || 'knight', 'normal', { mapType: params.get('mapType') || undefined, seed: params.get('seed') ? parseInt(params.get('seed'), 10) : undefined });
+    say('world: type=' + game.worldType + ' seed=' + game.worldSeed + ' lanes=' + JSON.stringify(game.world && game.world.laneSpawns) + ' plateaus=' + (game.world && game.world.plateaus ? game.world.plateaus.length : 0) + ' connected=' + (game.world ? game.world.connected() : 'n/a'));
     say('after newGame: buildings=' + game.buildings.length + ' damaged=' + game.buildings.filter(b => b.hp < b.maxHp - 0.5).length + ' sample=' + game.buildings.slice(0, 3).map(b => b.def.key + ':' + b.hp + '/' + b.maxHp).join(' '));
     game.update(1 / 60);
     say('after 1 step: damaged=' + game.buildings.filter(b => b.hp < b.maxHp - 0.5).length + ' barsVisible=' + game.buildings.filter(b => b.hpBar.group.visible).length);
@@ -1151,8 +1220,16 @@ function runSelfTest(game, params) {
     if (params.get('probe5')) {
       const shots = document.createElement('div'); shots.id = 'shots'; shots.style.display = 'none'; document.body.appendChild(shots);
       game.renderer.setSize(1280, 800); game.camera.aspect = 1.6; game.camera.updateProjectionMatrix();
-      const snap = (name) => { game.controls.update(1 / 60, 1 / 60); game.updateVisualsOnly(1 / 60); game.renderer.render(game.scene, game.camera); const d = document.createElement('div'); d.textContent = name + '|' + game.renderer.domElement.toDataURL('image/png'); shots.appendChild(d); };
+      const snap = (name) => { game.controls.update(1 / 60, 1 / 60); game.updateVisualsOnly(1 / 60); game.renderFrame(); const d = document.createElement('div'); d.textContent = name + '|' + game.renderer.domElement.toDataURL('image/png'); shots.appendChild(d); };
       for (const t of Object.keys(DATA.mapTypes)) { game.setWorld(777, t); game.controls.camDist = 235; game.controls.focus.set(0, 0, 0); game.controls.camPitch = 1.25; game.controls.camYaw = 0; snap('map_' + t); }
+      { game.newGame('knight', 'normal', { mapType: 'valley', seed: 777 }); game.players.B = game.newWallet('B', 'Bea', 'ranger'); game.playerOrder.push('B'); game.ui.refreshHud && game.ui.refreshHud();
+        let k = 0; for (const u of game.units) if (u.isSoldier && k++ % 2) u.owner = 'B';
+        game.placeBuilding('arrow_tower', game.grid.half - 9, game.grid.half + 14, 0, true); game.placeBuilding('arrow_tower', game.grid.half + 7, game.grid.half + 14, 0, true);
+        const towers = game.buildings.filter(b => b.def.tower); if (towers[0]) { towers[0].owner = 'B'; towers[0].syncOwnerMark(true); } if (towers[1]) { towers[1].owner = 'host'; towers[1].syncOwnerMark(true); }
+        for (const u of game.units) u.syncOwnerMark(); for (const b of game.buildings) b.syncOwnerMark(true);
+        game.controls.camDist = 42; game.controls.focus.set(0, 0, 16); game.controls.camPitch = 0.85; game.controls.camYaw = 0; snap('coop');
+        game.controls.camDist = 14; game.controls.focus.set(-2, 0, 14); game.controls.camPitch = 0.55; game.controls.camYaw = 0.6; snap('coop_close');
+        game.spawnTestChampion(); game.controls.camDist = 12; game.controls.focus.set(3, 0, 17); game.controls.camPitch = 0.5; snap('champion'); }
       game.setWorld(777, 'valley');
       const ford = game.world.fords[1]; const fc = game.world.cellCenter(ford.i - 0.5, ford.j - 0.5);
       game.controls.camDist = 55; game.controls.focus.set(fc.x, 0, fc.z); game.controls.camPitch = 0.75; snap('valley_ford');

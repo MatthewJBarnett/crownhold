@@ -25,8 +25,15 @@ Three.js and the PeerJS networking library load from cdnjs, so an internet conne
 - Every unit is fully healed when a wave ends. The Healing Shrine only works during a wave.
 - Farms and Gold Mines get pricier with every one you own (30% and 60% per building). Extra heroes start at
   1200 gold and each purchase raises the next price by 50%. Selling refunds 60% of what you actually paid.
-- Enemies path to the King and break through the cheapest walls in their way. The Keep shelters units inside
-  from ranged fire. If the King falls, the game is over.
+- Enemies arrive only along the map's two or three lanes (ringed on the minimap; the next wave's lanes are red).
+  Each lane starts at the very edge of the map, winds through two belts of forest or rock around the castle, then
+  crosses open ground to the walls. Enemies path to the King and walk a long way round walls before chewing
+  through them, so walls steer them into tower fire. The Keep shelters units inside from ranged fire. If the King
+  falls, the game is over.
+- Beside every lane are two high-ground summits (cliff-ringed squares). Only a tower fits on one: it gets +30% range
+  and +15% damage there, and melee enemies cannot reach it (archers, artillery and harpies can).
+- Idle soldiers and heroes run to help a wall or tower that is being hit nearby, and give up on enemies they cannot
+  path to. The King only fights what comes within a few metres of him.
 
 ## The world
 
@@ -35,8 +42,13 @@ River Valley (a river, a tributary, fords and marsh), Highlands (two rings of ro
 Darkwood (a forest belt with lanes and clearings, a stream), Badlands (radial canyons, crags, ruins), Frozen Marsh
 (snow, frozen lakes and slow bog) and Ashlands (a lava river and molten pools). Water, lava, rock and forest
 cannot be built on or walked through; marsh is walkable but slow; dirt roads run from each spawn point to the
-gate and speed everyone up. Hidden caches of gold reward a unit that roams out to them. Every spawn point is
-guaranteed a route to the King. Selecting a tower, or placing one, shows its range draped over the ground.
+gate and speed everyone up. Rivers are crossed on wooden bridges that stand on piers over the water. Hidden caches
+of gold reward a unit that roams out to them. Every lane is guaranteed a route to the King. Selecting a tower, or
+placing one, shows its range draped over the ground.
+
+Graphics: rounded units with capes, helmets and shields; stone with relief; grass tufts, round and pine canopies;
+rippling water; drifting snow, embers, pollen or dust depending on the map; torches at the gate and keep; soft
+contact shadows; a sun disc; and a bloom/colour-grading pass (Settings: Glow & colour; turn it off on slow machines).
 
 ## Heroes
 
@@ -54,6 +66,10 @@ with the hero they picked, appear in the lobby, and the host presses Start. Nobo
 begun. Every defender has their own gold, hero, garrison, buildings and upgrades (your Weapon Smithing or Tower
 Engineering applies to your soldiers and towers; shared buildings take the best level anyone has), and only they can
 order, control, sell or repair their own things. Each defender can build their own blacksmith, market and tavern.
+In co-op every defender has a colour: their units wear a ring at the feet, their buildings fly a pennant, the minimap
+uses the same colours, and the top bar shows each name with its swatch. Shared things (the King, the starting castle)
+wear gold and a crown pennant. Hovering anything names its owner, the selection panel says who may command, repair or
+upgrade it (buttons you cannot use are greyed), and Repair all only touches yours and the shared castle.
 The King and the starting castle are shared, waves start when every defender presses Next Wave, and any free unit of yours (or the King) can be taken
 over in first person. Waves scale with the number of defenders. The host runs the simulation, so the host should
 have the steadiest connection. After a defeat the host's Rise again returns everyone to the lobby. Play from the game files on your computer (`index.html`), not from
@@ -102,7 +118,8 @@ Possessed unit (first person)
 - `index.html`, `css/style.css`: page and HUD
 - `js/data.js`: every unit, hero, enemy, building, upgrade and wave definition (tune balance here)
 - `js/grid.js`: build grid, enemy flow field (walls are breakable at a cost), A* for friendly units, circle collision
-- `js/models.js`: procedural low-poly meshes for units, buildings, projectiles and shader-drawn health bars
+- `js/models.js`: procedural meshes for units, buildings, projectiles, owner pennants and shader-drawn health bars
+- `js/post.js`: bloom and colour grading (render target, bright pass, blur, composite) without EffectComposer
 - `js/entities.js`: units, buildings (construction, damage tint), projectiles, zones, particle effects
 - `js/ai.js`, `js/abilities.js`: NPC behaviour (including engineers) and hero abilities
 - `js/waves.js`: wave composition and spawning
@@ -117,3 +134,7 @@ Possessed unit (first person)
 `index.html?test=1&waves=0&collide=1` drives the possessed hero into walls and reports the closest approach.
 `index.html?test=1&waves=0&mptest=1` runs a host and a client replica in one page over a loopback transport.
 `index.html?autostart=1&hero=ranger&fps=1&presim=20&wave=1` starts a game immediately for screenshots.
+`&mapType=valley&seed=777` pins the world in test mode. `?test=1&probe5=1&waves=0` renders a set of views into the page.
+
+Experiments: Settings has a "Spawn a test champion" button (host only in co-op). It spawns an immortal hero with
+absurd splash damage, speed and cooldowns, as many times as you like, purely for reaching late waves quickly.

@@ -38,9 +38,11 @@ class WaveManager {
       counts[e.key] = (counts[e.key] || 0) + 1; budget -= e.reward; total++;
     }
     // spawn directions: 1 (early) .. 4 (late)
-    const dirs = Math.min(4, 1 + Math.floor((n - 1) / 3));
+    const lanes = (this.game.world && this.game.world.laneSpawns && this.game.world.laneSpawns.length) ? this.game.world.laneSpawns : DATA.spawnPoints.map((s, k) => k);
+    const dirs = Math.min(lanes.length, 1 + Math.floor((n - 1) / 3));
     const idxs = [];
-    while (idxs.length < dirs) { const k = U.randInt(0, DATA.spawnPoints.length - 1); if (!idxs.includes(k)) idxs.push(k); }
+    const pool = lanes.slice();
+    while (idxs.length < dirs && pool.length) { const k = pool.splice(Math.floor(Math.random() * pool.length), 1)[0]; idxs.push(k); }
     // overflow budget into extra HP so late waves stay dangerous without huge counts
     const extraHp = total >= DATA.waves.maxCount && budget > 0 ? 1 + budget / (DATA.waves.budget(n) * diff.budget) : 1;
     return { n, counts, boss: bossKey, dirs: idxs, hpMul: hpScale * extraHp * diff.hp, total: total + (bossKey ? 1 : 0),

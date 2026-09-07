@@ -305,7 +305,7 @@ class NetClient {
     for (const r of s.spawns || []) {
       const [id, defKey, team, hero, heroKey, hpMul] = r;
       if (this.units.has(id)) continue;
-      const def = team === 'enemy' ? DATA.enemies[defKey] : (hero ? DATA.heroes[heroKey] : DATA.units[defKey]);
+      const def = team === 'enemy' ? DATA.enemies[defKey] : (hero ? (DATA.heroes[heroKey] || (heroKey === 'champion' ? DATA.testChampion : null)) : DATA.units[defKey]);
       if (!def) continue;
       const u = new Unit(g, def, team, 0, 0, { hero: !!hero, heroKey: heroKey || null, hpMul: hpMul || 1, owner: r[6] >= 0 && g.playerOrder[r[6]] ? g.playerOrder[r[6]] : null });
       u.id = id; u.netPrev = null; u.netCur = null; u.group.visible = false;

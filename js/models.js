@@ -30,6 +30,80 @@ const Models = {
     const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;
     this._tex[key] = t; return t;
   },
+  softDot() {
+    if (this._dot) return this._dot;
+    const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+    const g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.4, 'rgba(255,255,255,0.6)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+    const t = new THREE.CanvasTexture(c); this._dot = t; return t;
+  },
+  sunDisc() {
+    const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
+    const g = x.createRadialGradient(128, 128, 0, 128, 128, 128); g.addColorStop(0, 'rgba(255,250,230,1)'); g.addColorStop(0.18, 'rgba(255,240,200,0.95)'); g.addColorStop(0.3, 'rgba(255,220,160,0.35)'); g.addColorStop(1, 'rgba(255,200,120,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, depthTest: false, fog: false, blending: THREE.AdditiveBlending }));
+    s.scale.setScalar(220); s.renderOrder = -10;
+    return s;
+  },
+  // a soft dark disc: the contact shadow under a unit or building
+  blob(radius, opacity = 0.4) {
+    if (!this._blobTex) {
+      const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
+      const g = x.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.55, 'rgba(0,0,0,0.55)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      x.fillStyle = g; x.fillRect(0, 0, 128, 128); this._blobTex = new THREE.CanvasTexture(c);
+    }
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(radius * 2, radius * 2), new THREE.MeshBasicMaterial({ map: this._blobTex, transparent: true, opacity, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2; m.renderOrder = 2;
+    return m;
+  },
+  tuftTexture() {
+    if (this._tuft) return this._tuft;
+    const c = document.createElement('canvas'); c.width = 64; c.height = 64; const x = c.getContext('2d');
+    x.clearRect(0, 0, 64, 64);
+    for (let k = 0; k < 9; k++) {
+      const bx = 8 + k * 6, top = 6 + Math.random() * 16, lean = (Math.random() - 0.5) * 14;
+      x.strokeStyle = `rgba(${200 + Math.floor(Math.random() * 55)},${215 + Math.floor(Math.random() * 40)},${170 + Math.floor(Math.random() * 60)},1)`;
+      x.lineWidth = 2.2; x.beginPath(); x.moveTo(bx, 64); x.quadraticCurveTo(bx + lean * 0.4, 40, bx + lean, top); x.stroke();
+    }
+    const t = new THREE.CanvasTexture(c); this._tuft = t; return t;
+  },
+  tuftGeometry() {
+    const g = new THREE.BufferGeometry();
+    const v = [], uv = [], idx = [];
+    for (let k = 0; k < 3; k++) {
+      const a = k * Math.PI / 3, cx = Math.cos(a) * 0.45, cz = Math.sin(a) * 0.45;
+      const b = v.length / 3;
+      v.push(-cx, 0, -cz, cx, 0, cz, cx, 0.7, cz, -cx, 0.7, -cz);
+      uv.push(0, 0, 1, 0, 1, 1, 0, 1);
+      idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+    }
+    g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+    const nn = new Float32Array(v.length); for (let k = 0; k < v.length; k += 3) { nn[k] = 0; nn[k + 1] = 1; nn[k + 2] = 0; }
+    g.setAttribute('normal', new THREE.BufferAttribute(nn, 3));
+    return g;
+  },
+  // tree crowns: three stacked pine tiers, or a rounded broadleaf crown
+  canopyGeometry(kind) {
+    const parts = [];
+    if (kind === 'round') {
+      for (const [r, y, sx] of [[1.35, 0.2, 1], [1.05, 1.1, 1.1], [0.7, 1.9, 1]]) { const s = new THREE.SphereGeometry(r, 10, 8); s.scale(sx, 0.85, sx); s.translate(0, y, 0); parts.push(s); }
+    } else {
+      for (const [r, h, y] of [[1.35, 1.9, -0.2], [1.05, 1.8, 0.9], [0.7, 1.6, 1.9]]) { const c = new THREE.ConeGeometry(r, h, 10); c.translate(0, y + h / 2, 0); parts.push(c); }
+    }
+    return this.mergeGeometries(parts);
+  },
+  mergeGeometries(list) {
+    const pos = [], nor = [], uv = [], idx = []; let base = 0;
+    for (const g of list) {
+      const p = g.attributes.position, n = g.attributes.normal, u = g.attributes.uv, ix = g.index;
+      for (let k = 0; k < p.count; k++) { pos.push(p.getX(k), p.getY(k), p.getZ(k)); nor.push(n.getX(k), n.getY(k), n.getZ(k)); uv.push(u ? u.getX(k) : 0, u ? u.getY(k) : 0); }
+      if (ix) for (let k = 0; k < ix.count; k++) idx.push(base + ix.getX(k)); else for (let k = 0; k < p.count; k++) idx.push(base + k);
+      base += p.count;
+    }
+    const out = new THREE.BufferGeometry();
+    out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); out.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); out.setIndex(idx);
+    return out;
+  },
   skyDome() {
     const geo = new THREE.SphereGeometry(1000, 24, 12);
     const pos = geo.attributes.position; const colors = new Float32Array(pos.count * 3);
@@ -66,19 +140,22 @@ const Models = {
     m.castShadow = shadow; m.receiveShadow = shadow;
     return m;
   },
-  cyl(rt, rb, h, mat, x = 0, y = 0, z = 0, seg = 10, shadow = true) {
+  cyl(rt, rb, h, mat, x = 0, y = 0, z = 0, seg = 14, shadow = true) {
+    if (seg >= 6) seg = Math.max(seg, 14);
     const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat);
     m.position.set(x, y, z);
     m.castShadow = shadow; m.receiveShadow = shadow;
     return m;
   },
-  cone(r, h, mat, x = 0, y = 0, z = 0, seg = 8) {
+  cone(r, h, mat, x = 0, y = 0, z = 0, seg = 12) {
+    if (seg >= 6) seg = Math.max(seg, 12);
     const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, seg), mat);
     m.position.set(x, y, z);
     m.castShadow = true; m.receiveShadow = true;
     return m;
   },
-  sphere(r, mat, x = 0, y = 0, z = 0, seg = 10) {
+  sphere(r, mat, x = 0, y = 0, z = 0, seg = 14) {
+    seg = Math.max(seg, 12);
     const m = new THREE.Mesh(new THREE.SphereGeometry(r, seg, Math.max(6, seg - 2)), mat);
     m.position.set(x, y, z);
     m.castShadow = true;
@@ -143,64 +220,75 @@ const Models = {
     const armor = this.freshMat(def.color || 0x888888);
     const skin = this.freshMat(def.skin || 0xe8c39e);
     const mats = [cloth, armor, skin];
-    const dark = this.mat(0x222222);
+    const dark = this.mat(0x222222), leather = this.mat(0x4a3320), steel = this.mat(0xb8bcc4);
     const s = def.scale || 1;
+    const armoured = !!(def.helmet || def.shield || def.title) && !def.robe && !def.skeleton;
 
-    // legs
+    // legs: tapered limbs with boots
     const legMat = def.skeleton ? skin : (def.robe ? cloth : this.mat(0x3a3a3a));
     for (const side of [-1, 1]) {
       const hip = new THREE.Group(); hip.position.set(side * 0.15, 0.72, 0);
-      const leg = this.box(0.2, 0.7, 0.22, legMat, 0, -0.36, 0);
-      hip.add(leg); g.add(hip);
+      if (def.skeleton) hip.add(this.box(0.12, 0.7, 0.12, skin, 0, -0.36, 0));
+      else { hip.add(this.cyl(0.105, 0.085, 0.6, legMat, 0, -0.32, 0, 10)); hip.add(this.box(0.2, 0.14, 0.27, leather, 0, -0.66, 0.03)); }
+      g.add(hip);
       parts[side < 0 ? 'legL' : 'legR'] = hip;
       if (def.robe) hip.visible = false;
     }
     if (def.robe) {
-      const robe = this.cyl(0.32, 0.5, 1.0, cloth, 0, 0.5, 0, 8);
+      const robe = this.cyl(0.3, 0.52, 1.0, cloth, 0, 0.5, 0, 14);
       g.add(robe); parts.robe = robe;
     }
-    // torso
-    const torso = this.box(0.56, 0.66, 0.34, def.skeleton ? skin : cloth, 0, 1.05, 0);
-    g.add(torso); parts.body = torso;
-    if (!def.robe && !def.skeleton) {
-      const chest = this.box(0.6, 0.4, 0.38, armor, 0, 1.12, 0); g.add(chest); parts.chest = chest;
-    }
+    // torso: an elliptical body with a belt
+    let torso;
     if (def.skeleton) {
-      for (let r = 0; r < 3; r++) g.add(this.box(0.6, 0.05, 0.36, dark, 0, 0.85 + r * 0.16, 0, false));
+      torso = this.box(0.5, 0.66, 0.3, skin, 0, 1.05, 0);
+      for (let r = 0; r < 3; r++) g.add(this.box(0.54, 0.05, 0.34, dark, 0, 0.85 + r * 0.16, 0, false));
+    } else {
+      torso = this.cyl(0.27, 0.23, 0.66, cloth, 0, 1.05, 0, 14); torso.scale.z = 0.66;
+      g.add(this.cyl(0.255, 0.255, 0.09, leather, 0, 0.77, 0, 14)).scale.z = 0.7;
+      g.add(this.box(0.1, 0.09, 0.05, this.mat(0xc8a040), 0, 0.77, 0.18, false));
     }
-    // head
-    const head = this.box(0.34, 0.34, 0.34, skin, 0, 1.56, 0);
+    g.add(torso); parts.body = torso;
+    if (armoured) {
+      const chest = this.cyl(0.31, 0.27, 0.44, armor, 0, 1.13, 0, 14); chest.scale.z = 0.68; g.add(chest); parts.chest = chest;
+      for (const side of [-1, 1]) { const p = this.sphere(0.14, armor, side * 0.36, 1.36, 0, 12); p.scale.y = 0.7; g.add(p); }
+    }
+    // neck and head
+    g.add(this.cyl(0.07, 0.08, 0.12, skin, 0, 1.42, 0, 10, false));
+    const head = this.sphere(0.19, skin, 0, 1.57, 0, 14); head.scale.set(1, 1.08, 0.94);
     g.add(head); parts.head = head;
+    if (!def.helmet && !def.hood && !def.hat && !def.skeleton) {
+      const hair = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), this.mat(def.hair || 0x3a2416)); hair.position.set(0, 1.58, -0.005); hair.castShadow = true; g.add(hair);
+    }
     // eyes
     const eyeMat = def.skeleton ? this.mat(0xff3020, { emissive: 0xff2010, emissiveIntensity: 1 }) : dark;
-    g.add(this.box(0.06, 0.06, 0.03, eyeMat, -0.08, 1.6, 0.17, false));
-    g.add(this.box(0.06, 0.06, 0.03, eyeMat, 0.08, 1.6, 0.17, false));
+    g.add(this.box(0.05, 0.05, 0.03, eyeMat, -0.07, 1.6, 0.17, false));
+    g.add(this.box(0.05, 0.05, 0.03, eyeMat, 0.07, 1.6, 0.17, false));
     if (def.helmet) {
-      g.add(this.box(0.4, 0.22, 0.4, armor, 0, 1.68, 0));
-      g.add(this.box(0.1, 0.16, 0.42, armor, 0, 1.55, 0.02));
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.225, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), armor); dome.position.y = 1.6; dome.castShadow = true; g.add(dome);
+      g.add(new THREE.Mesh(new THREE.TorusGeometry(0.225, 0.03, 6, 18), armor).rotateX(Math.PI / 2).translateZ(-1.6));
+      g.add(this.box(0.06, 0.2, 0.05, armor, 0, 1.55, 0.2, false));
+      if (def.plume || def.title) g.add(this.cone(0.07, 0.5, this.mat(def.plumeColor || 0xc02030), 0, 1.98, -0.06, 8));
     }
-    if (def.hood) {
-      g.add(this.cone(0.32, 0.5, cloth, 0, 1.85, 0, 6));
-    }
+    if (def.hood) g.add(this.cone(0.33, 0.55, cloth, 0, 1.85, 0, 12));
     if (def.hat) {
-      g.add(this.cyl(0.42, 0.42, 0.06, cloth, 0, 1.75, 0, 10));
-      g.add(this.cone(0.24, 0.8, cloth, 0, 2.1, 0, 8));
+      g.add(this.cyl(0.44, 0.44, 0.05, cloth, 0, 1.75, 0, 16));
+      g.add(this.cone(0.24, 0.8, cloth, 0, 2.1, 0, 12));
     }
     if (def.crown) {
       const gold = this.mat(0xffd54a, { emissive: 0x806000, emissiveIntensity: 0.4 });
-      g.add(this.cyl(0.2, 0.2, 0.14, gold, 0, 1.78, 0, 8));
+      g.add(this.cyl(0.2, 0.2, 0.14, gold, 0, 1.78, 0, 12));
       for (let k = 0; k < 5; k++) {
         const a = k / 5 * Math.PI * 2;
         g.add(this.box(0.06, 0.16, 0.06, gold, Math.sin(a) * 0.18, 1.9, Math.cos(a) * 0.18, false));
       }
     }
-    // arms
+    // arms: tapered limbs with rounded hands
     for (const side of [-1, 1]) {
       const sh = new THREE.Group(); sh.position.set(side * 0.38, 1.32, 0);
-      const arm = this.box(0.17, 0.6, 0.18, def.skeleton ? skin : cloth, 0, -0.28, 0);
-      sh.add(arm);
-      const hand = this.box(0.14, 0.14, 0.14, skin, 0, -0.6, 0, false);
-      sh.add(hand);
+      if (def.skeleton) sh.add(this.box(0.1, 0.6, 0.1, skin, 0, -0.28, 0));
+      else sh.add(this.cyl(0.085, 0.07, 0.58, def.skeleton ? skin : cloth, 0, -0.27, 0, 10));
+      sh.add(this.sphere(0.075, skin, 0, -0.6, 0, 10));
       g.add(sh);
       parts[side < 0 ? 'armL' : 'armR'] = sh;
     }
@@ -208,16 +296,19 @@ const Models = {
       const w = this.weapon(def.weapon, def.weapon === 'staff' ? this.mat(def.magic || def.abilities ? 0xff8040 : 0x60c0ff, { emissive: def.color || 0xff5010, emissiveIntensity: 0.7 }) : null);
       w.position.set(0, -0.6, 0.05);
       parts.armR.add(w); parts.weapon = w;
-      if (def.weapon === 'bow') { w.position.set(0, -0.6, 0.15); w.rotation.y = 0; }
+      if (def.weapon === 'bow') { w.position.set(0, -0.6, 0.15); w.rotation.y = 0; g.add(this.cyl(0.07, 0.07, 0.55, leather, -0.2, 1.15, -0.22, 8).rotateX(0.35)); }
       if (def.weapon === 'staff') { w.rotation.x = -Math.PI / 2; w.position.set(0, -0.3, 0.1); }
     }
     if (def.shield) {
-      const sh = this.box(0.08, 0.6, 0.45, armor, -0.12, -0.4, 0.1);
+      const sh = this.cyl(0.3, 0.3, 0.06, armor, -0.12, -0.4, 0.1, 16); sh.rotation.z = Math.PI / 2;
       parts.armL.add(sh);
+      const boss = this.sphere(0.07, steel, -0.16, -0.4, 0.1, 8); parts.armL.add(boss);
     }
-    if (def.isKing) {
-      const cape = this.box(0.6, 0.9, 0.06, this.mat(0x7a1030), 0, 0.95, -0.2);
-      g.add(cape);
+    if (def.isKing || def.title || def.cape) {
+      const capeGeo = new THREE.PlaneGeometry(0.64, 0.95, 3, 6); capeGeo.translate(0, -0.475, 0);
+      const cape = new THREE.Mesh(capeGeo, new THREE.MeshLambertMaterial({ color: def.capeColor || (def.isKing ? 0x7a1030 : (def.cloth || 0x3a3a5a)), side: THREE.DoubleSide }));
+      cape.position.set(0, 1.4, -0.2); cape.castShadow = true; g.add(cape); parts.cape = cape;
+      cape.userData.base = capeGeo.attributes.position.array.slice();
     }
     if (def.wings) {
       const wm = this.freshMat(0x5a3a6a); mats.push(wm);
@@ -343,9 +434,19 @@ const Models = {
   // ------------------------------------------------------------- buildings
   stone: null, stoneDark: null, wood: null, roof: null,
   initMats() {
-    const stoneTex = this.noiseTexture(128, 0.28, 5); stoneTex.repeat.set(1, 1);
-    this.stone = new THREE.MeshLambertMaterial({ color: 0xa0a098, map: stoneTex }); this.stoneDark = new THREE.MeshLambertMaterial({ color: 0x74746c, map: stoneTex }); this.wood = this.mat(0x7a5a38);
+    const stoneTex = this.noiseTexture(256, 0.16, 5); stoneTex.repeat.set(2, 2);
+    const bump = this.noiseTexture(256, 0.5, 15); bump.repeat.set(2, 2);
+    this.stone = new THREE.MeshPhongMaterial({ color: 0xa0a098, map: stoneTex, bumpMap: bump, bumpScale: 0.035, shininess: 4, specular: 0x222222, side: THREE.DoubleSide }); this.stoneDark = new THREE.MeshPhongMaterial({ color: 0x74746c, map: stoneTex, bumpMap: bump, bumpScale: 0.035, shininess: 4, specular: 0x222222, side: THREE.DoubleSide }); this.wood = this.mat(0x7a5a38); this.wood.side = THREE.DoubleSide;
     this.roof = this.mat(0x8a3a30); this.plaster = this.mat(0xd8cfb8); this.gold = this.mat(0xe0b040, { emissive: 0x604000, emissiveIntensity: 0.3 });
+  },
+  // a wall torch: bracket, flame and a flickering light
+  torch(g, x, y, z) {
+    g.add(this.cyl(0.05, 0.05, 0.5, this.mat(0x2a2a2a), x, y, z, 5, false));
+    const flame = this.cone(0.14, 0.42, this.mat(0xffb040, { emissive: 0xff7010, emissiveIntensity: 1.4 }), x, y + 0.45, z, 6); flame.castShadow = false; g.add(flame);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.softDot(), color: 0xffa040, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending })); glow.scale.setScalar(1.6); glow.position.set(x, y + 0.5, z); g.add(glow);
+    const light = new THREE.PointLight(0xffa040, 0.9, 13, 1.6); light.position.set(x, y + 0.6, z); light.castShadow = false; g.add(light);
+    light.userData.base = 0.9; light.userData.phase = x * 3 + z * 7; light.userData.flame = flame;
+    return light;
   },
   merlons(g, w, d, y, step = 1.0) {
     const m = this.stoneDark;
@@ -357,6 +458,18 @@ const Models = {
     g.add(this.cyl(0.04, 0.04, 2.2, this.mat(0x4a3a2a), x, y + 1.1, z, 5, false));
     g.add(this.box(0.9, 0.5, 0.04, this.mat(color), x + 0.45, y + 1.9, z, false));
   },
+  // a pennant in the owner's colour; shared things fly the gold crown
+  ownerBanner(color, shared = false, big = false) {
+    const g = new THREE.Group();
+    const h = big ? 3.2 : 2.0;
+    g.add(this.cyl(0.05, 0.05, h, this.mat(0x3a2a1a), 0, h / 2, 0, 5, false));
+    const cloth = new THREE.Mesh(new THREE.PlaneGeometry(big ? 1.6 : 1.0, big ? 0.9 : 0.6), new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.35, side: THREE.DoubleSide }));
+    cloth.position.set((big ? 0.8 : 0.5) + 0.03, h - (big ? 0.5 : 0.35), 0);
+    g.add(cloth);
+    if (shared) { const crown = this.cyl(0.22, 0.28, 0.22, this.mat(0xffe680, { emissive: 0x806000, emissiveIntensity: 0.4 }), 0, h + 0.15, 0, 8, false); g.add(crown); }
+    g.userData.cloth = cloth;
+    return g;
+  },
   building(def, level = 1) {
     if (!this.stone) this.initMats();
     const g = new THREE.Group();
@@ -365,6 +478,8 @@ const Models = {
     switch (def.key) {
       case 'wall':
         g.add(this.box(2, 3.2, 2, st, 0, 1.6, 0));
+        g.add(this.box(2.16, 0.3, 2.16, sd, 0, 0.15, 0));
+        g.add(this.box(2.1, 0.18, 2.1, this.plaster, 0, 3.21, 0, false));
         for (const [x, z] of [[-0.7, -0.7], [0.7, -0.7], [-0.7, 0.7], [0.7, 0.7]]) g.add(this.box(0.55, 0.55, 0.55, sd, x, 3.45, z));
         break;
       case 'gate':
@@ -378,6 +493,8 @@ const Models = {
           for (let k = -2; k <= 2; k++) door.add(this.box(0.08, 3.4, 0.1, this.mat(0x2a2a2a), k * 0.22, 1.6, 0.2, false));
           g.add(door); g.userData.door = door; }
         for (const x of [-0.7, 0.7]) g.add(this.box(0.55, 0.55, 0.55, sd, x, 4.25, 0));
+        g.userData.torches = [];
+        for (const x of [-1.15, 1.15]) for (const z of [-1.15, 1.15]) g.userData.torches.push(this.torch(g, x, 3.0, z));
         break;
       case 'arrow_tower':
         g.add(this.cyl(1.6, 1.85, 6.5, st, 0, 3.25, 0, 10));
@@ -532,6 +649,7 @@ const Models = {
           g.add(this.cone(0.95, 1.5, this.mat(0x3a4a8a), x, H + 2.2, z, 10));
         }
         this.merlons(g, 6, 6, H + 0.25, 1.0);
+        g.userData.torches = [this.torch(g, -1.3, 3.2, 3.0), this.torch(g, 1.3, 3.2, 3.0)];
         g.add(this.box(5.2, 0.2, 5.2, this.mat(0x7a7268), 0, 0.1, 0, false));
         g.add(this.box(1.4, 0.05, 5.0, this.mat(0x7a1030), 0, 0.23, 0.2, false));
         g.add(this.box(1.2, 0.5, 1.0, this.gold, 0, 0.45, -1.4)); g.add(this.box(1.2, 1.6, 0.25, this.gold, 0, 1.3, -1.8));
@@ -647,15 +765,16 @@ const Models = {
   tree() {
     const g = new THREE.Group();
     const h = U.rand(0.8, 1.4);
-    g.add(this.cyl(0.18, 0.28, 1.6 * h, this.mat(0x5a3a22), 0, 0.8 * h, 0, 6));
+    g.add(this.cyl(0.16, 0.34, 1.6 * h, this.mat(0x5a3a22), 0, 0.8 * h, 0, 9));
     const leaf = this.mat(U.choice([0x2f6b2f, 0x3a7a35, 0x2a5a30]));
-    g.add(this.cone(1.5 * h, 2.4 * h, leaf, 0, 2.2 * h, 0, 7));
-    g.add(this.cone(1.1 * h, 2.0 * h, leaf, 0, 3.4 * h, 0, 7));
+    g.add(this.cone(1.5 * h, 2.2 * h, leaf, 0, 2.0 * h, 0, 10));
+    g.add(this.cone(1.2 * h, 2.0 * h, leaf, 0, 3.0 * h, 0, 10));
+    g.add(this.cone(0.8 * h, 1.7 * h, leaf, 0, 4.0 * h, 0, 10));
     g.rotation.y = Math.random() * Math.PI * 2;
     return g;
   },
   rock() {
-    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(U.rand(0.5, 1.4), 0), this.mat(U.choice([0x777770, 0x8a8a80, 0x6a6a64])));
+    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(U.rand(0.5, 1.4), 1), this.mat(U.choice([0x777770, 0x8a8a80, 0x6a6a64])));
     m.scale.set(U.rand(0.7, 1.4), U.rand(0.5, 0.9), U.rand(0.7, 1.4));
     m.rotation.set(Math.random(), Math.random() * 3, Math.random());
     m.position.y = 0.1; m.castShadow = true; m.receiveShadow = true;

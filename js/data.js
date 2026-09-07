@@ -9,7 +9,7 @@ DATA.CELL = 2;                                  // metres per grid cell
 DATA.GRID = 110;                                // cells per side (220m map)
 DATA.MAP_HALF = DATA.GRID * DATA.CELL / 2 - 1;  // hard clamp for unit positions
 DATA.BUILD_RADIUS = 72;                         // max |x|,|z| for building placement (metres)
-DATA.SPAWN_RADIUS = DATA.MAP_HALF - 11;         // enemy spawn ring radius
+DATA.SPAWN_RADIUS = DATA.MAP_HALF - 4;          // enemy spawn ring radius: the very edge of the map
 
 DATA.difficulties = {
   easy:   { label: 'Easy',   hp: 0.75, dmg: 0.75, budget: 0.75, gold: 1.25 },
@@ -146,12 +146,12 @@ DATA.units = {
   },
   engineer: {
     key: 'engineer', name: 'Engineer', cost: 70, hp: 100, dmg: 6, range: 2.0, cd: 1.2, armor: 0.05, speed: 5.8, radius: 0.4,
-    attack: 'melee', repair: { hps: 35, range: 3.2 }, noCap: true, maxCount: 4,
+    attack: 'melee', repair: { hps: 35, range: 4.6 }, noCap: true, maxCount: 4,
     desc: 'Repairs damaged buildings for free, 35 HP per second. Runs from enemies and does not count against the soldier cap (max 4).',
     color: 0x7a5a3a, cloth: 0x6a5a3a, weapon: 'hammer', skin: 0xe8c39e,
   },
   crossbowman: {
-    key: 'crossbowman', name: 'Crossbowman', cost: 80, hp: 95, dmg: 19, range: 15, cd: 1.7, armor: 0.1, speed: 5.4, radius: 0.4,
+    key: 'crossbowman', name: 'Crossbowman', cost: 80, hp: 95, dmg: 23, range: 15, cd: 1.7, armor: 0.1, speed: 5.4, radius: 0.4,
     attack: 'ranged', projectile: 'bolt', magic: true, desc: 'Armour-piercing bolts. Slow to reload but ignores armour.',
     color: 0x6a6a7a, cloth: 0x4a3a5a, weapon: 'bow', helmet: true,
   },
@@ -166,7 +166,7 @@ DATA.units = {
     color: 0xf0e6d0, cloth: 0xe8dcc0, weapon: 'staff', robe: true, hood: true,
   },
   apprentice: {
-    key: 'apprentice', name: 'Apprentice', cost: 110, hp: 75, dmg: 22, range: 16, cd: 1.8, armor: 0, speed: 5.4, radius: 0.4,
+    key: 'apprentice', name: 'Apprentice', cost: 95, hp: 80, dmg: 22, range: 16, cd: 1.8, armor: 0, speed: 5.4, radius: 0.4,
     attack: 'ranged', projectile: 'fireball', splash: 2.0, magic: true, desc: 'Fireballs that splash in 2m. Fragile.',
     color: 0xb04a2a, cloth: 0x5a2a1a, weapon: 'staff', robe: true, hat: true,
   },
@@ -209,7 +209,7 @@ DATA.enemies = {
                 attack: 'melee', color: 0x7a7a80, cloth: 0x4a4a52, weapon: 'sword', helmet: true, shield: true, skin: 0x8fa86a },
   crossbow:   { key: 'crossbow', name: 'Crossbowman', hp: 70, dmg: 15, range: 16, cd: 1.9, armor: 0.05, speed: 4.5, radius: 0.4, reward: 12, unlock: 6, weight: 3,
                 attack: 'ranged', projectile: 'bolt', magic: true, color: 0x5a5a6a, cloth: 0x3a3a4a, weapon: 'bow', helmet: true, skin: 0x8fa86a },
-  sapper:     { key: 'sapper', name: 'Sapper', hp: 65, dmg: 5, range: 1.8, cd: 1, armor: 0, speed: 6.6, radius: 0.4, reward: 14, unlock: 7, weight: 2.5,
+  sapper:     { key: 'sapper', name: 'Sapper', hp: 65, dmg: 5, range: 1.8, cd: 1, armor: 0, speed: 6.6, radius: 0.4, reward: 14, unlock: 4, weight: 2.5,
                 attack: 'melee', prefersBuildings: true, suicide: { radius: 3.2, buildingDmg: 420, unitDmg: 60 }, color: 0x8a6a3a, cloth: 0x5a4a2a, weapon: 'club', skin: 0x8fa86a },
   harpy:      { key: 'harpy', name: 'Harpy', hp: 75, dmg: 11, range: 2.0, cd: 0.9, armor: 0, speed: 7.2, radius: 0.42, reward: 14, unlock: 9, weight: 2.5,
                 attack: 'melee', flying: true, altitude: 2.6, wings: true, color: 0x7a5a8a, cloth: 0x4a3a5a, weapon: 'dagger', skin: 0xc9a58a },
@@ -272,7 +272,7 @@ DATA.buildings = {
   arrow_tower:   { key: 'arrow_tower', name: 'Arrow Tower', cost: 130, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 20, dmg: 18, cd: 1.1, projectile: 'arrow', desc: 'Fast-firing tower. Good all-rounder.' },
   ballista_tower:{ key: 'ballista_tower', name: 'Ballista Tower', cost: 240, hp: 1000, w: 2, d: 2, cat: 'tower', tower: true,
-                   range: 28, dmg: 95, cd: 2.8, projectile: 'ballista', bonusVsLarge: 1.7, desc: 'Slow, huge single hits. +70% damage to large enemies.' },
+                   range: 28, dmg: 86, cd: 2.8, projectile: 'ballista', bonusVsLarge: 1.7, desc: 'Slow, huge single hits. +70% damage to large enemies.' },
   mage_tower:    { key: 'mage_tower', name: 'Mage Tower', cost: 320, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 22, dmg: 45, cd: 2.2, projectile: 'magic', desc: 'Lobs exploding fire that splashes in 3.5m and burns.' },
   frost_tower:   { key: 'frost_tower', name: 'Frost Tower', cost: 260, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
@@ -283,8 +283,8 @@ DATA.buildings = {
                    range: 18, dmg: 28, cd: 1.7, chain: { count: 4, radius: 6 }, desc: 'Chain lightning that arcs to four enemies and ignores armour.' },
   poison_tower:  { key: 'poison_tower', name: 'Poison Tower', cost: 240, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 18, dmg: 8, cd: 1.1, projectile: 'poison', desc: 'Darts that poison for 12 damage/s over 4s. Stacks nothing, but never misses.' },
-  watchtower:    { key: 'watchtower', name: 'Watchtower', cost: 340, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
-                   range: 32, dmg: 52, cd: 3.6, projectile: 'sniper', prefersCasters: true, desc: 'Marksmen with a 32m reach who pick off casters and catapults first. Trebuchets still outrange them.' },
+  watchtower:    { key: 'watchtower', name: 'Watchtower', cost: 320, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
+                   range: 32, dmg: 62, cd: 3.6, projectile: 'sniper', prefersCasters: true, desc: 'Marksmen with a 32m reach who pick off casters and catapults first. Trebuchets still outrange them.' },
   barricade: { key: 'barricade', name: 'Spiked Barricade', cost: 24, hp: 240, w: 1, d: 1, cat: 'defense', drag: true, spikes: 3,
               desc: 'Cheap and weak, but every melee blow against it wounds the attacker for 3.' },
   trap:     { key: 'trap', name: 'Spike Trap', cost: 45, hp: 200, w: 1, d: 1, cat: 'defense', interior: [[0, 0]], trap: { dmg: 70, radius: 1.6, slow: 0.5, rearm: 20 },
@@ -366,6 +366,18 @@ DATA.mapTypes = {
                palette: { grass: 0x3a3a3a, grass2: 0x5a5048, dry: 0x6a5a50, sky: 0x8a6a5a, water: 0xff6a10, waterGlow: 0xff3000, road: 0x4a4038, marsh: 0x3a3a30, leaves: [0x4a3a30, 0x5a4a3a, 0x3a2a20, 0x6a5a4a] } },
 };
 DATA.build = '2026-09-07 00:00';
+// experiments only: never listed in the hero menu, never unique, never bought. Immortal, splash attacks at range, very fast, abilities on a tenth of the cooldown
+DATA.testChampion = {
+  key: 'champion', name: 'The Test Champion', title: 'of the Experiments', role: 'Testing',
+  hp: 99999, dmg: 650, range: 30, cd: 0.3, armor: 0.9, speed: 13, radius: 0.5,
+  attack: 'ranged', projectile: 'fireball', splash: 4.5, magic: true, regen: 5000, abilityCdMul: 0.1,
+  abilities: ['meteor', 'flame_nova'],
+  passive: 'Experiments: immortal, absurd damage, splash at 30m, very fast, abilities on a tenth of the cooldown.',
+  traits: ['Immortal', '650 splash damage at 30m', 'Speed 13', 'Abilities recharge 10x faster'],
+  color: 0xffd040, cloth: 0x301040, weapon: 'staff', helmet: true, plume: true, magic: true,
+};
+DATA.playerColors = [0x58b8ff, 0xff9a40, 0xc86cff, 0x5ce08a, 0xffe14a, 0xff6aa8, 0x7ff0e0, 0xf0f0f0];
+DATA.sharedColor = 0xffd040;
 DATA.siteUrl = 'https://matthewjbarnett.github.io/crownhold/'; // the full game, outside any embedding sandbox
 DATA.startGold = 500;
 DATA.baseSoldierCap = 0; // keep + barracks + garrison supply the cap

@@ -66,6 +66,7 @@ class Unit {
     this.ring = Models.ring(this.radius + 0.35, this.team === 'player' ? 0x50ff80 : 0xff5050);
     this.ring.visible = false;
     this.game.scene.add(this.ring);
+    if (!this.flying) { const blob = Models.blob(this.radius + 0.35, this.large ? 0.5 : 0.42); blob.position.y = 0.03; this.group.add(blob); this.blob = blob; }
   }
 
   get centerY() { return this.pos.y + this.height * 0.55; }
@@ -115,7 +116,8 @@ class Unit {
 
   // --------------------------------------------------------------- movement
   // collision radius against buildings: a possessed unit keeps the camera well outside walls
-  get collisionRadius() { return this.possessed ? Math.max(0.55, this.radius) : Math.min(0.9, this.radius * 0.85); }
+  get collisionRadius() {
+    if (this.possessed && this.game.controls.mode === 'fps' && this.game.controls.controlled === this) return this.radius + 0.3; return this.possessed ? Math.max(0.55, this.radius) : Math.min(0.9, this.radius * 0.85); }
   tryMove(dx, dz) {
     const g = this.game.grid;
     const H = DATA.MAP_HALF;
@@ -192,6 +194,7 @@ class Unit {
     const a = g.worldToCell(this.pos.x, this.pos.z), b = g.worldToCell(x, z);
     const path = g.astar(a.i, a.j, b.i, b.j, this.team);
     this.pathI = 0;
+    this.pathFailed = path === null;
     if (path === null) { this.path = null; return false; }
     // replace the final cell centre with the exact destination if it is passable
     if (g.passableWorld(x, z, this.team)) { if (path.length) path[path.length - 1] = { x, z }; else path.push({ x, z }); }
@@ -271,6 +274,7 @@ class Unit {
   }
 
   takeDamage(amount, source, opts = {}) {
+    if (this.immortal) { this.hp = this.maxHp; if (source && source instanceof Unit) this.lastAttacker = source; return 0; }
     if (this.dead || amount <= 0) return 0;
     let a = amount;
     if (!opts.magic) a *= (1 - this.armor);
@@ -331,6 +335,7 @@ class Unit {
       else this.possessedUpdate(dt);
       this.integrateMovement(dt);
       if (this.moving && !this.possessed) this.faceToward(this.pos.x + this.moveIntent.x, this.pos.z + this.moveIntent.z, dt, 14);
+      if (this.moving) this.trackHeading(dt);
       this.separate(dt);
       if (!this.flying && !game.grid.circleFree(this.pos.x, this.pos.z, this.collisionRadius, this.team)) this.unstuck(dt);
     }
@@ -340,6 +345,12 @@ class Unit {
       this.pos.y += (want + Math.sin(time * 1.5) * 0.4 - this.pos.y) * Math.min(1, dt * 2);
     } else this.pos.y = gy;
     this.visualTail(dt);
+  }
+  trackHeading(dt) {
+    const ml = Math.hypot(this.moveIntent.x, this.moveIntent.z) || 1;
+    const k = Math.min(1, dt * 4);
+    this.headX = (this.headX || 0) + (this.moveIntent.x / ml - (this.headX || 0)) * k;
+    this.headZ = (this.headZ === undefined ? 1 : this.headZ) + (this.moveIntent.z / ml - (this.headZ === undefined ? 1 : this.headZ)) * k;
   }
   integrateMovement(dt) {
     const sp = this.effSpeed;
@@ -355,7 +366,9 @@ class Unit {
     const r = this.remote;
     if (!r) { this.moving = false; return; }
     const k = Math.min(1, dt * 14);
+    const ox = this.pos.x, oz = this.pos.z;
     this.pos.x += (r.x - this.pos.x) * k; this.pos.z += (r.z - this.pos.z) * k;
+    if (Math.hypot(this.pos.x - ox, this.pos.z - oz) > dt * 0.5) { this.moveIntent.x = this.pos.x - ox; this.moveIntent.z = this.pos.z - oz; this.trackHeading(dt); this.moveIntent.x = 0; this.moveIntent.z = 0; }
     this.yaw = r.yaw; this.moving = !!r.moving;
   }
   // client-side replica: the host owns the truth; we only move the unit we possess ourselves
@@ -367,6 +380,7 @@ class Unit {
       this.moveIntent.x = 0; this.moveIntent.z = 0;
       this.possessedUpdate(dt);
       this.integrateMovement(dt);
+      if (this.moving) this.trackHeading(dt);
       this.separate(dt);
       if (!this.flying && !game.grid.circleFree(this.pos.x, this.pos.z, this.collisionRadius, this.team)) this.unstuck(dt);
       if (this.localAtkT > 0) this.localAtkT -= dt;
@@ -409,6 +423,21 @@ class Unit {
     }
     this.ring.visible = this.selected || this.hovered;
     if (this.ring.visible) { this.ring.position.set(this.pos.x, this.game.groundY(this.pos.x, this.pos.z) + 0.06, this.pos.z); this.ring.material.color.setHex(this.selected ? (this.team === 'player' ? 0x50ff80 : 0xff5050) : 0xffffff); }
+    this.syncOwnerMark();
+  }
+  // co-op: every defender's units wear a ring in their colour at the feet; the King (shared) wears gold
+  syncOwnerMark() {
+    const g = this.game;
+    const want = g.coop && this.team === 'player' && !this.dead;
+    if (!want) { if (this.ownerMark) this.ownerMark.visible = false; return; }
+    const col = g.ownerColor(this);
+    if (!this.ownerMark) {
+      this.ownerMark = new THREE.Mesh(new THREE.RingGeometry(this.radius + 0.12, this.radius + 0.3, 20), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.7, depthWrite: false, side: THREE.DoubleSide }));
+      this.ownerMark.rotation.x = -Math.PI / 2; this.ownerMark.position.y = 0.05; this.ownerMark.renderOrder = 3;
+      this.group.add(this.ownerMark); this.markColor = col;
+    }
+    if (this.markColor !== col) { this.ownerMark.material.color.setHex(col); this.markColor = col; }
+    this.ownerMark.visible = !(this.possessed && g.controls.mode === 'fps' && g.controls.controlled === this && !g.controls.thirdPerson);
   }
 
   onBlocked(building) {
@@ -449,6 +478,12 @@ class Unit {
       const a = this.attackAnim;
       if (this.attackKind === 'melee') swingArm.rotation.x = -Math.sin(a * Math.PI) * 2.2;
       else swingArm.rotation.x = -1.3 * a;
+    }
+    if (p.cape) {
+      const geo = p.cape.geometry, arr = geo.attributes.position.array, base = p.cape.userData.base, t = this.game.time * 3 + this.id;
+      const lift = this.moving ? 0.35 : 0.08;
+      for (let k = 0; k < arr.length; k += 3) { const y = base[k + 1]; const f = -y; arr[k] = base[k] + Math.sin(t + f * 4) * 0.03 * f; arr[k + 1] = y; arr[k + 2] = base[k + 2] - f * f * lift - Math.sin(t * 1.3 + f * 5) * 0.04 * f; }
+      geo.attributes.position.needsUpdate = true;
     }
     if (this.spinT > 0) { this.spinT -= dt; this.yaw += dt * 14; }
     if (this.stunned) { this.group.rotation.z = Math.sin(this.game.time * 20) * 0.08; } else this.group.rotation.z = 0;
@@ -526,6 +561,7 @@ class Building {
     this.group.rotation.y = this.rot * Math.PI / 2;
     this.group.userData.building = this;
     this.game.scene.add(this.group);
+    if (!this.def.keep) { const blob = Models.blob(this.radius * 1.25 + 0.6, 0.35); blob.position.y = 0.04; this.group.add(blob); }
     if (!this.hpBar) {
       const hb = Models.healthBar(Math.max(2.2, this.radius * 1.5), 0.26);
       this.hpBar = hb; hb.group.visible = false;
@@ -533,9 +569,31 @@ class Building {
       hb.group.position.set(this.pos.x, this.height + 1.0, this.pos.z);
     }
     this.ownMats = null; this.tintedFrac = 1;
+    this.syncOwnerMark(true);
     if (this.underConstruction) { this.applyDamageTint(this.hp / this.maxHp); if (this.ownMats) for (const o of this.ownMats) { o.material.transparent = true; o.material.opacity = 0.45 + 0.55 * this.progress; } }
   }
   get alive() { return !this.dead; }
+  // co-op: a pennant in the owner's colour on towers and buildings, a gold crown pennant on the shared castle
+  syncOwnerMark(force = false) {
+    const g = this.game;
+    if (!g.coop || this.dead) { if (this.ownerMark) this.ownerMark.visible = false; return; }
+    const wall = this.def.cat === 'defense' && !this.def.tower && !this.def.gate;
+    if (wall) return;
+    const col = g.ownerColor(this), shared = !this.owner;
+    if (force || !this.ownerMark || this.markColor !== col || this.markShared !== shared) {
+      if (this.ownerMark) this.group.remove(this.ownerMark);
+      this.ownerMark = Models.ownerBanner(col, shared, !!this.def.keep);
+      const fp = this.def.keep ? 4.5 : (this.def.tower ? 1.0 : Math.max(0.8, this.radius * 0.6));
+      this.ownerMark.position.set(fp * 0.6, this.height + (this.def.tower ? 0.6 : 0.2), fp * 0.6);
+      this.group.add(this.ownerMark); this.markColor = col; this.markShared = shared;
+    }
+    this.ownerMark.visible = true;
+  }
+  tickOwnerMark() {
+    if (!this.game.coop) return;
+    if (this.ownerMark && this.ownerMark.userData.cloth) this.ownerMark.userData.cloth.rotation.y = Math.sin(this.game.time * 3 + this.id) * 0.25;
+    if (this.markColor !== this.game.ownerColor(this) || this.markShared !== !this.owner) this.syncOwnerMark();
+  }
   get baseCost() { return this.def.cost; }
   upgradeCost() { return Math.round(this.def.cost * DATA.towerUpgrade.costMul * this.level); }
   canUpgrade() { return this.def.tower && this.level < DATA.towerUpgrade.maxLevel; }
@@ -547,6 +605,7 @@ class Building {
     if (this.def.spikes && source instanceof Unit && source.attackKind === 'melee' && !source.dead) source.takeDamage(this.def.spikes, null, { magic: true });
     this.hp -= amount;
     this.flashT = 0.1;
+    if (source instanceof Unit && !source.dead) { this.lastAttacker = source; this.lastHitT = this.game.time; }
     this.game.grid.flowDirty = true; // wall cost changed
     if (this.hp <= 0) this.destroy(source);
     return amount;
@@ -564,6 +623,7 @@ class Building {
   }
 
   update(dt) {
+    this.tickOwnerMark();
     const game = this.game;
     if (this.flashT > 0) { this.flashT -= dt; }
     // health bar

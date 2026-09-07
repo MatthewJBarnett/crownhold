@@ -259,9 +259,9 @@ Unit.prototype.playerThink = function () {
   const c = this.command;
   let anchor = this.post, leash;
   let aggro;
-  if (this.isKing) { aggro = 7; leash = 6; }
-  else if (this.isHero) { aggro = 22; leash = 26; }
-  else { aggro = 16; leash = 24; }
+  if (this.isKing) { aggro = Math.max(5, this.range + 3); leash = 6; }   // the King only steps up to what is nearly in reach
+  else if (this.isHero) { aggro = 30; leash = 36; }
+  else { aggro = 22; leash = 32; }
   if (c && c.type === 'hold') { aggro = this.range + this.radius + 1.5; leash = 0; }
   if (c && c.type === 'follow') { anchor = c.leader.pos; leash = 15; aggro = Math.min(aggro, 14); }
   if (c && c.type === 'attackmove') { anchor = { x: c.x, z: c.z }; leash = Math.max(leash, U.dist(this.pos.x, this.pos.z, c.x, c.z) + 6); }
@@ -269,9 +269,11 @@ Unit.prototype.playerThink = function () {
 
   let best = null, bestS = Infinity;
   if (this.sheltered && this.attackKind !== 'melee') aggro = Math.min(aggro, 3.6); // inside the keep you only fight what comes through the door
+  const avoid = this.avoidTarget && this.avoidTarget.until > game.time ? this.avoidTarget.unit : null;
   if (aggro > 0) {
     for (const u of game.unitsNear(this.pos.x, this.pos.z, aggro, 'enemy')) {
       if (u.dead) continue;
+      if (u === avoid && !this.inRange(u, 0.4)) continue;   // could not reach it a moment ago
       if (leash > 0 && U.dist(u.pos.x, u.pos.z, anchor.x, anchor.z) > leash) continue;
       let s = this.distTo(u);
       if (this.def.bonusVsLarge && u.large) s -= 8;
@@ -280,6 +282,20 @@ Unit.prototype.playerThink = function () {
     }
   }
   if (c && c.type === 'hold' && best && !this.inRange(best, 0.6)) best = null;
+  // come to the aid of a wall or tower being hit nearby (the King stays put)
+  if (!best && !this.isKing && !(c && (c.type === 'hold' || c.type === 'move' || c.type === 'follow'))) {
+    const reach = this.isHero ? 48 : 34;
+    let bd = Infinity;
+    for (const b of game.buildings) {
+      if (b.dead || !b.lastAttacker || b.lastAttacker.dead || game.time - (b.lastHitT || -99) > 3) continue;
+      if (U.dist(b.pos.x, b.pos.z, this.pos.x, this.pos.z) > reach) continue;
+      const a = b.lastAttacker;
+      if (a === avoid) continue;
+      if (leash > 0 && U.dist(a.pos.x, a.pos.z, anchor.x, anchor.z) > leash + 14) continue;
+      const d = this.distTo(a);
+      if (d < bd) { bd = d; best = a; }
+    }
+  }
   // sally out against artillery shelling the fortress from beyond tower range
   if (!best && !this.isKing && !(c && (c.type === 'hold' || c.type === 'move' || c.type === 'follow'))) {
     let art = null, ad = Infinity;
@@ -334,6 +350,9 @@ Unit.prototype.playerAct = function (dt) {
     }
     if (!(cmd && cmd.type === 'hold')) {
       this.navigateTo(t.pos.x, t.pos.z, Math.max(0.3, this.range * 0.85 + this.radius + t.radius), dt);
+      // no way through the walls to it: give it up for a while and look for something reachable
+      if (this.pathFailed && !this.flying) { this.noPathT = (this.noPathT || 0) + dt; if (this.noPathT > 1.2) { this.avoidTarget = { unit: t, until: this.game.time + 5 }; this.target = null; this.noPathT = 0; this.aiTimer = 0; } }
+      else this.noPathT = 0;
       return;
     }
   }
@@ -343,9 +362,17 @@ Unit.prototype.playerAct = function (dt) {
   }
   if (cmd && cmd.type === 'follow') {
     const L = cmd.leader;
-    const a = cmd.slot * 2.4, r = 2.4 + Math.sqrt(cmd.slot) * 0.9;
+    // a slot behind the leader's heading (the heading only changes while the leader walks, so mouse look does not swing the pack around)
+    const base = Math.atan2(L.headX || 0, L.headZ === undefined ? 1 : L.headZ) + Math.PI;
+    const row = Math.floor(cmd.slot / 5), col = cmd.slot % 5;
+    const a = base + (col - 2) * 0.55, r = 2.3 + row * 1.5 + Math.abs(col - 2) * 0.35;
     const tx = L.pos.x + Math.sin(a) * r, tz = L.pos.z + Math.cos(a) * r;
-    if (U.dist(this.pos.x, this.pos.z, tx, tz) > 1.2) this.navigateTo(tx, tz, 0.6, dt);
+    const d = U.dist(this.pos.x, this.pos.z, tx, tz);
+    if (d > 0.45) {
+      this.navigateTo(tx, tz, 0.3, dt);
+      const k = U.clamp((d - 0.3) / 2.4, 0.3, 1);   // ease in: keep pace with the leader instead of sprinting and stopping
+      this.moveIntent.x *= k; this.moveIntent.z *= k;
+    } else if (!L.moving) this.faceToward(this.pos.x + (L.headX || 0), this.pos.z + (L.headZ === undefined ? 1 : L.headZ), dt, 5);
     return;
   }
   if (cmd && cmd.type === 'hold') return;

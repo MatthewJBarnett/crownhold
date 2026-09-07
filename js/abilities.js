@@ -194,6 +194,6 @@ Unit.prototype.useAbility = function (index, aim) {
     }
     default: return false;
   }
-  ab.timer = ab.def.cd;
+  ab.timer = ab.def.cd * (this.def.abilityCdMul || 1);
   return true;
 };

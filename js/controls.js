@@ -642,7 +642,7 @@ class Controls {
     this.ghost.position.set(cx / res.cells.length, 0, cz / res.cells.length);
     this.ghost.rotation.y = this.buildRot * Math.PI / 2;
     this.ghostOk = res.ok && this.game.canAfford(this.game.buildingCost(this.buildDef)) && !(this.buildDef.unique && this.game.hasBuilding(this.buildDef.key, this.game.localPlayer));
-    if (this.buildDef.tower) this.game.showRange(this.ghost.position.x, this.ghost.position.z, this.game.towerRangeFor(this.buildDef));
+    if (this.buildDef.tower) { const onSummit = res.cells.every(cl => this.game.grid.inBounds(cl.i, cl.j) && this.game.grid.natural[this.game.grid.idx(cl.i, cl.j)] === 9); this.game.showRange(this.ghost.position.x, this.ghost.position.z, this.game.towerRangeFor(this.buildDef) * (onSummit ? 1.3 : 1)); }
     Models.setGhostValid(this.ghost, this.ghostOk, this.game.waves && this.game.waves.active);
     this.game.ui.showBuildHint(res.ok ? (this.ghostOk ? '' : (this.buildDef.unique && this.game.hasBuilding(this.buildDef.key, this.game.localPlayer) ? 'Already built' : 'Not enough gold')) : res.reason);
   }
@@ -707,6 +707,7 @@ class Controls {
       const d = this.camDist, p = this.camPitch;
       cam.position.set(this.focus.x + Math.sin(this.camYaw) * Math.cos(p) * d, Math.sin(p) * d, this.focus.z + Math.cos(this.camYaw) * Math.cos(p) * d);
       cam.lookAt(this.focus.x, 0, this.focus.z);
+      if (cam.near !== 0.2) { cam.near = 0.2; cam.updateProjectionMatrix(); }
       if (this.buildDef && this.ghost) { /* ghost updated on mouse move */ }
     } else {
       const u = this.controlled;
@@ -729,6 +730,7 @@ class Controls {
       }
       cam.rotation.order = 'YXZ';
       const eye = new THREE.Vector3(u.pos.x, u.pos.y + u.eyeHeight, u.pos.z);
+      if (cam.near !== 0.06) { cam.near = 0.06; cam.updateProjectionMatrix(); }
       if (this.firstPerson) {
         const bob = u.moving ? Math.sin(u.animT) * 0.05 : 0;
         cam.position.set(eye.x, eye.y + bob, eye.z);

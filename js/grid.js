@@ -106,9 +106,15 @@ class Grid {
       if (!this.inBounds(c.i, c.j)) return { ok: false, reason: 'Out of bounds', cells: fp.cells };
       const w = this.cellToWorld(c.i, c.j);
       if (!def.temporary && (Math.abs(w.x) > lim || Math.abs(w.z) > lim)) return { ok: false, reason: 'Outside the buildable area', cells: fp.cells };
-      if (this.natural[this.idx(c.i, c.j)]) { const nk = this.natural[this.idx(c.i, c.j)]; return { ok: false, reason: nk === CELL_WATER ? 'Cannot build on water' : (nk === 8 ? 'Cannot build on lava' : (nk === 7 ? 'Too soft: marsh' : 'Blocked by rock or forest')), cells: fp.cells }; }
+      if (this.natural[this.idx(c.i, c.j)]) {
+        const nk = this.natural[this.idx(c.i, c.j)];
+        if (nk === 9 && def.tower) continue;   // a tower may stand on a summit
+        return { ok: false, reason: nk === CELL_WATER ? 'Cannot build on water' : (nk === 8 ? 'Cannot build on lava' : (nk === 7 ? 'Too soft: marsh' : (nk === 9 ? 'High ground: towers only' : (nk === 12 ? 'Cliff face' : (nk === 10 ? 'Cannot build on a bridge' : 'Blocked by rock or forest'))))), cells: fp.cells };
+      }
       if (this.occ[this.idx(c.i, c.j)]) return { ok: false, reason: 'Occupied', cells: fp.cells };
     }
+    const summit = fp.cells.filter(c => this.inBounds(c.i, c.j) && this.natural[this.idx(c.i, c.j)] === 9).length;
+    if (summit && summit !== fp.cells.length) return { ok: false, reason: 'Must sit fully on the summit', cells: fp.cells };
     if (game) {
       for (const u of game.units) {
         if (u.team !== 'enemy' || u.dead) continue;
@@ -137,7 +143,7 @@ class Grid {
   }
 
   // ----- flow field (enemies -> king). Solid cells are passable at a cost so enemies breach walls.
-  wallCost(b) { return 30 + (b ? b.hp / 40 : 0); }
+  wallCost(b) { return 60 + (b ? b.hp / 10 : 0); }   // enemies walk a long way round before they chew through
   computeFlow(ti, tj) {
     const n = this.n, integ = this.integ;
     integ.fill(Infinity);

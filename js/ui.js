@@ -119,6 +119,8 @@ class UI {
     if (q('.inverty')) q('.inverty').addEventListener('change', () => { c.invertY = q('.inverty').checked; g.savePref('inverty', c.invertY ? '1' : '0'); });
     if (q('.vol')) q('.vol').addEventListener('input', () => { SFX.setVolume(parseInt(q('.vol').value, 10) / 100); g.savePref('volume', q('.vol').value); this.refreshSettings(); });
     if (q('.shadows')) q('.shadows').addEventListener('change', () => g.setShadows(q('.shadows').checked));
+    if (q('.bloom')) q('.bloom').addEventListener('change', () => g.setBloom(q('.bloom').checked));
+    if (q('.spawncheat')) q('.spawncheat').addEventListener('click', () => g.spawnTestChampion());
     if (q('.showfps')) q('.showfps').addEventListener('change', () => { g.showFps = q('.showfps').checked; g.savePref('showfps', g.showFps ? '1' : '0'); this.$('fpscounter').classList.toggle('hidden', !g.showFps); });
     root.querySelectorAll('input').forEach(i => i.addEventListener('keydown', (e) => e.stopPropagation()));
   }
@@ -133,6 +135,7 @@ class UI {
       if (q('.vol') && document.activeElement !== q('.vol')) q('.vol').value = Math.round(SFX.volume * 100);
       if (q('.volval')) q('.volval').textContent = Math.round(SFX.volume * 100) + '%';
       if (q('.shadows')) q('.shadows').checked = !!g.shadowsOn;
+      if (q('.bloom')) q('.bloom').checked = !!g.bloomOn;
       if (q('.showfps')) q('.showfps').checked = !!g.showFps;
     });
   }
@@ -186,6 +189,7 @@ class UI {
   }
   onConnected() { this.$('connecting').classList.add('hidden'); this.toast('Connected. Your hero is at the keep: select them and press C to take control.', 'good', 7000); }
   onGameStart() {
+    if (this.game.coop) setTimeout(() => { if (this.game.started) this.localToast(`Co-op: rings and pennants show who owns what. You are <span class="sw" style="background:${this.game.cssColor(this.game.playerColor(this.game.localPlayer))}"></span>. Gold crowns mark what everyone shares.`, 'good', 8000); }, 1500);
     this.$('hud').classList.remove('hidden');
     this.$('gameover').classList.add('hidden');
     this.dirty = true;
@@ -241,7 +245,7 @@ class UI {
       pr.appendChild(b);
     }
     const pu = this.$('panel-upgrade');
-    pu.innerHTML = '';
+    pu.innerHTML = this.game.coop ? '<div class="note">Your upgrades affect your own units and towers. The shared castle uses the best level among all defenders.</div>' : '';
     for (const d of Object.values(DATA.upgrades)) {
       const b = document.createElement('button');
       b.className = 'item'; b.dataset.upgrade = d.key;
@@ -358,17 +362,21 @@ class UI {
     panel.classList.remove('hidden');
     if (b) {
       const canUp = b.canUpgrade();
-      panel.innerHTML = `<div><div class="nm">${b.name}${b.def.tower ? ` · Level ${b.level}` : ''}${b.underConstruction ? ' · under construction' : ''}</div><div class="sub">${b.underConstruction ? 'Engineers finish it during the wave; it completes on its own when the wave ends.' : b.def.desc}</div>
+      const g = this.game, coop = g.coop, mine = g.ownsOrShared(b);
+      const ownerLine = coop ? `<div class="owner"><span class="sw" style="background:${g.cssColor(g.ownerColor(b))}"></span>${!b.owner ? 'Shared: any defender can repair or upgrade it. Upgrades use the best level among you.' : (mine ? 'Yours: only you can repair, upgrade or sell it.' : `${g.playerName(b.owner)}'s: only they can repair, upgrade or sell it.`)}</div>` : '';
+      panel.innerHTML = `<div><div class="nm">${b.name}${b.def.tower ? ` · Level ${b.level}` : ''}${b.high ? ' · high ground (+30% range, +15% damage, out of melee reach)' : ''}${b.underConstruction ? ' · under construction' : ''}</div><div class="sub">${b.underConstruction ? 'Engineers finish it during the wave; it completes on its own when the wave ends.' : b.def.desc}</div>${ownerLine}
         <div class="bar"><div class="fill" id="selhp"></div></div>
         <div class="stats" id="selstats"></div>
         <div class="row">
-          <button data-a="repair">Repair (${b.repairCost()})</button>
-          ${canUp ? `<button data-a="upgrade">Upgrade (${b.upgradeCost()})</button>` : ''}
-          ${b.def.keep ? '' : `<button data-a="sell">Sell (+${b.sellValue()})</button>`}
+          <button data-a="repair"${mine ? '' : ' class="disabled" title="Not yours"'}>Repair (${b.repairCost()})</button>
+          ${canUp ? `<button data-a="upgrade"${mine ? '' : ' class="disabled" title="Not yours"'}>Upgrade (${b.upgradeCost()})</button>` : ''}
+          ${b.def.keep ? '' : `<button data-a="sell"${mine ? '' : ' class="disabled" title="Not yours"'}>Sell (+${b.sellValue()})</button>`}
         </div></div>`;
-      panel.querySelector('[data-a=repair]').addEventListener('click', () => this.game.repairBuilding(b));
-      if (canUp) panel.querySelector('[data-a=upgrade]').addEventListener('click', () => this.game.upgradeBuilding(b));
-      if (!b.def.keep) panel.querySelector('[data-a=sell]').addEventListener('click', () => this.game.sellBuilding(b));
+      if (mine) {
+        panel.querySelector('[data-a=repair]').addEventListener('click', () => this.game.repairBuilding(b));
+        if (canUp) panel.querySelector('[data-a=upgrade]').addEventListener('click', () => this.game.upgradeBuilding(b));
+        if (!b.def.keep) panel.querySelector('[data-a=sell]').addEventListener('click', () => this.game.sellBuilding(b));
+      }
       this.selRef = b;
       return;
     }
@@ -377,8 +385,10 @@ class UI {
       const mine = u.team === 'player' && (!u.owner || u.owner === this.game.localPlayer);
       const own = mine;
       const ownerNote = u.team === 'player' && u.owner && u.owner !== this.game.localPlayer ? ` · ${this.game.playerName(u.owner)}'s` : (u.team === 'player' && !u.owner && this.game.playerOrder.length > 1 ? ' · shared' : '');
+      const g = this.game;
+      const ownerLine = g.coop && u.team === 'player' ? `<div class="owner"><span class="sw" style="background:${g.cssColor(g.ownerColor(u))}"></span>${!u.owner ? 'Shared: any defender can command or control the King.' : (mine ? 'Yours: only you can command them.' : `${g.playerName(u.owner)}'s: only they can command them.`)}</div>` : '';
       const abil = u.abilities.length ? `<div class="abil">${u.abilities.map(a => `<span data-ab="${a.key}"><b>${a.def.key}</b> ${a.def.name}</span>`).join('')}</div>` : '';
-      panel.innerHTML = `<div><div class="nm">${u.name}${u.isHero ? ` · ${u.def.title}` : ''}${ownerNote}</div><div class="sub">${u.def.desc || u.def.passive || (u.isKing ? 'If he falls, the game is lost.' : (u.team === 'player' ? '' : 'Enemy'))}</div>
+      panel.innerHTML = `<div><div class="nm">${u.name}${u.isHero ? ` · ${u.def.title}` : ''}${ownerNote}</div><div class="sub">${u.def.desc || u.def.passive || (u.isKing ? 'If he falls, the game is lost.' : (u.team === 'player' ? '' : 'Enemy'))}</div>${ownerLine}
         <div class="bar"><div class="fill" id="selhp"></div></div>
         <div class="stats" id="selstats"></div>${abil}
         ${own ? `<div class="row"><button class="ctl" data-a="control">Take control <kbd>C</kbd></button><button data-a="hold">Hold <kbd>H</kbd></button><button data-a="follow">Follow hero <kbd>F</kbd></button></div>` : ''}</div>`;
@@ -419,6 +429,17 @@ class UI {
       if (r.def.tower) s += `<span>Damage <b>${Math.round(r.dmg)}</b></span><span>Range <b>${r.range.toFixed(1)}m</b></span>`;
       st.innerHTML = s;
     }
+  }
+  // co-op: name the owner of whatever the cursor is over
+  updateHoverLabel() {
+    const g = this.game, c = g.controls, el = this.$('hoverlabel');
+    if (!el) return;
+    const o = c.mode === 'fps' ? null : (c.hovered && c.hovered.team === 'player' ? c.hovered : c.hoveredBuilding);
+    if (!g.coop || !o || c.buildDef) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+    const label = g.ownerLabel(o);
+    el.innerHTML = `<span class="sw" style="background:${g.cssColor(g.ownerColor(o))}"></span>${label === 'Yours' ? 'Your ' + o.name : (label === 'Shared' ? 'Shared: ' + o.name : label + ' ' + o.name)}`;
+    el.style.left = (c.mouse.x + 16) + 'px'; el.style.top = (c.mouse.y + 18) + 'px';
   }
   onModeChanged() {
     const c = this.game.controls;
@@ -491,6 +512,15 @@ class UI {
     if (p && !badge) { badge = document.createElement('div'); badge.className = 'paused-badge'; badge.textContent = 'Paused'; this.$('hud').appendChild(badge); }
     if (!p && badge) badge.remove();
   }
+  // shown only on this screen, may carry markup
+  localToast(html, type = 'info', dur = 3200) {
+    const box = this.$('toasts');
+    const el = document.createElement('div');
+    el.className = 'toast ' + type; el.innerHTML = html;
+    box.appendChild(el);
+    while (box.children.length > 4) box.firstChild.remove();
+    setTimeout(() => el.remove(), dur);
+  }
   toast(msg, type = 'info', dur = 3200) {
     if (this.game.netHost) this.game.netHost.toast(msg, type, dur);
     const box = this.$('toasts');
@@ -526,18 +556,19 @@ class UI {
     }
     this.$('speed').querySelectorAll('button').forEach(b => b.classList.toggle('on', parseInt(b.dataset.s, 10) === g.timeScale));
     { const total = g.repairTotal(), ra = this.$('repairall');
-      const damaged = g.buildings.filter(b => b.repairCost() > 0).length;
+      const damaged = g.buildings.filter(b => b.repairCost() > 0 && g.ownsOrShared(b)).length;
       const locked = g.repairsLocked();
-      ra.innerHTML = locked ? `Engineers repair during waves${damaged ? ` (${damaged} damaged)` : ''}` : (damaged ? `Repair ${damaged} building${damaged === 1 ? '' : 's'} <span class="cost">${total}g</span> <kbd>R</kbd>` : 'Nothing to repair');
+      ra.innerHTML = locked ? `Engineers repair during waves${damaged ? ` (${damaged} damaged)` : ''}` : (damaged ? `Repair ${damaged} building${damaged === 1 ? '' : 's'}${g.coop ? ' (yours + shared)' : ''} <span class="cost">${total}g</span> <kbd>R</kbd>` : 'Nothing to repair');
       ra.classList.toggle('disabled', !damaged || locked); }
     this.$('autorepairbox').checked = !!g.autoRepair;
     { const rs = this.$('roomstat'), rt = this.$('roomtext');
-      const roster = g.playerOrder.map(id => { const p = g.players[id]; return `${p.name}${id === g.localPlayer ? ' (you)' : ''} ${U.fmt(p.gold)}g`; }).join(' · ');
+      const roster = g.playerOrder.map(id => { const p = g.players[id]; return `<span class="sw" style="background:${g.cssColor(g.playerColor(id))}"></span>${p.name}${id === g.localPlayer ? ' (you)' : ''} ${U.fmt(p.gold)}g`; }).join(' · ') + (g.coop ? ` · <span class="sw" style="background:${g.cssColor(DATA.sharedColor)}"></span>shared` : '');
       if (g.netHost) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netHost.code}</b> · ${roster}`; }
       else if (g.netClient) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netClient.code || ''}</b> · ${roster}${g.netClient.lost ? ' · <span class="bad">disconnected</span>' : ''}`; }
       else rs.classList.add('hidden'); }
     if (this.dirty) { this.refreshPanels(); this.dirty = false; }
     this.updateSelPanel();
+    this.updateHoverLabel();
     if (g.controls.mode === 'fps') {
       const u = g.controls.controlled;
       if (u) {
@@ -562,21 +593,23 @@ class UI {
       const cs = DATA.CELL * s;
       for (let j = 0; j < g.world.n; j++) for (let i = 0; i < g.world.n; i++) {
         const k = g.world.kind[g.world.idx(i, j)]; if (!k) continue;
-        ctx.fillStyle = k === CELL_WATER ? '#3a7fc0' : (k === CELL_ROCK ? '#6a6a64' : (k === 6 ? '#8a7048' : (k === 7 ? '#3a4a24' : (k === 8 ? '#ff6a10' : '#1f4a25'))));
+        ctx.fillStyle = k === CELL_WATER ? '#3a7fc0' : (k === CELL_ROCK ? '#6a6a64' : (k === 6 ? '#8a7048' : (k === 7 ? '#3a4a24' : (k === 8 ? '#ff6a10' : (k === 9 ? '#c8b070' : (k === 12 ? '#8a8078' : (k === 10 ? '#a07040' : '#1f4a25')))))));
         const c = g.world.cellCenter(i, j); ctx.fillRect(px(c.x - 1), pz(c.z - 1), cs + 0.5, cs + 0.5);
       }
     }
+    const coop = g.coop;
     for (const bl of g.buildings) {
-      ctx.fillStyle = bl.def.tower ? '#e0c060' : (bl.def.keep ? '#ffd040' : (bl.def.gate ? '#b08040' : (bl.def.temporary ? '#a0e0ff' : (bl.def.cat === 'economy' ? '#80c0ff' : '#bbb'))));
+      ctx.fillStyle = coop && bl.owner ? g.cssColor(g.playerColor(bl.owner)) : (bl.def.tower ? '#e0c060' : (bl.def.keep ? '#ffd040' : (bl.def.gate ? '#b08040' : (bl.def.temporary ? '#a0e0ff' : (bl.def.cat === 'economy' ? '#80c0ff' : (coop ? '#ffd040' : '#bbb'))))));
       for (const c of bl.cells) { const w = g.grid.cellToWorld(c.i, c.j); ctx.fillRect(px(w.x - 1), pz(w.z - 1), 2 * s + 0.5, 2 * s + 0.5); }
     }
     for (const u of g.units) {
       if (u.dead) continue;
-      ctx.fillStyle = u.team === 'enemy' ? (u.isBoss ? '#ff3020' : '#ff7060') : (u.isKing ? '#ffe040' : (u.isHero ? '#60c0ff' : '#80ff90'));
+      ctx.fillStyle = u.team === 'enemy' ? (u.isBoss ? '#ff3020' : '#ff7060') : (coop ? g.cssColor(g.ownerColor(u)) : (u.isKing ? '#ffe040' : (u.isHero ? '#60c0ff' : '#80ff90')));
       const r = u.isBoss ? 4 : (u.isHero || u.isKing ? 3 : 1.6);
       ctx.beginPath(); ctx.arc(px(u.pos.x), pz(u.pos.z), r, 0, Math.PI * 2); ctx.fill();
     }
-    // spawn directions for the upcoming / active wave
+    // lanes enemies can use, and the ones the next wave will take
+    if (g.world && g.world.laneSpawns) { ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.5; for (const si of g.world.laneSpawns) { const sp = DATA.spawnPoints[si]; ctx.beginPath(); ctx.arc(px(sp.x), pz(sp.z), 6, 0, Math.PI * 2); ctx.stroke(); } }
     const plan = g.waves.active ? null : g.waves.preview;
     if (plan && plan.dirs) { ctx.fillStyle = 'rgba(255,80,60,0.9)'; for (const i of plan.dirs) { const sp = DATA.spawnPoints[i]; ctx.beginPath(); ctx.arc(px(sp.x), pz(sp.z), 5, 0, Math.PI * 2); ctx.fill(); } }
     // camera focus
