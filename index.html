@@ -23,6 +23,11 @@
         <button data-d="easy">Easy</button><button data-d="normal" class="on">Normal</button><button data-d="hard">Hard</button>
       </div>
     </div>
+    <div class="menu-row settings">
+      <label>Mouse sensitivity</label>
+      <input type="range" class="sens" min="10" max="400" step="5" value="100"><span class="sensval">100%</span>
+      <label class="chk"><input type="checkbox" class="raw" checked> Raw input</label>
+    </div>
     <h2 class="section">Choose your starting hero</h2>
     <div id="herocards" class="hero-cards"></div>
     <button id="startbtn" class="big">Begin the Siege</button>
@@ -52,7 +57,7 @@
     <div class="stat"><span class="lbl">Soldiers</span><span id="soldiers">0/0</span></div>
     <div class="stat kingstat"><span class="lbl">King</span><div class="bar"><div id="kinghp" class="fill"></div></div></div>
     <div id="bossbar" class="hidden"><span id="bossname"></span><div class="bar boss"><div id="bosshp" class="fill"></div></div></div>
-    <div id="roomstat" class="stat hidden"></div>
+    <div id="roomstat" class="stat hidden"><span id="roomtext"></span><button id="copycode" class="mini" title="Copy the room code">Copy code</button><button id="copylink" class="mini" title="Copy a link that fills the code in for your friend">Copy invite link</button></div>
     <div class="spacer"></div>
     <div class="seg small" id="speed"><button data-s="1" class="on">1×</button><button data-s="2">2×</button><button data-s="3">3×</button></div>
     <button id="pausebtn" class="icon" title="Pause (P)">❚❚</button>
@@ -129,7 +134,7 @@
       <div>
         <h3>Possessed unit (first person)</h3>
         <ul>
-          <li>Mouse look (click the game once to capture the mouse), <kbd>WASD</kbd> move, arrow keys turn, <kbd>Shift</kbd> sprint, <kbd>[</kbd> <kbd>]</kbd> mouse sensitivity</li>
+          <li>Mouse look (click the game once to capture the mouse), <kbd>WASD</kbd> move, arrow keys turn, <kbd>Shift</kbd> sprint, <kbd>[</kbd> <kbd>]</kbd> mouse sensitivity (or the slider below)</li>
           <li><kbd>LMB</kbd> attack (hold to keep swinging / shooting)</li>
           <li><kbd>Q</kbd> <kbd>E</kbd> hero abilities, aimed where you look</li>
           <li><kbd>RMB</kbd> tap or <kbd>G</kbd>: send your soldiers to attack where you aim. Without mouse capture, holding <kbd>RMB</kbd> and dragging looks around without limits</li>
@@ -146,6 +151,12 @@
           <li>Fallen heroes return after the wave. A fallen King ends the game</li>
         </ul>
       </div>
+    </div>
+    <div class="menu-row settings">
+      <label>Mouse sensitivity</label>
+      <input type="range" class="sens" min="10" max="400" step="5" value="100"><span class="sensval">100%</span>
+      <label class="chk"><input type="checkbox" class="raw" checked> Raw input</label>
+      <span class="note">Raw input ignores the system pointer speed and acceleration, like Minecraft. Turn it off if the view feels far faster or slower than your cursor.</span>
     </div>
     <button id="helpclose" class="big">Back to the battle</button>
   </div>

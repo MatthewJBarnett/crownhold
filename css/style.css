@@ -56,7 +56,14 @@ button.icon { width: 34px; height: 30px; padding: 0; font-size: 13px; }
 #mpblocked { color: var(--text); margin: 4px 0 10px; }
 #mpblocked button { margin-left: 8px; border-color: var(--gold); color: var(--gold); font-weight: 600; }
 #mpstatus.err { color: var(--bad); }
-#roomstat { color: var(--muted); font-size: 12px; }
+#roomstat { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 8px; }
+button.mini { padding: 3px 8px; font-size: 11px; }
+.settings { margin: 6px 0 4px; flex-wrap: wrap; }
+.settings input[type=range] { width: 200px; accent-color: #e8c060; }
+.settings .sensval { min-width: 44px; color: var(--gold); font-weight: 600; font-variant-numeric: tabular-nums; }
+.settings .chk { display: inline-flex; align-items: center; gap: 6px; color: var(--text); cursor: pointer; }
+.settings .chk input { accent-color: #e8c060; }
+.settings .note { flex-basis: 100%; color: var(--muted); font-size: 12px; text-align: center; }
 #roomstat b { color: var(--gold); letter-spacing: 0.12em; }
 #roomstat .bad { color: var(--bad); }
 .hint b { color: var(--gold); }

@@ -65,7 +65,14 @@ button.icon { width: 34px; height: 30px; padding: 0; font-size: 13px; }
 #mpblocked { color: var(--text); margin: 4px 0 10px; }
 #mpblocked button { margin-left: 8px; border-color: var(--gold); color: var(--gold); font-weight: 600; }
 #mpstatus.err { color: var(--bad); }
-#roomstat { color: var(--muted); font-size: 12px; }
+#roomstat { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 8px; }
+button.mini { padding: 3px 8px; font-size: 11px; }
+.settings { margin: 6px 0 4px; flex-wrap: wrap; }
+.settings input[type=range] { width: 200px; accent-color: #e8c060; }
+.settings .sensval { min-width: 44px; color: var(--gold); font-weight: 600; font-variant-numeric: tabular-nums; }
+.settings .chk { display: inline-flex; align-items: center; gap: 6px; color: var(--text); cursor: pointer; }
+.settings .chk input { accent-color: #e8c060; }
+.settings .note { flex-basis: 100%; color: var(--muted); font-size: 12px; text-align: center; }
 #roomstat b { color: var(--gold); letter-spacing: 0.12em; }
 #roomstat .bad { color: var(--bad); }
 .hint b { color: var(--gold); }
@@ -215,6 +222,11 @@ button.icon { width: 34px; height: 30px; padding: 0; font-size: 13px; }
         <button data-d="easy">Easy</button><button data-d="normal" class="on">Normal</button><button data-d="hard">Hard</button>
       </div>
     </div>
+    <div class="menu-row settings">
+      <label>Mouse sensitivity</label>
+      <input type="range" class="sens" min="10" max="400" step="5" value="100"><span class="sensval">100%</span>
+      <label class="chk"><input type="checkbox" class="raw" checked> Raw input</label>
+    </div>
     <h2 class="section">Choose your starting hero</h2>
     <div id="herocards" class="hero-cards"></div>
     <button id="startbtn" class="big">Begin the Siege</button>
@@ -244,7 +256,7 @@ button.icon { width: 34px; height: 30px; padding: 0; font-size: 13px; }
     <div class="stat"><span class="lbl">Soldiers</span><span id="soldiers">0/0</span></div>
     <div class="stat kingstat"><span class="lbl">King</span><div class="bar"><div id="kinghp" class="fill"></div></div></div>
     <div id="bossbar" class="hidden"><span id="bossname"></span><div class="bar boss"><div id="bosshp" class="fill"></div></div></div>
-    <div id="roomstat" class="stat hidden"></div>
+    <div id="roomstat" class="stat hidden"><span id="roomtext"></span><button id="copycode" class="mini" title="Copy the room code">Copy code</button><button id="copylink" class="mini" title="Copy a link that fills the code in for your friend">Copy invite link</button></div>
     <div class="spacer"></div>
     <div class="seg small" id="speed"><button data-s="1" class="on">1×</button><button data-s="2">2×</button><button data-s="3">3×</button></div>
     <button id="pausebtn" class="icon" title="Pause (P)">❚❚</button>
@@ -321,7 +333,7 @@ button.icon { width: 34px; height: 30px; padding: 0; font-size: 13px; }
       <div>
         <h3>Possessed unit (first person)</h3>
         <ul>
-          <li>Mouse look (click the game once to capture the mouse), <kbd>WASD</kbd> move, arrow keys turn, <kbd>Shift</kbd> sprint, <kbd>[</kbd> <kbd>]</kbd> mouse sensitivity</li>
+          <li>Mouse look (click the game once to capture the mouse), <kbd>WASD</kbd> move, arrow keys turn, <kbd>Shift</kbd> sprint, <kbd>[</kbd> <kbd>]</kbd> mouse sensitivity (or the slider below)</li>
           <li><kbd>LMB</kbd> attack (hold to keep swinging / shooting)</li>
           <li><kbd>Q</kbd> <kbd>E</kbd> hero abilities, aimed where you look</li>
           <li><kbd>RMB</kbd> tap or <kbd>G</kbd>: send your soldiers to attack where you aim. Without mouse capture, holding <kbd>RMB</kbd> and dragging looks around without limits</li>
@@ -338,6 +350,12 @@ button.icon { width: 34px; height: 30px; padding: 0; font-size: 13px; }
           <li>Fallen heroes return after the wave. A fallen King ends the game</li>
         </ul>
       </div>
+    </div>
+    <div class="menu-row settings">
+      <label>Mouse sensitivity</label>
+      <input type="range" class="sens" min="10" max="400" step="5" value="100"><span class="sensval">100%</span>
+      <label class="chk"><input type="checkbox" class="raw" checked> Raw input</label>
+      <span class="note">Raw input ignores the system pointer speed and acceleration, like Minecraft. Turn it off if the view feels far faster or slower than your cursor.</span>
     </div>
     <button id="helpclose" class="big">Back to the battle</button>
   </div>
@@ -3360,7 +3378,8 @@ class Controls {
     this.camYaw = 0; this.camPitch = 0.95; this.camDist = 52;
     this.fpsYaw = 0; this.fpsPitch = 0;
     this.lookLocked = false;
-    this.sensMul = 1; try { const v = parseFloat(localStorage.getItem('crownhold_sens')); if (v > 0.2 && v < 5) this.sensMul = v; } catch (e) {}
+    this.sensMul = 1; this.rawInput = true;
+    try { const v = parseFloat(localStorage.getItem('crownhold_sens')); if (v >= 0.1 && v <= 4) this.sensMul = v; const r = localStorage.getItem('crownhold_raw'); if (r === '0') this.rawInput = false; } catch (e) {}
     this.buildDef = null; this.buildRot = 0; this.ghost = null; this.ghostAnchor = null; this.ghostOk = false;
     this.dragStart = null; this.dragCells = []; this.dragGhosts = [];
     this.selStart = null; this.rightDown = null; this.middleDown = null;
@@ -3763,8 +3782,8 @@ class Controls {
     if (!fn) { this.lockUnavailable = true; this.game.ui.onLockChanged(); return; }
     const fail = (err) => { this.lockError = err && err.name; this.lockErrorMsg = err && err.message; if (err && (err.name === 'SecurityError' || err.name === 'NotAllowedError' || err.name === 'NotSupportedError')) this.lockUnavailable = true; this.game.ui.onLockChanged(); };
     try {
-      // raw mouse input (no OS acceleration) where supported, like a native shooter; otherwise the plain request
-      const p = fn.call(c, { unadjustedMovement: true });
+      // raw mouse input (no OS acceleration) where supported and wanted, like a native shooter; otherwise the plain request
+      const p = this.rawInput ? fn.call(c, { unadjustedMovement: true }) : fn.call(c);
       if (p && p.catch) p.catch((err) => {
         if (err && err.name === 'NotSupportedError') { try { const p2 = fn.call(c); if (p2 && p2.catch) p2.catch(fail); } catch (e2) { fail(e2); } }
         else fail(err);
@@ -3805,10 +3824,19 @@ class Controls {
     const sens = 0.0022 * this.sensMul;
     if (Math.abs(dx) < 400 && Math.abs(dy) < 400) { this.fpsYaw -= dx * sens; this.fpsPitch = U.clamp(this.fpsPitch - dy * sens, -1.35, 1.35); }
   }
-  adjustSensitivity(mul) {
-    this.sensMul = U.clamp(this.sensMul * mul, 0.3, 4);
+  setSensitivity(v, quiet) {
+    this.sensMul = U.clamp(v, 0.1, 4);
     try { localStorage.setItem('crownhold_sens', String(this.sensMul)); } catch (e) {}
-    this.game.ui.toast(`Mouse sensitivity ${Math.round(this.sensMul * 100)}%  ( [ lower, ] higher )`);
+    this.game.ui.refreshSettings();
+    if (!quiet) this.game.ui.toast(`Mouse sensitivity ${Math.round(this.sensMul * 100)}%  ( [ lower, ] higher )`);
+  }
+  adjustSensitivity(mul) { this.setSensitivity(this.sensMul * mul); }
+  setRawInput(on) {
+    this.rawInput = !!on;
+    try { localStorage.setItem('crownhold_raw', on ? '1' : '0'); } catch (e) {}
+    this.game.ui.refreshSettings();
+    // re-capture so the new mode applies right away
+    if (this.lookLocked && document.pointerLockElement === this.canvas) { document.exitPointerLock(); this.lastLockTry = 0; setTimeout(() => { if (this.mode === 'fps') this.requestLock(); }, 400); }
   }
   popOut() {
     let w = null;
@@ -4490,6 +4518,11 @@ class UI {
       this.$('difficulty').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
     }));
     this.$('startbtn').addEventListener('click', () => { SFX.init(); SFX.resume(); this.hideMenu(); this.game.newGame(this.selectedHero, this.difficulty); });
+    document.querySelectorAll('.settings').forEach(r => this.bindSettings(r));
+    this.refreshSettings();
+    this.$('copycode').addEventListener('click', () => { const g = this.game; const code = g.netHost ? g.netHost.code : (g.netClient ? g.netClient.code : ''); if (code) this.copyText(code, this.$('copycode')); });
+    this.$('copylink').addEventListener('click', () => { const g = this.game; const code = g.netHost ? g.netHost.code : (g.netClient ? g.netClient.code : ''); if (code) this.copyText(this.inviteLink(code), this.$('copylink')); });
+    { const jc = new URLSearchParams(location.search).get('join'); if (jc) { this.$('joincode').value = jc.toUpperCase().slice(0, 6); this.mpStatus(`Room code ${jc.toUpperCase()} filled in. Pick your hero, enter a name, and press Join.`); } }
     this.$('restartbtn').addEventListener('click', () => { if (this.game.replica) { location.reload(); return; } this.$('gameover').classList.add('hidden'); this.$('menu').classList.remove('hidden'); this.$('hud').classList.add('hidden'); this.game.started = false; });
     // multiplayer lobby
     const nameOf = () => (this.$('mpname').value || '').trim().slice(0, 16) || 'Player';
@@ -4531,6 +4564,29 @@ class UI {
       window.claude.use('downloads').then((d) => { this.downloads = d || null; this.refreshEmbeddedHints(); }).catch(() => {});
     }
     this.refreshEmbeddedHints();
+  }
+  copyText(text, btn) {
+    const done = () => { if (btn) { const old = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = old; }, 1500); } };
+    const fallback = () => { try { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); done(); } catch (e) { this.toast('Could not copy. The code is: ' + text, 'error', 6000); } };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(fallback); else fallback();
+  }
+  inviteLink(code) { return DATA.siteUrl + '?join=' + code; }
+  // sensitivity slider + raw-input toggle, present on the menu and in the help screen
+  bindSettings(root) {
+    const c = this.game.controls;
+    const sl = root.querySelector('.sens'), ri = root.querySelector('.raw');
+    if (sl) { sl.addEventListener('input', () => c.setSensitivity(parseInt(sl.value, 10) / 100, true)); }
+    if (ri) ri.addEventListener('change', () => c.setRawInput(ri.checked));
+    root.querySelectorAll('input').forEach(i => i.addEventListener('keydown', (e) => e.stopPropagation()));
+  }
+  refreshSettings() {
+    const c = this.game.controls;
+    document.querySelectorAll('.settings').forEach(root => {
+      const sl = root.querySelector('.sens'), lab = root.querySelector('.sensval'), ri = root.querySelector('.raw');
+      if (sl && document.activeElement !== sl) sl.value = Math.round(c.sensMul * 100);
+      if (lab) lab.textContent = Math.round(c.sensMul * 100) + '%';
+      if (ri) ri.checked = !!c.rawInput;
+    });
   }
   urlBox() {
     return `<span class="url"><input type="text" readonly value="${DATA.siteUrl}" onclick="this.select()"><button data-a="copy">Copy</button></span>`;
@@ -4913,9 +4969,9 @@ class UI {
       ra.innerHTML = locked ? `Engineers repair during waves${damaged ? ` (${damaged} damaged)` : ''}` : (damaged ? `Repair ${damaged} building${damaged === 1 ? '' : 's'} <span class="cost">${total}g</span> <kbd>R</kbd>` : 'Nothing to repair');
       ra.classList.toggle('disabled', !damaged || locked); }
     this.$('autorepairbox').checked = !!g.autoRepair;
-    { const rs = this.$('roomstat');
-      if (g.netHost) { rs.classList.remove('hidden'); rs.innerHTML = `Room <b>${g.netHost.code}</b> · ${g.netHost.playerCount} player${g.netHost.playerCount === 1 ? '' : 's'}`; }
-      else if (g.netClient) { rs.classList.remove('hidden'); rs.innerHTML = `Room <b>${g.netClient.code || ''}</b> · ${g.netClient.players} players${g.netClient.lost ? ' · <span class="bad">disconnected</span>' : ''}`; }
+    { const rs = this.$('roomstat'), rt = this.$('roomtext');
+      if (g.netHost) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netHost.code}</b> · ${g.netHost.playerCount} player${g.netHost.playerCount === 1 ? '' : 's'}`; }
+      else if (g.netClient) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netClient.code || ''}</b> · ${g.netClient.players} players${g.netClient.lost ? ' · <span class="bad">disconnected</span>' : ''}`; }
       else rs.classList.add('hidden'); }
     if (this.dirty) { this.refreshPanels(); this.dirty = false; }
     this.updateSelPanel();
@@ -5136,7 +5192,7 @@ class Game {
       this.newGame(heroKey, difficultyKey);
       this.playerName = name;
       new NetHost(this, tr, code);
-      this.ui.toast(`Hosting room ${code}. Friends can join with that code.`, 'good', 8000);
+      this.ui.toast(`Hosting room ${code}. Use the Copy buttons at the top to share the code or an invite link.`, 'good', 9000);
       this.ui.dirty = true;
       cb(null, code);
     });
@@ -5769,6 +5825,13 @@ function runSelfTest(game, params) {
       say(`mp: damaged buildings host=${host.buildings.filter(b => b.hp < b.maxHp - 1).length} client=${client.buildings.filter(b => b.hp < b.maxHp - 1).length}; dead units host=${host.units.filter(u => u.dead).length} client=${client.units.filter(u => u.dead).length}`);
       host.newGame('knight', 'normal'); step(30);
       say(`mp: after host restart: client units=${client.units.length} host units=${host.units.length} client buildings=${client.buildings.length} host buildings=${host.buildings.length}`);
+    }
+    if (params.get('settingstest')) {
+      const c = game.controls;
+      c.setSensitivity(2.5, true); say(`settings: sensMul=${c.sensMul} stored=${localStorage.getItem('crownhold_sens')} slider=${document.querySelector('.settings .sens').value} label=${document.querySelector('.settings .sensval').textContent}`);
+      c.setRawInput(false); say(`settings: raw=${c.rawInput} stored=${localStorage.getItem('crownhold_raw')} box=${document.querySelector('.settings .raw').checked}`);
+      c.setSensitivity(1, true); c.setRawInput(true);
+      say(`settings: invite link=${game.ui.inviteLink('ABCDEF')} joincode field=${document.getElementById('joincode').value}`);
     }
     if (params.get('repairtest')) {
       const h = game.grid.half;

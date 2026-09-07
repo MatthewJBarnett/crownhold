@@ -173,7 +173,7 @@ class Game {
       this.newGame(heroKey, difficultyKey);
       this.playerName = name;
       new NetHost(this, tr, code);
-      this.ui.toast(`Hosting room ${code}. Friends can join with that code.`, 'good', 8000);
+      this.ui.toast(`Hosting room ${code}. Use the Copy buttons at the top to share the code or an invite link.`, 'good', 9000);
       this.ui.dirty = true;
       cb(null, code);
     });
@@ -806,6 +806,13 @@ function runSelfTest(game, params) {
       say(`mp: damaged buildings host=${host.buildings.filter(b => b.hp < b.maxHp - 1).length} client=${client.buildings.filter(b => b.hp < b.maxHp - 1).length}; dead units host=${host.units.filter(u => u.dead).length} client=${client.units.filter(u => u.dead).length}`);
       host.newGame('knight', 'normal'); step(30);
       say(`mp: after host restart: client units=${client.units.length} host units=${host.units.length} client buildings=${client.buildings.length} host buildings=${host.buildings.length}`);
+    }
+    if (params.get('settingstest')) {
+      const c = game.controls;
+      c.setSensitivity(2.5, true); say(`settings: sensMul=${c.sensMul} stored=${localStorage.getItem('crownhold_sens')} slider=${document.querySelector('.settings .sens').value} label=${document.querySelector('.settings .sensval').textContent}`);
+      c.setRawInput(false); say(`settings: raw=${c.rawInput} stored=${localStorage.getItem('crownhold_raw')} box=${document.querySelector('.settings .raw').checked}`);
+      c.setSensitivity(1, true); c.setRawInput(true);
+      say(`settings: invite link=${game.ui.inviteLink('ABCDEF')} joincode field=${document.getElementById('joincode').value}`);
     }
     if (params.get('repairtest')) {
       const h = game.grid.half;

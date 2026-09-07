@@ -32,6 +32,11 @@ class UI {
       this.$('difficulty').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
     }));
     this.$('startbtn').addEventListener('click', () => { SFX.init(); SFX.resume(); this.hideMenu(); this.game.newGame(this.selectedHero, this.difficulty); });
+    document.querySelectorAll('.settings').forEach(r => this.bindSettings(r));
+    this.refreshSettings();
+    this.$('copycode').addEventListener('click', () => { const g = this.game; const code = g.netHost ? g.netHost.code : (g.netClient ? g.netClient.code : ''); if (code) this.copyText(code, this.$('copycode')); });
+    this.$('copylink').addEventListener('click', () => { const g = this.game; const code = g.netHost ? g.netHost.code : (g.netClient ? g.netClient.code : ''); if (code) this.copyText(this.inviteLink(code), this.$('copylink')); });
+    { const jc = new URLSearchParams(location.search).get('join'); if (jc) { this.$('joincode').value = jc.toUpperCase().slice(0, 6); this.mpStatus(`Room code ${jc.toUpperCase()} filled in. Pick your hero, enter a name, and press Join.`); } }
     this.$('restartbtn').addEventListener('click', () => { if (this.game.replica) { location.reload(); return; } this.$('gameover').classList.add('hidden'); this.$('menu').classList.remove('hidden'); this.$('hud').classList.add('hidden'); this.game.started = false; });
     // multiplayer lobby
     const nameOf = () => (this.$('mpname').value || '').trim().slice(0, 16) || 'Player';
@@ -73,6 +78,29 @@ class UI {
       window.claude.use('downloads').then((d) => { this.downloads = d || null; this.refreshEmbeddedHints(); }).catch(() => {});
     }
     this.refreshEmbeddedHints();
+  }
+  copyText(text, btn) {
+    const done = () => { if (btn) { const old = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = old; }, 1500); } };
+    const fallback = () => { try { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); done(); } catch (e) { this.toast('Could not copy. The code is: ' + text, 'error', 6000); } };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(fallback); else fallback();
+  }
+  inviteLink(code) { return DATA.siteUrl + '?join=' + code; }
+  // sensitivity slider + raw-input toggle, present on the menu and in the help screen
+  bindSettings(root) {
+    const c = this.game.controls;
+    const sl = root.querySelector('.sens'), ri = root.querySelector('.raw');
+    if (sl) { sl.addEventListener('input', () => c.setSensitivity(parseInt(sl.value, 10) / 100, true)); }
+    if (ri) ri.addEventListener('change', () => c.setRawInput(ri.checked));
+    root.querySelectorAll('input').forEach(i => i.addEventListener('keydown', (e) => e.stopPropagation()));
+  }
+  refreshSettings() {
+    const c = this.game.controls;
+    document.querySelectorAll('.settings').forEach(root => {
+      const sl = root.querySelector('.sens'), lab = root.querySelector('.sensval'), ri = root.querySelector('.raw');
+      if (sl && document.activeElement !== sl) sl.value = Math.round(c.sensMul * 100);
+      if (lab) lab.textContent = Math.round(c.sensMul * 100) + '%';
+      if (ri) ri.checked = !!c.rawInput;
+    });
   }
   urlBox() {
     return `<span class="url"><input type="text" readonly value="${DATA.siteUrl}" onclick="this.select()"><button data-a="copy">Copy</button></span>`;
@@ -455,9 +483,9 @@ class UI {
       ra.innerHTML = locked ? `Engineers repair during waves${damaged ? ` (${damaged} damaged)` : ''}` : (damaged ? `Repair ${damaged} building${damaged === 1 ? '' : 's'} <span class="cost">${total}g</span> <kbd>R</kbd>` : 'Nothing to repair');
       ra.classList.toggle('disabled', !damaged || locked); }
     this.$('autorepairbox').checked = !!g.autoRepair;
-    { const rs = this.$('roomstat');
-      if (g.netHost) { rs.classList.remove('hidden'); rs.innerHTML = `Room <b>${g.netHost.code}</b> · ${g.netHost.playerCount} player${g.netHost.playerCount === 1 ? '' : 's'}`; }
-      else if (g.netClient) { rs.classList.remove('hidden'); rs.innerHTML = `Room <b>${g.netClient.code || ''}</b> · ${g.netClient.players} players${g.netClient.lost ? ' · <span class="bad">disconnected</span>' : ''}`; }
+    { const rs = this.$('roomstat'), rt = this.$('roomtext');
+      if (g.netHost) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netHost.code}</b> · ${g.netHost.playerCount} player${g.netHost.playerCount === 1 ? '' : 's'}`; }
+      else if (g.netClient) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netClient.code || ''}</b> · ${g.netClient.players} players${g.netClient.lost ? ' · <span class="bad">disconnected</span>' : ''}`; }
       else rs.classList.add('hidden'); }
     if (this.dirty) { this.refreshPanels(); this.dirty = false; }
     this.updateSelPanel();

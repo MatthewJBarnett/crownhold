@@ -36,7 +36,8 @@ temporary ice walls) and Wren the Beastmaster (summons a wolf pack, war horn). Y
 
 ## Playing together
 
-One player clicks Host a game and shares the six-letter room code shown at the top of their screen. Others
+One player clicks Host a game and shares the six-letter room code shown at the top of their screen, using the
+Copy code or Copy invite link buttons next to it (the invite link opens the game with the code filled in). Others
 enter the code and Join with the hero they picked. Everyone shares the same fortress, gold and King, and can
 build, give orders, and take control of any unit nobody else is controlling. The host runs the simulation, so
 the host should have the steadiest connection. Play from the game files on your computer (`index.html`), not from
@@ -65,7 +66,7 @@ Possessed unit (first person)
 - Q and E use the hero's abilities, aimed where you look
 - Right mouse or G sends your soldiers to attack where you aim, F makes them follow you, H holds, V sends them to the King
 - Tab or Esc returns to the overview
-- `[` and `]` change mouse sensitivity (remembered between sessions). Captured mouse look uses raw, unaccelerated input where the browser supports it
+- Mouse sensitivity (10% to 400%) and a Raw input toggle live on the menu and the help screen (?), and `[` / `]` adjust sensitivity in play; both are remembered. Raw input ignores system pointer speed and acceleration like Minecraft; turn it off if the view feels far faster or slower than your cursor
 - If the browser refuses to capture the mouse (some embedded pages do), mouse look still works inside the game frame. Hold the right mouse button (or the left while attacking) to keep looking after the hidden cursor leaves the frame; a right-button tap still orders your soldiers. Fullscreen, where allowed, gives more room
 
 ## Layout

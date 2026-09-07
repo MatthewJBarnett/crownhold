@@ -16,7 +16,8 @@ class Controls {
     this.camYaw = 0; this.camPitch = 0.95; this.camDist = 52;
     this.fpsYaw = 0; this.fpsPitch = 0;
     this.lookLocked = false;
-    this.sensMul = 1; try { const v = parseFloat(localStorage.getItem('crownhold_sens')); if (v > 0.2 && v < 5) this.sensMul = v; } catch (e) {}
+    this.sensMul = 1; this.rawInput = true;
+    try { const v = parseFloat(localStorage.getItem('crownhold_sens')); if (v >= 0.1 && v <= 4) this.sensMul = v; const r = localStorage.getItem('crownhold_raw'); if (r === '0') this.rawInput = false; } catch (e) {}
     this.buildDef = null; this.buildRot = 0; this.ghost = null; this.ghostAnchor = null; this.ghostOk = false;
     this.dragStart = null; this.dragCells = []; this.dragGhosts = [];
     this.selStart = null; this.rightDown = null; this.middleDown = null;
@@ -419,8 +420,8 @@ class Controls {
     if (!fn) { this.lockUnavailable = true; this.game.ui.onLockChanged(); return; }
     const fail = (err) => { this.lockError = err && err.name; this.lockErrorMsg = err && err.message; if (err && (err.name === 'SecurityError' || err.name === 'NotAllowedError' || err.name === 'NotSupportedError')) this.lockUnavailable = true; this.game.ui.onLockChanged(); };
     try {
-      // raw mouse input (no OS acceleration) where supported, like a native shooter; otherwise the plain request
-      const p = fn.call(c, { unadjustedMovement: true });
+      // raw mouse input (no OS acceleration) where supported and wanted, like a native shooter; otherwise the plain request
+      const p = this.rawInput ? fn.call(c, { unadjustedMovement: true }) : fn.call(c);
       if (p && p.catch) p.catch((err) => {
         if (err && err.name === 'NotSupportedError') { try { const p2 = fn.call(c); if (p2 && p2.catch) p2.catch(fail); } catch (e2) { fail(e2); } }
         else fail(err);
@@ -461,10 +462,19 @@ class Controls {
     const sens = 0.0022 * this.sensMul;
     if (Math.abs(dx) < 400 && Math.abs(dy) < 400) { this.fpsYaw -= dx * sens; this.fpsPitch = U.clamp(this.fpsPitch - dy * sens, -1.35, 1.35); }
   }
-  adjustSensitivity(mul) {
-    this.sensMul = U.clamp(this.sensMul * mul, 0.3, 4);
+  setSensitivity(v, quiet) {
+    this.sensMul = U.clamp(v, 0.1, 4);
     try { localStorage.setItem('crownhold_sens', String(this.sensMul)); } catch (e) {}
-    this.game.ui.toast(`Mouse sensitivity ${Math.round(this.sensMul * 100)}%  ( [ lower, ] higher )`);
+    this.game.ui.refreshSettings();
+    if (!quiet) this.game.ui.toast(`Mouse sensitivity ${Math.round(this.sensMul * 100)}%  ( [ lower, ] higher )`);
+  }
+  adjustSensitivity(mul) { this.setSensitivity(this.sensMul * mul); }
+  setRawInput(on) {
+    this.rawInput = !!on;
+    try { localStorage.setItem('crownhold_raw', on ? '1' : '0'); } catch (e) {}
+    this.game.ui.refreshSettings();
+    // re-capture so the new mode applies right away
+    if (this.lookLocked && document.pointerLockElement === this.canvas) { document.exitPointerLock(); this.lastLockTry = 0; setTimeout(() => { if (this.mode === 'fps') this.requestLock(); }, 400); }
   }
   popOut() {
     let w = null;
