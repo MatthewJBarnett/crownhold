@@ -27,6 +27,7 @@ class WorldMap {
     this.kind = new Uint8Array(this.n * this.n);       // natural obstacle per cell: 0 free, CELL_WATER, CELL_ROCK, 5 forest (rock-like)
     this.hs = this.n + 1;                                // height samples (one per cell corner)
     this.h = new Float32Array(this.hs * this.hs);
+    this.h0 = new Float32Array(this.hs * this.hs);       // the same without the river/marsh carve
     this.fords = []; this.river = []; this.rocks = []; this.forests = [];
     this.generate();
   }
@@ -38,16 +39,17 @@ class WorldMap {
   // ---------------------------------------------------------------- terrain height
   baseHeight(x, z) {
     const r = Math.max(Math.abs(x), Math.abs(z));
-    const t = U.clamp((r - 58) / 20, 0, 1);
+    const t = U.clamp((r - (DATA.BUILD_RADIUS + 4)) / 22, 0, 1);
     const s = t * t * (3 - 2 * t);
     const n = U.smoothNoise(x * 0.045 + this.seed % 97, z * 0.045 + this.seed % 89) * 0.7 + U.smoothNoise(x * 0.12 + 3, z * 0.12 + 7) * 0.3;
     return s * n * 7 * (this.cfg ? this.cfg.hills : 1);
   }
-  heightAt(x, z) {
+  heightAt(x, z, arr) {
+    x = U.clamp(x, -DATA.MAP_HALF, DATA.MAP_HALF); z = U.clamp(z, -DATA.MAP_HALF, DATA.MAP_HALF);
     const fx = x / this.cell + this.half, fz = z / this.cell + this.half;
     const i = U.clamp(Math.floor(fx), 0, this.hs - 2), j = U.clamp(Math.floor(fz), 0, this.hs - 2);
     const tx = U.clamp(fx - i, 0, 1), tz = U.clamp(fz - j, 0, 1);
-    const h = this.h, w = this.hs;
+    const h = arr || this.h, w = this.hs;
     const a = h[j * w + i], b = h[j * w + i + 1], c = h[(j + 1) * w + i], d = h[(j + 1) * w + i + 1];
     return U.lerp(U.lerp(a, b, tx), U.lerp(c, d, tx), tz);
   }
@@ -56,22 +58,171 @@ class WorldMap {
   generate() {
     for (let attempt = 0; attempt < 30; attempt++) {
       const rnd = mulberry32(this.seed + attempt * 7919);
-      this.kind.fill(0); this.fords = []; this.river = []; this.rocks = []; this.forests = []; this.lakes = [];
+      this.kind.fill(0); this.fords = []; this.river = []; this.rocks = []; this.forests = []; this.lakes = []; this.chests = [];
       const cfg = this.cfg, t = this.type;
-      if (cfg.river) this.layRiver(rnd);
       const pick = (r) => r[0] + Math.floor(rnd() * (r[1] - r[0] + 1));
-      for (let l = 0; l < (cfg.lakes || 0); l++) this.layBlobs(rnd, 1, CELL_WATER, [2.6, 4.2], 1, this.lakes);
-      if (t === 'highlands') { this.layBlobs(rnd, pick([6, 9]), CELL_ROCK, [4.5, 8], 0.22, this.rocks); this.layBlobs(rnd, pick([3, 5]), CELL_ROCK, [1.6, 2.8], 1, this.rocks); }
-      else if (t === 'badlands') { this.layBlobs(rnd, pick([4, 6]), CELL_ROCK, [3, 5], 0.3, this.rocks); this.layBlobs(rnd, pick([3, 5]), CELL_ROCK, [1.4, 2.4], 1, this.rocks); }
-      else this.layBlobs(rnd, pick(cfg.rocks), CELL_ROCK, [1.5, 3.2], 1, this.rocks);
-      const fr = t === 'darkwood' ? [3.2, 6.2] : (t === 'highlands' ? [2.2, 3.6] : [2.6, 4.6]);
-      this.layBlobs(rnd, pick(cfg.forests), 5, fr, 0.8, this.forests);
+      if (t === 'valley') {
+        this.layRiver(rnd); this.layTributary(rnd);
+        this.layBlobs(rnd, pick(cfg.rocks), CELL_ROCK, [1.5, 3.2], 1, this.rocks);
+        this.layBlobs(rnd, pick(cfg.forests), 5, [2.6, 4.6], 0.8, this.forests);
+        this.layMarshNearWater(rnd, 3);
+      } else if (t === 'highlands') {
+        this.layRidges(rnd);
+        this.layBlobs(rnd, 2, CELL_WATER, [2.6, 4.2], 1, this.lakes);
+        this.layBlobs(rnd, pick(cfg.rocks), CELL_ROCK, [1.4, 2.4], 1, this.rocks);
+        this.layBlobs(rnd, pick(cfg.forests), 5, [2.2, 3.6], 0.8, this.forests);
+      } else if (t === 'darkwood') {
+        this.layRiver(rnd);
+        this.layForestBelt(rnd);
+        this.layBlobs(rnd, pick(cfg.forests), 5, [2.5, 4], 0.8, this.forests);
+        this.layBlobs(rnd, pick(cfg.rocks), CELL_ROCK, [1.4, 2.6], 1, this.rocks);
+        this.layMarshNearWater(rnd, 2);
+      } else if (t === 'badlands') {
+        this.layCanyons(rnd);
+        this.layBlobs(rnd, pick(cfg.rocks), CELL_ROCK, [1.4, 2.6], 1, this.rocks);
+        this.layBlobs(rnd, 1, CELL_WATER, [2, 3], 1, this.lakes);
+      } else if (t === 'frozen') {
+        this.layBlobs(rnd, 3, CELL_WATER, [2.6, 4.5], 1, this.lakes);
+        this.layBlobs(rnd, 5, 7, [2.2, 3.8], 0.9, []);
+        this.layBlobs(rnd, pick(cfg.rocks), CELL_ROCK, [1.4, 2.8], 1, this.rocks);
+        this.layBlobs(rnd, pick(cfg.forests), 5, [2, 3.2], 0.8, this.forests);
+      } else if (t === 'volcanic') {
+        this.layRiver(rnd, 8);
+        this.layBlobs(rnd, 2, 8, [2, 3.4], 1, this.lakes);
+        this.layBlobs(rnd, pick(cfg.rocks), CELL_ROCK, [1.2, 2.4], 1, this.rocks);
+      }
       if (this.connected()) { this.usedSeed = this.seed + attempt * 7919; break; }
       if (attempt === 29) { this.usedSeed = this.seed + attempt * 7919; this.carveOpen(); }
     }
+    this.layRoads();
+    this.placeChests(mulberry32(this.usedSeed + 99));
     this.bakeHeights();
   }
-  layRiver(rnd) {
+  blocked(k) { return k === CELL_WATER || k === CELL_ROCK || k === 5 || k === 8; }
+  // a thinner second stream from a random edge that joins the main river
+  layTributary(rnd) {
+    if (!this.river.length) return;
+    const h = this.half, join = this.river[2 + Math.floor(rnd() * 3)];
+    const side = Math.floor(rnd() * 4);
+    const start = side === 0 ? { i: 2 + rnd() * (this.n - 4), j: 1 } : side === 1 ? { i: 2 + rnd() * (this.n - 4), j: this.n - 2 } : side === 2 ? { i: 1, j: 2 + rnd() * (this.n - 4) } : { i: this.n - 2, j: 2 + rnd() * (this.n - 4) };
+    const mid = { i: (start.i + join.i) / 2 + (rnd() - 0.5) * 12, j: (start.j + join.j) / 2 + (rnd() - 0.5) * 12 };
+    const pts = [start, mid, join];
+    for (let j = 0; j < this.n; j++) for (let i = 0; i < this.n; i++) {
+      const c = this.cellCenter(i, j);
+      if (Math.max(Math.abs(c.x), Math.abs(c.z)) <= 22) continue;
+      if (this.distToPolyline(i, j, pts) <= 0.8 && !this.kind[this.idx(i, j)]) this.kind[this.idx(i, j)] = CELL_WATER;
+    }
+    // one ford on the tributary
+    const p = this.pointOnPolyline(pts, 0.45); this.fords.push(p);
+    for (let j = Math.floor(p.j) - 3; j <= Math.floor(p.j) + 3; j++) for (let i = Math.floor(p.i) - 3; i <= Math.floor(p.i) + 3; i++) if (this.inBounds(i, j) && Math.hypot(i + 0.5 - p.i, j + 0.5 - p.j) <= 2.2 && this.kind[this.idx(i, j)] === CELL_WATER) this.kind[this.idx(i, j)] = 0;
+  }
+  // bog next to water: walkable but slow
+  layMarshNearWater(rnd, count) {
+    const waterCells = [];
+    for (let j = 0; j < this.n; j++) for (let i = 0; i < this.n; i++) if (this.kind[this.idx(i, j)] === CELL_WATER) waterCells.push([i, j]);
+    let placed = 0, guard = 0;
+    while (placed < count && waterCells.length && guard++ < 60) {
+      const [wi, wj] = waterCells[Math.floor(rnd() * waterCells.length)];
+      const c = this.cellCenter(wi, wj);
+      if (Math.max(Math.abs(c.x), Math.abs(c.z)) < 26) continue;
+      const r = 2 + rnd() * 1.8;
+      for (let j = wj - 4; j <= wj + 4; j++) for (let i = wi - 4; i <= wi + 4; i++) {
+        if (!this.inBounds(i, j) || this.kind[this.idx(i, j)]) continue;
+        const cc = this.cellCenter(i, j); if (Math.max(Math.abs(cc.x), Math.abs(cc.z)) < 24) continue;
+        if (Math.hypot(i - wi, j - wj) <= r * (0.8 + 0.4 * U.smoothNoise(i * 0.6, j * 0.6))) this.kind[this.idx(i, j)] = 7;
+      }
+      placed++;
+    }
+  }
+  // two rings of ridge with a few passes each
+  layRidges(rnd) {
+    const h = this.half;
+    for (const [rc, thick, gaps] of [[19, 1.4, 3], [31, 1.8, 4]]) {
+      const gapAngles = []; for (let g = 0; g < gaps; g++) gapAngles.push(rnd() * Math.PI * 2);
+      const phase = rnd() * 10;
+      for (let j = 0; j < this.n; j++) for (let i = 0; i < this.n; i++) {
+        const dx = i + 0.5 - h - 0.5, dz = j + 0.5 - h - 0.5;
+        const ang = Math.atan2(dz, dx), r = Math.hypot(dx, dz);
+        const wob = rc + Math.sin(ang * 3 + phase) * 1.6 + Math.sin(ang * 7 + phase * 2) * 0.8;
+        if (Math.abs(r - wob) > thick) continue;
+        if (gapAngles.some(ga => Math.abs(Math.atan2(Math.sin(ang - ga), Math.cos(ang - ga))) < 0.28)) continue;
+        const c = this.cellCenter(i, j);
+        if (DATA.spawnPoints.some(sp => U.dist(sp.x, sp.z, c.x, c.z) < 12)) continue;
+        if (!this.kind[this.idx(i, j)]) this.kind[this.idx(i, j)] = CELL_ROCK;
+      }
+    }
+  }
+  // a forest annulus with lanes and clearings
+  layForestBelt(rnd) {
+    const h = this.half, r0 = 17, r1 = 26;
+    const lanes = []; for (let k = 0; k < 4; k++) lanes.push(k * Math.PI / 2 + (rnd() - 0.5) * 0.8);
+    const clearings = []; for (let k = 0; k < 3; k++) clearings.push({ a: rnd() * Math.PI * 2, r: r0 + 2 + rnd() * (r1 - r0 - 4), rad: 2 + rnd() * 1.5 });
+    for (let j = 0; j < this.n; j++) for (let i = 0; i < this.n; i++) {
+      if (this.kind[this.idx(i, j)]) continue;
+      const dx = i + 0.5 - h - 0.5, dz = j + 0.5 - h - 0.5;
+      const ang = Math.atan2(dz, dx), r = Math.hypot(dx, dz);
+      const edge = 1.2 * U.smoothNoise(i * 0.5 + 3, j * 0.5 + 9);
+      if (r < r0 + edge || r > r1 - edge) continue;
+      if (lanes.some(la => Math.abs(Math.atan2(Math.sin(ang - la), Math.cos(ang - la))) < 0.11)) continue;
+      if (clearings.some(cl => Math.hypot(dx - Math.cos(cl.a) * cl.r, dz - Math.sin(cl.a) * cl.r) < cl.rad)) continue;
+      this.kind[this.idx(i, j)] = 5;
+    }
+  }
+  // radial canyon walls with breaks
+  layCanyons(rnd) {
+    const h = this.half, n = 5 + Math.floor(rnd() * 2);
+    for (let k = 0; k < n; k++) {
+      const ang = k / n * Math.PI * 2 + (rnd() - 0.5) * 0.5, wob = rnd() * 10;
+      const gapAt = 18 + rnd() * 10, gap2 = 30 + rnd() * 6;
+      for (let r = 14; r < 36; r += 0.5) {
+        if (Math.abs(r - gapAt) < 1.6 || Math.abs(r - gap2) < 1.4) continue;
+        const a = ang + Math.sin(r * 0.35 + wob) * 0.12;
+        const i = Math.round(h + Math.cos(a) * r), j = Math.round(h + Math.sin(a) * r);
+        for (let dj = 0; dj <= 0; dj++) for (let di = 0; di <= 0; di++) {
+          if (!this.inBounds(i + di, j + dj) || this.kind[this.idx(i + di, j + dj)]) continue;
+          const c = this.cellCenter(i + di, j + dj);
+          if (DATA.spawnPoints.some(sp => U.dist(sp.x, sp.z, c.x, c.z) < 12)) continue;
+          this.kind[this.idx(i + di, j + dj)] = CELL_ROCK;
+        }
+      }
+    }
+  }
+  // dirt roads: the shortest walkable route from each spawn point to the gate
+  layRoads() {
+    const h = this.half, n = this.n;
+    const target = this.idx(h, h + 12);
+    const passable = (k) => !this.blocked(this.kind[k]);
+    const dist = new Int32Array(n * n).fill(-1), prev = new Int32Array(n * n).fill(-1);
+    const q = [target]; dist[target] = 0;
+    for (let qi = 0; qi < q.length; qi++) {
+      const k = q[qi]; const i = k % n, j = (k - i) / n;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const ni = i + di, nj = j + dj; if (!this.inBounds(ni, nj)) continue;
+        const nk = this.idx(ni, nj); if (dist[nk] >= 0 || !passable(nk)) continue;
+        dist[nk] = dist[k] + (this.kind[nk] === 7 ? 3 : 1); prev[nk] = k; q.push(nk);
+      }
+    }
+    for (const sp of DATA.spawnPoints) {
+      let i = Math.floor(sp.x / this.cell + h + 0.5), j = Math.floor(sp.z / this.cell + h + 0.5);
+      let k = this.idx(i, j);
+      if (dist[k] < 0) { let best = -1, bd = 1e9; for (let dj = -3; dj <= 3; dj++) for (let di = -3; di <= 3; di++) { const a = i + di, b = j + dj; if (this.inBounds(a, b) && dist[this.idx(a, b)] >= 0) { const d = di * di + dj * dj; if (d < bd) { bd = d; best = this.idx(a, b); } } } k = best; }
+      let guard = 0;
+      while (k >= 0 && k !== target && guard++ < 4000) { if (this.kind[k] === 0) { const c = this.cellCenter(k % n, (k - k % n) / n); if (Math.max(Math.abs(c.x), Math.abs(c.z)) > 21) this.kind[k] = 6; } k = prev[k]; }
+    }
+  }
+  placeChests(rnd) {
+    const h = this.half;
+    let guard = 0;
+    while (this.chests.length < 4 && guard++ < 200) {
+      const ang = rnd() * Math.PI * 2, rad = 34 + rnd() * 38;
+      const x = Math.cos(ang) * rad, z = Math.sin(ang) * rad;
+      const i = Math.floor(x / this.cell + h + 0.5), j = Math.floor(z / this.cell + h + 0.5);
+      if (!this.inBounds(i, j) || this.kind[this.idx(i, j)] !== 0) continue;
+      if (this.chests.some(c => U.dist(c.x, c.z, x, z) < 20)) continue;
+      this.chests.push({ x: (i - h) * this.cell, z: (j - h) * this.cell, taken: false });
+    }
+  }
+  layRiver(rnd, kind = CELL_WATER) {
     const n = this.n, h = this.half;
     // enters on one side, leaves on the opposite side, bending around the castle
     const vertical = rnd() < 0.5;
@@ -89,7 +240,7 @@ class WorldMap {
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
       const d = this.distToPolyline(i, j, pts);
       const c = this.cellCenter(i, j);
-      if (d <= width && Math.max(Math.abs(c.x), Math.abs(c.z)) > 12) this.kind[this.idx(i, j)] = CELL_WATER;
+      if (d <= width && Math.max(Math.abs(c.x), Math.abs(c.z)) > 12) this.kind[this.idx(i, j)] = kind;
     }
     // fords: three crossings, each three cells wide
     for (const t of [0.22, 0.5, 0.78]) {
@@ -97,7 +248,7 @@ class WorldMap {
       this.fords.push(p);
       for (let j = Math.floor(p.j) - 3; j <= Math.floor(p.j) + 3; j++) for (let i = Math.floor(p.i) - 3; i <= Math.floor(p.i) + 3; i++) {
         if (!this.inBounds(i, j)) continue;
-        if (Math.hypot(i + 0.5 - p.i, j + 0.5 - p.j) <= 2.2 && this.kind[this.idx(i, j)] === CELL_WATER) this.kind[this.idx(i, j)] = 0;
+        if (Math.hypot(i + 0.5 - p.i, j + 0.5 - p.j) <= 2.2 && this.kind[this.idx(i, j)] === kind) this.kind[this.idx(i, j)] = 0;
       }
     }
   }
@@ -140,7 +291,7 @@ class WorldMap {
         if ((ex * ex) / (rx * rx) + (ez * ez) / (rz * rz) > wob) continue;
         const c = this.cellCenter(i, j);
         if (Math.max(Math.abs(c.x), Math.abs(c.z)) < 23 || Math.max(Math.abs(c.x), Math.abs(c.z)) > lim) continue;
-        if (this.kind[this.idx(i, j)]) { blocked = true; break; }
+        if (this.kind[this.idx(i, j)] && !(kind === 7 && this.kind[this.idx(i, j)] === 6)) { blocked = true; break; }
         cells.push([i, j]);
       }
       if (blocked || cells.length < 3) continue;
@@ -172,7 +323,7 @@ class WorldMap {
         const ni = i + di, nj = j + dj;
         if (!this.inBounds(ni, nj)) continue;
         const nk = this.idx(ni, nj);
-        if (seen[nk] || this.kind[nk]) continue;
+        if (seen[nk] || this.blocked(this.kind[nk])) continue;
         seen[nk] = 1; q.push(nk);
       }
     }
@@ -188,10 +339,12 @@ class WorldMap {
     for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) {
       const x = (i - this.half) * this.cell - this.cell / 2, z = (j - this.half) * this.cell - this.cell / 2;
       let y = this.baseHeight(x, z);
+      this.h0[j * w + i] = y;
       // carve the river bed: a corner is lowered when any touching cell is water
       let water = 0, cnt = 0;
-      for (const [di, dj] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { if (this.inBounds(i + di, j + dj)) { cnt++; if (this.kind[this.idx(i + di, j + dj)] === CELL_WATER) water++; } }
+      for (const [di, dj] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { if (this.inBounds(i + di, j + dj)) { cnt++; const kk = this.kind[this.idx(i + di, j + dj)]; if (kk === CELL_WATER || kk === 8) water++; } }
       if (water) y -= 1.4 * (water / cnt) + 0.3;
+      else { let marsh = 0; for (const [di, dj] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) if (this.inBounds(i + di, j + dj) && this.kind[this.idx(i + di, j + dj)] === 7) marsh++; if (marsh) y -= 0.25 * (marsh / cnt); }
       this.h[j * w + i] = y;
     }
   }
@@ -200,12 +353,15 @@ class WorldMap {
   applyToGrid(grid) {
     for (let k = 0; k < this.n * this.n; k++) {
       const kind = this.kind[k];
-      if (!kind) continue;
-      grid.flag[k] = kind === CELL_WATER ? CELL_WATER : CELL_ROCK;
+      grid.terrain[k] = kind;
+      if (!kind || kind === 6) continue;
+      if (kind === 7) { grid.natural[k] = 7; continue; }           // marsh: walkable, slow, unbuildable
+      grid.flag[k] = (kind === CELL_WATER || kind === 8) ? CELL_WATER : CELL_ROCK;
       grid.natural[k] = kind;
     }
     grid.flowDirty = true;
   }
+  kindAtWorld(x, z) { const i = Math.floor(x / this.cell + this.half + 0.5), j = Math.floor(z / this.cell + this.half + 0.5); return this.kindAt(i, j); }
   buildScene(scene) {
     const group = new THREE.Group();
     // ground with heights and painted cells
@@ -215,45 +371,72 @@ class WorldMap {
     const pos = geo.attributes.position;
     const colors = new Float32Array(pos.count * 3);
     const pal = this.cfg.palette;
-    const c = new THREE.Color(), grass = new THREE.Color(pal.grass), grass2 = new THREE.Color(pal.grass2), mud = new THREE.Color(0x6b5a3a), rock = new THREE.Color(0x777770), forest = new THREE.Color(0x2f5a2a), dry = new THREE.Color(pal.dry);
+    const c = new THREE.Color(), grass = new THREE.Color(pal.grass), grass2 = new THREE.Color(pal.grass2), mud = new THREE.Color(this.type === 'volcanic' ? 0x2a1a14 : 0x6b5a3a), rock = new THREE.Color(this.type === 'frozen' ? 0x9aa0a8 : 0x777770), forest = new THREE.Color(this.type === 'frozen' ? 0x8aa090 : 0x2f5a2a), dry = new THREE.Color(pal.dry), road = new THREE.Color(pal.road || 0x9a7a4a), marsh = new THREE.Color(pal.marsh || 0x4a5a2a);
     for (let k = 0; k < pos.count; k++) {
       const x = pos.getX(k), z = pos.getZ(k);
-      pos.setY(k, this.heightAt(U.clamp(x, -79, 79), U.clamp(z, -79, 79)));
+      pos.setY(k, this.heightAt(U.clamp(x, -DATA.MAP_HALF, DATA.MAP_HALF), U.clamp(z, -DATA.MAP_HALF, DATA.MAP_HALF)));
       const i = Math.floor(x / this.cell + this.half + 0.5), j = Math.floor(z / this.cell + this.half + 0.5);
       const kind = this.kindAt(i, j);
       const nz = U.smoothNoise(x * 0.08 + 50, z * 0.08 + 50) * 0.6 + U.smoothNoise(x * 0.3, z * 0.3) * 0.4;
       c.copy(grass).lerp(grass2, nz);
       const r = Math.max(Math.abs(x), Math.abs(z));
       if (r > DATA.BUILD_RADIUS + 1) c.lerp(dry, 0.25);
-      if (kind === CELL_WATER) c.copy(mud);
+      if (kind === CELL_WATER || kind === 8) c.copy(mud);
       else if (kind === CELL_ROCK) c.lerp(rock, 0.7);
       else if (kind === 5) c.lerp(forest, 0.6);
+      else if (kind === 6) c.lerp(road, 0.75);
+      else if (kind === 7) c.lerp(marsh, 0.8);
       else {
-        // banks and rock edges
-        let nearWater = false, nearRock = false;
-        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const kk = this.kindAt(i + di, j + dj); if (kk === CELL_WATER) nearWater = true; if (kk === CELL_ROCK) nearRock = true; }
-        if (nearWater) c.lerp(mud, 0.45); else if (nearRock) c.lerp(rock, 0.3);
+        // banks, rock edges, road shoulders
+        let nearWater = false, nearRock = false, nearRoad = false;
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const kk = this.kindAt(i + di, j + dj); if (kk === CELL_WATER || kk === 8) nearWater = true; if (kk === CELL_ROCK) nearRock = true; if (kk === 6) nearRoad = true; }
+        if (nearWater) c.lerp(mud, 0.45); else if (nearRock) c.lerp(rock, 0.3); else if (nearRoad) c.lerp(road, 0.3);
       }
       const y = pos.getY(k); if (y > 1) c.lerp(dry, Math.min(0.35, y * 0.06));
       colors[k * 3] = c.r; colors[k * 3 + 1] = c.g; colors[k * 3 + 2] = c.b;
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
-    const ground = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    const gtex = Models.noiseTexture(256, 0.22, 2); gtex.repeat.set(52, 52);
+    const ground = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, map: gtex }));
     ground.receiveShadow = true;
     group.add(ground); this.ground = ground;
     // water: one big plane just below the plain; it only shows inside the carved bed
-    const water = new THREE.Mesh(new THREE.PlaneGeometry(size + 40, size + 40), new THREE.MeshLambertMaterial({ color: 0x3a7fc0, transparent: true, opacity: 0.78, emissive: 0x0a2a50, emissiveIntensity: 0.4 }));
-    water.rotation.x = -Math.PI / 2; water.position.y = -0.55; water.receiveShadow = true;
+    const wgeo = new THREE.PlaneGeometry(size + 28, size + 28, seg + 14, seg + 14);
+    wgeo.rotateX(-Math.PI / 2);
+    { const wp = wgeo.attributes.position; for (let k = 0; k < wp.count; k++) { const x = wp.getX(k), z = wp.getZ(k); wp.setY(k, this.heightAt(x, z, this.h0) - 0.5); } wgeo.computeVertexNormals(); }
+    const lava = this.type === 'volcanic';
+    const wtex = Models.noiseTexture(256, 0.3, 9); wtex.repeat.set(34, 34);
+    const water = new THREE.Mesh(wgeo, new THREE.MeshPhongMaterial({ color: pal.water || 0x3a7fc0, transparent: !lava, opacity: lava ? 1 : 0.8, emissive: pal.waterGlow || 0x0a2a50, emissiveIntensity: lava ? 0.9 : 0.35, map: wtex, shininess: lava ? 10 : 90, specular: lava ? 0x402000 : 0x9ad0ff }));
+    water.receiveShadow = !lava;
     group.add(water); this.water = water;
     // fords: wooden planks over the crossings
     const plank = Models.mat(0x7a5a38);
     for (const f of this.fords) {
       const cc = this.cellCenter(f.i - 0.5, f.j - 0.5);
       const b = new THREE.Mesh(new THREE.BoxGeometry(7, 0.3, 7), plank);
-      b.position.set(cc.x, -0.05, cc.z); b.castShadow = true; b.receiveShadow = true;
+      b.position.set(cc.x, 0.02, cc.z); b.castShadow = true; b.receiveShadow = true;
       group.add(b);
       for (let k = -3; k <= 3; k++) { const rail = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.9, 0.2), plank); rail.position.set(cc.x + k * 1.1, 0.5, cc.z + 3.4); group.add(rail); const rail2 = rail.clone(); rail2.position.z = cc.z - 3.4; group.add(rail2); }
+    }
+    // marsh reeds and treasure chests
+    const reedMat = Models.mat(this.type === 'frozen' ? 0x8a9a8a : 0x5a6a2a);
+    const reedGeo = new THREE.CylinderGeometry(0.03, 0.05, 1.1, 4);
+    const marshCells = []; for (let j = 0; j < this.n; j++) for (let i = 0; i < this.n; i++) if (this.kind[this.idx(i, j)] === 7) marshCells.push([i, j]);
+    if (marshCells.length) {
+      const reeds = new THREE.InstancedMesh(reedGeo, reedMat, marshCells.length * 4); reeds.frustumCulled = false;
+      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
+      const rr = mulberry32(this.usedSeed + 7); let k = 0;
+      for (const [i, j] of marshCells) { const cc = this.cellCenter(i, j); for (let t = 0; t < 4; t++) { const x = cc.x + (rr() - 0.5) * 1.8, z = cc.z + (rr() - 0.5) * 1.8; q.setFromEuler(new THREE.Euler((rr() - 0.5) * 0.3, rr() * 6, (rr() - 0.5) * 0.3)); p.set(x, this.heightAt(x, z) + 0.5, z); m.compose(p, q, s); reeds.setMatrixAt(k++, m); } }
+      reeds.instanceMatrix.needsUpdate = true; group.add(reeds);
+    }
+    for (const ch of this.chests) {
+      const g = new THREE.Group();
+      g.add(Models.box(1.0, 0.6, 0.7, Models.mat(0x6a4a2a), 0, 0.3, 0));
+      g.add(Models.box(1.04, 0.28, 0.74, Models.mat(0xd8b040, { emissive: 0x604000, emissiveIntensity: 0.3 }), 0, 0.72, 0));
+      g.add(Models.box(0.2, 0.2, 0.1, Models.mat(0x3a3a3a), 0, 0.55, 0.4, false));
+      g.position.set(ch.x, this.heightAt(ch.x, ch.z), ch.z); g.rotation.y = ch.x * 0.3;
+      group.add(g); ch.mesh = g;
     }
     // rocks and forests as instanced meshes
     const rockCells = [], forestCells = [];
@@ -272,7 +455,7 @@ class WorldMap {
           p.set(cc.x + (rnd() - 0.5) * 1.2, this.heightAt(cc.x, cc.z) + sy * 0.3, cc.z + (rnd() - 0.5) * 1.2);
           q.setFromEuler(new THREE.Euler(rnd() * 0.6, rnd() * 6, rnd() * 0.6)); s.set(sx, sy, sz);
           m.compose(p, q, s); inst.setMatrixAt(k, m);
-          col.setHex([0x777770, 0x8a8a80, 0x6a6a64, 0x9a958a][Math.floor(rnd() * 4)]); inst.setColorAt(k, col); k++;
+          col.setHex((this.type === 'frozen' ? [0xc8d0d8, 0xb0b8c0, 0xd8e0e8, 0xa0a8b0] : (this.type === 'volcanic' ? [0x3a3a3a, 0x4a4040, 0x2a2a2a, 0x5a4a44] : [0x777770, 0x8a8a80, 0x6a6a64, 0x9a958a]))[Math.floor(rnd() * 4)]); inst.setColorAt(k, col); k++;
         }
       }
       inst.instanceMatrix.needsUpdate = true; if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
@@ -293,11 +476,23 @@ class WorldMap {
           q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6); s.set(sc, sc, sc);
           p.set(x, y + 0.8 * sc, z); m.compose(p, q, s); trunks.setMatrixAt(k, m);
           p.set(x, y + 0.8 * sc + 2.1 * sc, z); m.compose(p, q, s); leaves.setMatrixAt(k, m);
-          col.setHex([0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x1f4a25][Math.floor(rnd() * 4)]); leaves.setColorAt(k, col); k++;
+          col.setHex((pal.leaves || [0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x1f4a25])[Math.floor(rnd() * 4)]); leaves.setColorAt(k, col); k++;
         }
       }
       trunks.instanceMatrix.needsUpdate = true; leaves.instanceMatrix.needsUpdate = true; if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
       group.add(trunks); group.add(leaves);
+    }
+    // dead trees on the dry maps (walkable decoration)
+    if (this.cfg.decor === 'dead') {
+      const bark = Models.mat(0x3a2a20);
+      for (let k = 0; k < 40; k++) {
+        let x, z, tries = 0;
+        do { x = (rnd() - 0.5) * 2 * (DATA.MAP_HALF - 4); z = (rnd() - 0.5) * 2 * (DATA.MAP_HALF - 4); tries++; } while (tries < 20 && (Math.max(Math.abs(x), Math.abs(z)) < 24 || this.kindAtWorld(x, z)));
+        const y = this.heightAt(x, z), t = new THREE.Group();
+        t.add(Models.cyl(0.12, 0.22, 3 + rnd() * 2, bark, 0, 1.6 + rnd(), 0, 5));
+        for (let b = 0; b < 3; b++) { const br = Models.box(0.1, 1.4, 0.1, bark, 0, 2.4 + b * 0.5, 0); br.rotation.set((rnd() - 0.5) * 1.4, rnd() * 6, (rnd() - 0.5) * 1.4); t.add(br); }
+        t.position.set(x, y, z); group.add(t);
+      }
     }
     // ruins: a few broken wall stubs for atmosphere (walkable)
     for (let k = 0; k < (this.cfg.ruins || 6); k++) {

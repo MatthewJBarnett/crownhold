@@ -22,6 +22,7 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0c10; color: var(--text); font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px; }
 #game { position: fixed; inset: 0; }
 #game canvas { display: block; }
+#vignette { position: fixed; inset: 0; pointer-events: none; z-index: 5; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.28) 100%); }
 #game canvas.fps { cursor: none; }
 #right.passive, #topbar.passive { pointer-events: none; }
 #lockhint { display: inline-block; margin-bottom: 8px; padding: 6px 12px; background: rgba(60,40,10,0.85); border: 1px solid #e0a040; border-radius: 6px; color: #ffd890; font-size: 13px; max-width: 520px; }
@@ -43,6 +44,7 @@ button.icon { width: 34px; height: 30px; padding: 0; font-size: 13px; }
 .title { font-family: 'Cinzel', serif; font-weight: 800; font-size: 56px; margin: 0; color: var(--gold); letter-spacing: 0.08em; text-shadow: 0 4px 24px rgba(232,192,96,0.35); }
 .title.small { font-size: 34px; }
 .subtitle { margin: 4px 0 18px; color: var(--muted); font-size: 16px; }
+.stamp { display: block; font-size: 11px; color: var(--muted); opacity: 0.7; margin-top: 4px; }
 .section { font-family: 'Cinzel', serif; font-size: 18px; color: var(--gold); margin: 18px 0 10px; font-weight: 600; }
 .menu-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
 .menu-row label { color: var(--muted); }
@@ -75,7 +77,9 @@ button.icon { width: 34px; height: 30px; padding: 0; font-size: 13px; }
 .players .p .tag { font-size: 11px; color: var(--gold); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; }
 #lobby .menu-row { gap: 14px; margin-top: 10px; }
 button.mini { padding: 3px 8px; font-size: 11px; }
-.settings { margin: 6px 0 4px; flex-wrap: wrap; }
+.settings .setrow { display: grid; grid-template-columns: 180px 1fr auto; gap: 12px; align-items: center; text-align: left; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.settings .setrow > label:first-child { color: var(--gold); font-weight: 600; }
+#fpscounter { position: fixed; right: 12px; bottom: 10px; z-index: 20; font: 12px monospace; color: var(--gold); background: rgba(0,0,0,0.45); padding: 3px 7px; border-radius: 4px; pointer-events: none; }
 .settings input[type=range] { width: 200px; accent-color: #e8c060; }
 .settings .sensval { min-width: 44px; color: var(--gold); font-weight: 600; font-variant-numeric: tabular-nums; }
 .settings .chk { display: inline-flex; align-items: center; gap: 6px; color: var(--text); cursor: pointer; }
@@ -217,12 +221,13 @@ button.mini { padding: 3px 8px; font-size: 11px; }
 </head>
 <body>
 <div id="game"></div>
+<div id="vignette"></div>
 
 <!-- ===================== main menu ===================== -->
 <div id="menu" class="overlay">
   <div class="menu-box">
     <h1 class="title">Crownhold</h1>
-    <p class="subtitle">Hold the fortress. Keep the King alive.</p>
+    <p class="subtitle">Hold the fortress. Keep the King alive. <span id="buildstamp" class="stamp"></span></p>
     <div id="embedded" class="banner hidden"></div>
     <div class="menu-row">
       <label>Difficulty</label>
@@ -232,17 +237,12 @@ button.mini { padding: 3px 8px; font-size: 11px; }
     </div>
     <div class="menu-row">
       <label>Map</label>
-      <div class="seg" id="mapsel"><button data-m="random" class="on">Random</button><button data-m="valley">River Valley</button><button data-m="highlands">Highlands</button><button data-m="darkwood">Darkwood</button><button data-m="badlands">Badlands</button></div>
+      <div class="seg" id="mapsel"><button data-m="random" class="on">Random</button><button data-m="valley">River Valley</button><button data-m="highlands">Highlands</button><button data-m="darkwood">Darkwood</button><button data-m="badlands">Badlands</button><button data-m="frozen">Frozen Marsh</button><button data-m="volcanic">Ashlands</button></div>
     </div>
     <p id="mapdesc" class="hint" style="margin-top:4px">A different layout every game.</p>
-    <div class="menu-row settings">
-      <label>Mouse sensitivity</label>
-      <input type="range" class="sens" min="10" max="400" step="5" value="100"><span class="sensval">100%</span>
-      <label class="chk"><input type="checkbox" class="raw" checked> Raw input</label>
-    </div>
     <h2 class="section">Choose your starting hero</h2>
     <div id="herocards" class="hero-cards"></div>
-    <button id="startbtn" class="big">Begin the Siege</button>
+    <button id="startbtn" class="big">Begin the Siege</button> <button id="menusettings">Settings</button>
     <div class="mp">
       <h2 class="section">Play together</h2>
       <div id="mpblocked" class="hint hidden"></div>
@@ -276,6 +276,7 @@ button.mini { padding: 3px 8px; font-size: 11px; }
     <button id="helpbtn" class="icon" title="Controls (?)">?</button>
     <button id="mutebtn" class="icon" title="Mute (M)">♪</button>
     <button id="fsbtn" class="icon" title="Fullscreen">⛶</button>
+    <button id="settingsbtn" class="icon" title="Settings (O)">⚙</button>
   </div>
 
   <div id="left">
@@ -315,7 +316,7 @@ button.mini { padding: 3px 8px; font-size: 11px; }
       <div id="fpsabil"></div>
       <div id="lockhint" class="hidden"></div>
       <div id="fpshints">
-        <span><kbd>LMB</kbd> attack</span><span><kbd>WASD</kbd> move · arrows turn</span><span><kbd>[</kbd> <kbd>]</kbd> mouse sensitivity</span><span><kbd>RMB</kbd> tap/<kbd>G</kbd> soldiers attack there</span><span><kbd>F</kbd> follow me</span><span><kbd>H</kbd> hold</span><span><kbd>V</kbd> defend King</span><span><kbd>T</kbd> 3rd person</span><span><kbd>Tab</kbd> overview</span>
+        <span><kbd>LMB</kbd> attack</span><span><kbd>WASD</kbd> move · arrows turn</span><span><kbd>O</kbd> settings</span><span><kbd>RMB</kbd> tap/<kbd>G</kbd> soldiers attack there</span><span><kbd>F</kbd> follow me</span><span><kbd>H</kbd> hold</span><span><kbd>V</kbd> defend King</span><span><kbd>T</kbd> 3rd person</span><span><kbd>Tab</kbd> overview</span>
       </div>
     </div>
   </div>
@@ -346,7 +347,7 @@ button.mini { padding: 3px 8px; font-size: 11px; }
       <div>
         <h3>Possessed unit (first person)</h3>
         <ul>
-          <li>Mouse look (click the game once to capture the mouse), <kbd>WASD</kbd> move, arrow keys turn, <kbd>Shift</kbd> sprint, <kbd>[</kbd> <kbd>]</kbd> mouse sensitivity (or the slider below)</li>
+          <li>Mouse look (click the game once to capture the mouse), <kbd>WASD</kbd> move, arrow keys turn, <kbd>Shift</kbd> sprint, <kbd>O</kbd> opens settings (mouse sensitivity, raw input, invert, volume, shadows)</li>
           <li><kbd>LMB</kbd> attack (hold to keep swinging / shooting)</li>
           <li><kbd>Q</kbd> <kbd>E</kbd> hero abilities, aimed where you look</li>
           <li><kbd>RMB</kbd> tap or <kbd>G</kbd>: send your soldiers to attack where you aim. Without mouse capture, holding <kbd>RMB</kbd> and dragging looks around without limits</li>
@@ -358,17 +359,11 @@ button.mini { padding: 3px 8px; font-size: 11px; }
         <ul>
           <li>Between waves you build and repair instantly. During a wave a new building is only a construction site until an Engineer finishes it (or the wave ends), and only Engineers can repair</li>
           <li>Enemies path to the King and will break through the cheapest walls in their way. Funnel them into your gate and tower fire</li>
-          <li>The Keep shelters units inside from ranged attacks. The King fights back if enemies get in</li>
+          <li>The Keep shelters units inside from ranged attacks, and units inside cannot shoot out either. The King fights back if enemies get in</li>
           <li>Catapults out-range your towers: send a hero or cavalry of swordsmen to kill them</li>
           <li>A fallen hero stays dead until you buy them back; there is only ever one of each hero. A fallen King ends the game</li>
         </ul>
       </div>
-    </div>
-    <div class="menu-row settings">
-      <label>Mouse sensitivity</label>
-      <input type="range" class="sens" min="10" max="400" step="5" value="100"><span class="sensval">100%</span>
-      <label class="chk"><input type="checkbox" class="raw" checked> Raw input</label>
-      <span class="note">Raw input ignores the system pointer speed and acceleration, like Minecraft. Turn it off if the view feels far faster or slower than your cursor.</span>
     </div>
     <button id="helpclose" class="big">Back to the battle</button>
   </div>
@@ -384,6 +379,22 @@ button.mini { padding: 3px 8px; font-size: 11px; }
   </div>
 </div>
 <div id="connecting" class="overlay hidden"><div class="menu-box"><h2 class="title small">Joining the defence…</h2><p class="subtitle">Waiting for the host to send the battlefield.</p></div></div>
+
+<!-- ===================== settings ===================== -->
+<div id="settings" class="overlay hidden">
+  <div class="menu-box settings">
+    <h2 class="title small">Settings</h2>
+    <div class="setrow"><label>Mouse sensitivity</label><input type="range" class="sens" min="10" max="400" step="5" value="100"><span class="sensval">100%</span></div>
+    <div class="setrow"><label>Raw mouse input</label><label class="chk"><input type="checkbox" class="raw" checked> Ignore system pointer speed and acceleration (like Minecraft). Turn off if the view feels far faster or slower than your cursor.</label></div>
+    <div class="setrow"><label>Invert vertical look</label><label class="chk"><input type="checkbox" class="inverty"> Push forward to look down</label></div>
+    <div class="setrow"><label>Sound volume</label><input type="range" class="vol" min="0" max="100" step="5" value="50"><span class="volval">50%</span></div>
+    <div class="setrow"><label>Shadows</label><label class="chk"><input type="checkbox" class="shadows" checked> On (turn off on slow machines)</label></div>
+    <div class="setrow"><label>Frame rate</label><label class="chk"><input type="checkbox" class="showfps"> Show a frames-per-second counter</label></div>
+    <p class="hint">In play: <kbd>[</kbd> <kbd>]</kbd> also change sensitivity, <kbd>M</kbd> mutes, <kbd>O</kbd> opens this screen.</p>
+    <button id="settingsclose" class="big">Done</button>
+  </div>
+</div>
+<div id="fpscounter" class="hidden"></div>
 
 <!-- ===================== game over ===================== -->
 <div id="gameover" class="overlay hidden">
@@ -586,7 +597,7 @@ DATA.units = {
   },
   pikeman: {
     key: 'pikeman', name: 'Pikeman', cost: 85, hp: 180, dmg: 28, range: 3.3, cd: 1.5, armor: 0.2, speed: 5.0, radius: 0.45,
-    attack: 'melee', bonusVsLarge: 2.0, desc: 'Long reach. Double damage against large enemies and bosses.',
+    attack: 'melee', bonusVsLarge: 1.6, desc: 'Long reach. +60% damage against large enemies and bosses.',
     color: 0x9a9a9a, cloth: 0x6b3a2a, weapon: 'pike', helmet: true,
   },
 };
@@ -675,14 +686,14 @@ DATA.projectiles = {
 // footprint: w x d cells. interior: list of [dx,dz] cells that are walkable (relative to top-left)
 // ---------------------------------------------------------------------------
 DATA.buildings = {
-  wall:     { key: 'wall', name: 'Stone Wall', cost: 12, hp: 600, w: 1, d: 1, cat: 'defense', drag: true,
-              desc: 'Cheap and sturdy. Drag to build long stretches.' },
-  gate:     { key: 'gate', name: 'Gate', cost: 35, hp: 500, w: 1, d: 1, cat: 'defense', gate: true,
+  wall:     { key: 'wall', name: 'Stone Wall', cost: 40, hp: 520, w: 1, d: 1, cat: 'defense', drag: true,
+              desc: 'Sturdy stone. Drag to build long stretches. Enemies hack at walls twice as hard as at anything else.' },
+  gate:     { key: 'gate', name: 'Gate', cost: 80, hp: 500, w: 1, d: 1, cat: 'defense', gate: true,
               desc: 'Your units pass through; enemies must break it.' },
   arrow_tower:   { key: 'arrow_tower', name: 'Arrow Tower', cost: 130, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 20, dmg: 18, cd: 1.1, projectile: 'arrow', desc: 'Fast-firing tower. Good all-rounder.' },
   ballista_tower:{ key: 'ballista_tower', name: 'Ballista Tower', cost: 240, hp: 1000, w: 2, d: 2, cat: 'tower', tower: true,
-                   range: 28, dmg: 95, cd: 2.8, projectile: 'ballista', bonusVsLarge: 2, desc: 'Slow, huge single hits. Double damage to large enemies.' },
+                   range: 28, dmg: 95, cd: 2.8, projectile: 'ballista', bonusVsLarge: 1.7, desc: 'Slow, huge single hits. +70% damage to large enemies.' },
   mage_tower:    { key: 'mage_tower', name: 'Mage Tower', cost: 320, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 22, dmg: 45, cd: 2.2, projectile: 'magic', desc: 'Lobs exploding fire that splashes in 3.5m and burns.' },
   frost_tower:   { key: 'frost_tower', name: 'Frost Tower', cost: 260, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
@@ -690,13 +701,13 @@ DATA.buildings = {
   cannon_tower:  { key: 'cannon_tower', name: 'Cannon Tower', cost: 380, hp: 1100, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 24, dmg: 120, cd: 4.0, projectile: 'cannon', minRange: 6, desc: 'Lobs iron shot that splashes in 3m. Cannot hit anything closer than 6m.' },
   lightning_tower:{ key: 'lightning_tower', name: 'Lightning Tower', cost: 340, hp: 850, w: 2, d: 2, cat: 'tower', tower: true,
-                   range: 18, dmg: 32, cd: 1.5, chain: { count: 4, radius: 6 }, desc: 'Chain lightning that arcs to four enemies and ignores armour.' },
+                   range: 18, dmg: 28, cd: 1.7, chain: { count: 4, radius: 6 }, desc: 'Chain lightning that arcs to four enemies and ignores armour.' },
   poison_tower:  { key: 'poison_tower', name: 'Poison Tower', cost: 240, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 18, dmg: 8, cd: 1.1, projectile: 'poison', desc: 'Darts that poison for 12 damage/s over 4s. Stacks nothing, but never misses.' },
-  watchtower:    { key: 'watchtower', name: 'Watchtower', cost: 300, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
-                   range: 36, dmg: 65, cd: 3.2, projectile: 'sniper', prefersCasters: true, desc: 'Marksmen with a 36m reach who pick off casters and artillery first.' },
-  barricade: { key: 'barricade', name: 'Spiked Barricade', cost: 9, hp: 320, w: 1, d: 1, cat: 'defense', drag: true, spikes: 7,
-              desc: 'Cheap and weak, but every melee blow against it wounds the attacker for 7.' },
+  watchtower:    { key: 'watchtower', name: 'Watchtower', cost: 340, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
+                   range: 32, dmg: 52, cd: 3.6, projectile: 'sniper', prefersCasters: true, desc: 'Marksmen with a 32m reach who pick off casters and catapults first. Trebuchets still outrange them.' },
+  barricade: { key: 'barricade', name: 'Spiked Barricade', cost: 24, hp: 240, w: 1, d: 1, cat: 'defense', drag: true, spikes: 3,
+              desc: 'Cheap and weak, but every melee blow against it wounds the attacker for 3.' },
   trap:     { key: 'trap', name: 'Spike Trap', cost: 45, hp: 200, w: 1, d: 1, cat: 'defense', interior: [[0, 0]], trap: { dmg: 70, radius: 1.6, slow: 0.5, rearm: 20 },
               desc: 'Hidden in the ground. Enemies stepping on it take 70 damage and are slowed. Rearms after 20s.' },
   barracks: { key: 'barracks', name: 'Barracks', cost: 160, hp: 1200, w: 3, d: 3, cat: 'economy', soldierCap: 6,
@@ -707,8 +718,8 @@ DATA.buildings = {
               desc: '+90 gold at the end of each wave. Each mine you own makes the next one 60% pricier.' },
   blacksmith: { key: 'blacksmith', name: 'Blacksmith', cost: 300, hp: 900, w: 3, d: 3, cat: 'economy', unique: true, soldierDmg: 0.15,
               desc: 'Soldiers deal +15% damage. Unlocks the Weapon and Armor upgrades.' },
-  shrine:   { key: 'shrine', name: 'Healing Shrine', cost: 220, hp: 600, w: 2, d: 2, cat: 'economy', heal: { radius: 10, hps: 7 },
-              desc: 'During a wave, heals friendly units within 10m for 7 HP/s. Everyone is healed fully between waves anyway.' },
+  shrine:   { key: 'shrine', name: 'Healing Shrine', cost: 220, hp: 600, w: 2, d: 2, cat: 'economy', heal: { radius: 12, hps: 10 },
+              desc: 'During a wave, heals friendly units within 12m for 10 HP/s. Everyone is healed fully between waves anyway.' },
   market:   { key: 'market', name: 'Market', cost: 350, hp: 700, w: 3, d: 3, cat: 'economy', unique: true, killBonus: 0.25,
               desc: '+25% gold from kills. One per fortress.' },
   tavern:   { key: 'tavern', name: 'Tavern', cost: 260, hp: 800, w: 3, d: 3, cat: 'economy', unique: true, soldierCap: 3, soldierSpeed: 0.12,
@@ -746,7 +757,7 @@ DATA.waves = {
   budget: (n) => 48 + 38 * n + 6 * n * n,
   clearBonus: (n) => 70 + 35 * n,
   hpScale: (n) => n <= 6 ? 1 : 1 + (n - 6) * 0.055,
-  playerScale: (players) => 1 + 0.65 * Math.max(0, players - 1),
+  playerScale: (players) => 1 + 0.8 * Math.max(0, players - 1),
   bossEvery: 5,
   maxCount: 130,
 };
@@ -762,11 +773,20 @@ DATA.spawnPoints = (() => {
 })();
 
 DATA.mapTypes = {
-  valley:    { label: 'River Valley', desc: 'A river with three fords splits the plain; scattered rocks and woods.', river: true, rocks: [5, 7], forests: [3, 4], lakes: 0, hills: 1, palette: { grass: 0x4f8a3a, grass2: 0x7aa14a, dry: 0x8a9a4a, sky: 0x9cc4e4 } },
-  highlands: { label: 'Highlands', desc: 'Rock ridges and two mountain lakes; enemies funnel through the gaps.', river: false, rocks: [9, 12], forests: [1, 2], lakes: 2, hills: 1.6, palette: { grass: 0x5a8a4a, grass2: 0x8aa060, dry: 0x9a9a6a, sky: 0xa8c8e8 } },
-  darkwood:  { label: 'Darkwood', desc: 'Dense forests everywhere, a slow stream, and few open lanes.', river: true, rocks: [2, 3], forests: [7, 9], lakes: 0, hills: 0.7, palette: { grass: 0x3f6f32, grass2: 0x5a8a40, dry: 0x6a7a3a, sky: 0x8ab0cc } },
-  badlands:  { label: 'Badlands', desc: 'Dry, open ground with ruins and a few crags. Nowhere to hide.', river: false, rocks: [4, 6], forests: [0, 1], lakes: 1, hills: 1.2, palette: { grass: 0x9a8a4a, grass2: 0xb8a060, dry: 0xc0a870, sky: 0xd8c4a0 }, ruins: 14 },
+  valley:    { zenith: 0x3f7fd0, label: 'River Valley', desc: 'A river and its tributary with fords, marshes along the banks, woods and rocks.', rocks: [5, 7], forests: [3, 4], hills: 1, ruins: 6,
+               palette: { grass: 0x4f8a3a, grass2: 0x7aa14a, dry: 0x8a9a4a, sky: 0x9cc4e4, water: 0x3a7fc0, road: 0x9a7a4a, marsh: 0x4a5a2a, leaves: [0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x4a8a3a] } },
+  highlands: { zenith: 0x3a6fc8, label: 'Highlands', desc: 'Two rings of rock ridges around the castle with a few passes, and mountain lakes.', rocks: [3, 5], forests: [2, 3], hills: 1.7, ruins: 5,
+               palette: { grass: 0x5a8a4a, grass2: 0x8aa060, dry: 0x9a9a6a, sky: 0xa8c8e8, water: 0x2a6ab0, road: 0x8a7a5a, marsh: 0x4a5a3a, leaves: [0x2a5a30, 0x1f4a28, 0x3a6a3a, 0x2f5f35] } },
+  darkwood:  { zenith: 0x2f5f9a, label: 'Darkwood', desc: 'A belt of dense forest with four lanes cut through it, clearings, marsh and a stream.', rocks: [2, 3], forests: [3, 4], hills: 0.7, ruins: 6,
+               palette: { grass: 0x3f6f32, grass2: 0x5a8a40, dry: 0x6a7a3a, sky: 0x8ab0cc, water: 0x2f6a90, road: 0x7a6a4a, marsh: 0x3a4a22, leaves: [0x1f4a25, 0x2a5a30, 0x1a3f20, 0x2f6b2f] } },
+  badlands:  { zenith: 0x6a9ad0, label: 'Badlands', desc: 'Dry ground cut by radial canyons of rock, crags, an oasis and old ruins.', rocks: [3, 5], forests: [0, 0], hills: 1.2, ruins: 16, decor: 'dead',
+               palette: { grass: 0x9a8a4a, grass2: 0xb8a060, dry: 0xc0a870, sky: 0xd8c4a0, water: 0x3a8ab0, road: 0xb09060, marsh: 0x6a6a3a, leaves: [0x6a6a3a, 0x7a7a4a, 0x5a5a30, 0x8a8a50] } },
+  frozen:    { zenith: 0x6a8ab8, label: 'Frozen Marsh', desc: 'Snowfields, frozen lakes and bog that slows everyone who wades through it.', rocks: [4, 6], forests: [1, 2], hills: 1.3, ruins: 5, decor: 'snow',
+               palette: { grass: 0xb8c4cc, grass2: 0x98a8b4, dry: 0xc8d2da, sky: 0xb8c8d8, water: 0x7ab8e0, road: 0xa0a8a8, marsh: 0x7a8a7a, leaves: [0x3a5a4a, 0x2f4f42, 0x4a6a5a, 0x3a5a50] } },
+  volcanic:  { zenith: 0x4a2a2a, label: 'Ashlands', desc: 'Black ash, a river of lava and molten pools; rock spires are the only cover.', rocks: [5, 8], forests: [0, 0], hills: 1.6, ruins: 10, decor: 'dead',
+               palette: { grass: 0x3a3a3a, grass2: 0x5a5048, dry: 0x6a5a50, sky: 0x8a6a5a, water: 0xff6a10, waterGlow: 0xff3000, road: 0x4a4038, marsh: 0x3a3a30, leaves: [0x4a3a30, 0x5a4a3a, 0x3a2a20, 0x6a5a4a] } },
 };
+DATA.build = '2026-09-07 00:00';
 DATA.siteUrl = 'https://matthewjbarnett.github.io/crownhold/'; // the full game, outside any embedding sandbox
 DATA.startGold = 500;
 DATA.baseSoldierCap = 0; // keep + barracks + garrison supply the cap
@@ -887,17 +907,18 @@ class SpatialHash {
 
 // Tiny procedural sound effects (no assets needed)
 const SFX = {
-  ctx: null, muted: false, master: null, recent: [], lastPlay: {},
+  ctx: null, muted: false, master: null, recent: [], lastPlay: {}, volume: 0.5,
   init() {
     if (this.ctx) return;
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
       this.ctx = new AC();
-      this.master = this.ctx.createGain(); this.master.gain.value = 0.5; this.master.connect(this.ctx.destination);
+      this.master = this.ctx.createGain(); this.master.gain.value = this.muted ? 0 : this.volume; this.master.connect(this.ctx.destination);
     } catch (e) { this.ctx = null; }
   },
   resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
-  toggleMute() { this.muted = !this.muted; if (this.master) this.master.gain.value = this.muted ? 0 : 0.5; },
+  toggleMute() { this.muted = !this.muted; if (this.master) this.master.gain.value = this.muted ? 0 : this.volume; },
+  setVolume(v) { this.volume = Math.max(0, Math.min(1, v)); if (this.master && !this.muted) this.master.gain.value = this.volume; },
   noiseBuffer(dur) {
     const n = Math.floor(this.ctx.sampleRate * dur);
     const buf = this.ctx.createBuffer(1, n, this.ctx.sampleRate);
@@ -973,7 +994,8 @@ class Grid {
     this.occ = new Array(n * n).fill(null);   // building occupying the cell
     this.flag = new Uint8Array(n * n);        // CELL_FREE / CELL_SOLID / CELL_GATE
     this.shelter = new Uint8Array(n * n);     // 1 = keep interior
-    this.natural = new Uint8Array(n * n);     // water / rock / forest: impassable, unbuildable, unbreakable
+    this.natural = new Uint8Array(n * n);     // water / rock / forest: impassable, unbuildable, unbreakable (7 = marsh: walkable, unbuildable)
+    this.terrain = new Uint8Array(n * n);     // full terrain kind per cell (0 open, 6 road, 7 marsh, ...)
     this.integ = new Float64Array(n * n);     // flow-field integration values (enemy -> king)
     this.flowDirty = true;
     this.flowTarget = null;
@@ -1069,7 +1091,7 @@ class Grid {
       if (!this.inBounds(c.i, c.j)) return { ok: false, reason: 'Out of bounds', cells: fp.cells };
       const w = this.cellToWorld(c.i, c.j);
       if (!def.temporary && (Math.abs(w.x) > lim || Math.abs(w.z) > lim)) return { ok: false, reason: 'Outside the buildable area', cells: fp.cells };
-      if (this.natural[this.idx(c.i, c.j)]) return { ok: false, reason: this.natural[this.idx(c.i, c.j)] === CELL_WATER ? 'Cannot build on water' : 'Blocked by rock or forest', cells: fp.cells };
+      if (this.natural[this.idx(c.i, c.j)]) { const nk = this.natural[this.idx(c.i, c.j)]; return { ok: false, reason: nk === CELL_WATER ? 'Cannot build on water' : (nk === 8 ? 'Cannot build on lava' : (nk === 7 ? 'Too soft: marsh' : 'Blocked by rock or forest')), cells: fp.cells }; }
       if (this.occ[this.idx(c.i, c.j)]) return { ok: false, reason: 'Occupied', cells: fp.cells };
     }
     if (game) {
@@ -1094,7 +1116,7 @@ class Grid {
   remove(b) {
     for (const c of b.cells) {
       const k = this.idx(c.i, c.j);
-      if (this.occ[k] === b) { this.occ[k] = null; this.flag[k] = this.natural[k] ? (this.natural[k] === CELL_WATER ? CELL_WATER : CELL_ROCK) : CELL_FREE; this.shelter[k] = 0; }
+      if (this.occ[k] === b) { this.occ[k] = null; const nk = this.natural[k]; this.flag[k] = (nk && nk !== 7) ? ((nk === CELL_WATER || nk === 8) ? CELL_WATER : CELL_ROCK) : CELL_FREE; this.shelter[k] = 0; }
     }
     this.flowDirty = true;
   }
@@ -1292,6 +1314,7 @@ class WorldMap {
     this.kind = new Uint8Array(this.n * this.n);       // natural obstacle per cell: 0 free, CELL_WATER, CELL_ROCK, 5 forest (rock-like)
     this.hs = this.n + 1;                                // height samples (one per cell corner)
     this.h = new Float32Array(this.hs * this.hs);
+    this.h0 = new Float32Array(this.hs * this.hs);       // the same without the river/marsh carve
     this.fords = []; this.river = []; this.rocks = []; this.forests = [];
     this.generate();
   }
@@ -1303,16 +1326,17 @@ class WorldMap {
   // ---------------------------------------------------------------- terrain height
   baseHeight(x, z) {
     const r = Math.max(Math.abs(x), Math.abs(z));
-    const t = U.clamp((r - 58) / 20, 0, 1);
+    const t = U.clamp((r - (DATA.BUILD_RADIUS + 4)) / 22, 0, 1);
     const s = t * t * (3 - 2 * t);
     const n = U.smoothNoise(x * 0.045 + this.seed % 97, z * 0.045 + this.seed % 89) * 0.7 + U.smoothNoise(x * 0.12 + 3, z * 0.12 + 7) * 0.3;
     return s * n * 7 * (this.cfg ? this.cfg.hills : 1);
   }
-  heightAt(x, z) {
+  heightAt(x, z, arr) {
+    x = U.clamp(x, -DATA.MAP_HALF, DATA.MAP_HALF); z = U.clamp(z, -DATA.MAP_HALF, DATA.MAP_HALF);
     const fx = x / this.cell + this.half, fz = z / this.cell + this.half;
     const i = U.clamp(Math.floor(fx), 0, this.hs - 2), j = U.clamp(Math.floor(fz), 0, this.hs - 2);
     const tx = U.clamp(fx - i, 0, 1), tz = U.clamp(fz - j, 0, 1);
-    const h = this.h, w = this.hs;
+    const h = arr || this.h, w = this.hs;
     const a = h[j * w + i], b = h[j * w + i + 1], c = h[(j + 1) * w + i], d = h[(j + 1) * w + i + 1];
     return U.lerp(U.lerp(a, b, tx), U.lerp(c, d, tx), tz);
   }
@@ -1321,22 +1345,171 @@ class WorldMap {
   generate() {
     for (let attempt = 0; attempt < 30; attempt++) {
       const rnd = mulberry32(this.seed + attempt * 7919);
-      this.kind.fill(0); this.fords = []; this.river = []; this.rocks = []; this.forests = []; this.lakes = [];
+      this.kind.fill(0); this.fords = []; this.river = []; this.rocks = []; this.forests = []; this.lakes = []; this.chests = [];
       const cfg = this.cfg, t = this.type;
-      if (cfg.river) this.layRiver(rnd);
       const pick = (r) => r[0] + Math.floor(rnd() * (r[1] - r[0] + 1));
-      for (let l = 0; l < (cfg.lakes || 0); l++) this.layBlobs(rnd, 1, CELL_WATER, [2.6, 4.2], 1, this.lakes);
-      if (t === 'highlands') { this.layBlobs(rnd, pick([6, 9]), CELL_ROCK, [4.5, 8], 0.22, this.rocks); this.layBlobs(rnd, pick([3, 5]), CELL_ROCK, [1.6, 2.8], 1, this.rocks); }
-      else if (t === 'badlands') { this.layBlobs(rnd, pick([4, 6]), CELL_ROCK, [3, 5], 0.3, this.rocks); this.layBlobs(rnd, pick([3, 5]), CELL_ROCK, [1.4, 2.4], 1, this.rocks); }
-      else this.layBlobs(rnd, pick(cfg.rocks), CELL_ROCK, [1.5, 3.2], 1, this.rocks);
-      const fr = t === 'darkwood' ? [3.2, 6.2] : (t === 'highlands' ? [2.2, 3.6] : [2.6, 4.6]);
-      this.layBlobs(rnd, pick(cfg.forests), 5, fr, 0.8, this.forests);
+      if (t === 'valley') {
+        this.layRiver(rnd); this.layTributary(rnd);
+        this.layBlobs(rnd, pick(cfg.rocks), CELL_ROCK, [1.5, 3.2], 1, this.rocks);
+        this.layBlobs(rnd, pick(cfg.forests), 5, [2.6, 4.6], 0.8, this.forests);
+        this.layMarshNearWater(rnd, 3);
+      } else if (t === 'highlands') {
+        this.layRidges(rnd);
+        this.layBlobs(rnd, 2, CELL_WATER, [2.6, 4.2], 1, this.lakes);
+        this.layBlobs(rnd, pick(cfg.rocks), CELL_ROCK, [1.4, 2.4], 1, this.rocks);
+        this.layBlobs(rnd, pick(cfg.forests), 5, [2.2, 3.6], 0.8, this.forests);
+      } else if (t === 'darkwood') {
+        this.layRiver(rnd);
+        this.layForestBelt(rnd);
+        this.layBlobs(rnd, pick(cfg.forests), 5, [2.5, 4], 0.8, this.forests);
+        this.layBlobs(rnd, pick(cfg.rocks), CELL_ROCK, [1.4, 2.6], 1, this.rocks);
+        this.layMarshNearWater(rnd, 2);
+      } else if (t === 'badlands') {
+        this.layCanyons(rnd);
+        this.layBlobs(rnd, pick(cfg.rocks), CELL_ROCK, [1.4, 2.6], 1, this.rocks);
+        this.layBlobs(rnd, 1, CELL_WATER, [2, 3], 1, this.lakes);
+      } else if (t === 'frozen') {
+        this.layBlobs(rnd, 3, CELL_WATER, [2.6, 4.5], 1, this.lakes);
+        this.layBlobs(rnd, 5, 7, [2.2, 3.8], 0.9, []);
+        this.layBlobs(rnd, pick(cfg.rocks), CELL_ROCK, [1.4, 2.8], 1, this.rocks);
+        this.layBlobs(rnd, pick(cfg.forests), 5, [2, 3.2], 0.8, this.forests);
+      } else if (t === 'volcanic') {
+        this.layRiver(rnd, 8);
+        this.layBlobs(rnd, 2, 8, [2, 3.4], 1, this.lakes);
+        this.layBlobs(rnd, pick(cfg.rocks), CELL_ROCK, [1.2, 2.4], 1, this.rocks);
+      }
       if (this.connected()) { this.usedSeed = this.seed + attempt * 7919; break; }
       if (attempt === 29) { this.usedSeed = this.seed + attempt * 7919; this.carveOpen(); }
     }
+    this.layRoads();
+    this.placeChests(mulberry32(this.usedSeed + 99));
     this.bakeHeights();
   }
-  layRiver(rnd) {
+  blocked(k) { return k === CELL_WATER || k === CELL_ROCK || k === 5 || k === 8; }
+  // a thinner second stream from a random edge that joins the main river
+  layTributary(rnd) {
+    if (!this.river.length) return;
+    const h = this.half, join = this.river[2 + Math.floor(rnd() * 3)];
+    const side = Math.floor(rnd() * 4);
+    const start = side === 0 ? { i: 2 + rnd() * (this.n - 4), j: 1 } : side === 1 ? { i: 2 + rnd() * (this.n - 4), j: this.n - 2 } : side === 2 ? { i: 1, j: 2 + rnd() * (this.n - 4) } : { i: this.n - 2, j: 2 + rnd() * (this.n - 4) };
+    const mid = { i: (start.i + join.i) / 2 + (rnd() - 0.5) * 12, j: (start.j + join.j) / 2 + (rnd() - 0.5) * 12 };
+    const pts = [start, mid, join];
+    for (let j = 0; j < this.n; j++) for (let i = 0; i < this.n; i++) {
+      const c = this.cellCenter(i, j);
+      if (Math.max(Math.abs(c.x), Math.abs(c.z)) <= 22) continue;
+      if (this.distToPolyline(i, j, pts) <= 0.8 && !this.kind[this.idx(i, j)]) this.kind[this.idx(i, j)] = CELL_WATER;
+    }
+    // one ford on the tributary
+    const p = this.pointOnPolyline(pts, 0.45); this.fords.push(p);
+    for (let j = Math.floor(p.j) - 3; j <= Math.floor(p.j) + 3; j++) for (let i = Math.floor(p.i) - 3; i <= Math.floor(p.i) + 3; i++) if (this.inBounds(i, j) && Math.hypot(i + 0.5 - p.i, j + 0.5 - p.j) <= 2.2 && this.kind[this.idx(i, j)] === CELL_WATER) this.kind[this.idx(i, j)] = 0;
+  }
+  // bog next to water: walkable but slow
+  layMarshNearWater(rnd, count) {
+    const waterCells = [];
+    for (let j = 0; j < this.n; j++) for (let i = 0; i < this.n; i++) if (this.kind[this.idx(i, j)] === CELL_WATER) waterCells.push([i, j]);
+    let placed = 0, guard = 0;
+    while (placed < count && waterCells.length && guard++ < 60) {
+      const [wi, wj] = waterCells[Math.floor(rnd() * waterCells.length)];
+      const c = this.cellCenter(wi, wj);
+      if (Math.max(Math.abs(c.x), Math.abs(c.z)) < 26) continue;
+      const r = 2 + rnd() * 1.8;
+      for (let j = wj - 4; j <= wj + 4; j++) for (let i = wi - 4; i <= wi + 4; i++) {
+        if (!this.inBounds(i, j) || this.kind[this.idx(i, j)]) continue;
+        const cc = this.cellCenter(i, j); if (Math.max(Math.abs(cc.x), Math.abs(cc.z)) < 24) continue;
+        if (Math.hypot(i - wi, j - wj) <= r * (0.8 + 0.4 * U.smoothNoise(i * 0.6, j * 0.6))) this.kind[this.idx(i, j)] = 7;
+      }
+      placed++;
+    }
+  }
+  // two rings of ridge with a few passes each
+  layRidges(rnd) {
+    const h = this.half;
+    for (const [rc, thick, gaps] of [[19, 1.4, 3], [31, 1.8, 4]]) {
+      const gapAngles = []; for (let g = 0; g < gaps; g++) gapAngles.push(rnd() * Math.PI * 2);
+      const phase = rnd() * 10;
+      for (let j = 0; j < this.n; j++) for (let i = 0; i < this.n; i++) {
+        const dx = i + 0.5 - h - 0.5, dz = j + 0.5 - h - 0.5;
+        const ang = Math.atan2(dz, dx), r = Math.hypot(dx, dz);
+        const wob = rc + Math.sin(ang * 3 + phase) * 1.6 + Math.sin(ang * 7 + phase * 2) * 0.8;
+        if (Math.abs(r - wob) > thick) continue;
+        if (gapAngles.some(ga => Math.abs(Math.atan2(Math.sin(ang - ga), Math.cos(ang - ga))) < 0.28)) continue;
+        const c = this.cellCenter(i, j);
+        if (DATA.spawnPoints.some(sp => U.dist(sp.x, sp.z, c.x, c.z) < 12)) continue;
+        if (!this.kind[this.idx(i, j)]) this.kind[this.idx(i, j)] = CELL_ROCK;
+      }
+    }
+  }
+  // a forest annulus with lanes and clearings
+  layForestBelt(rnd) {
+    const h = this.half, r0 = 17, r1 = 26;
+    const lanes = []; for (let k = 0; k < 4; k++) lanes.push(k * Math.PI / 2 + (rnd() - 0.5) * 0.8);
+    const clearings = []; for (let k = 0; k < 3; k++) clearings.push({ a: rnd() * Math.PI * 2, r: r0 + 2 + rnd() * (r1 - r0 - 4), rad: 2 + rnd() * 1.5 });
+    for (let j = 0; j < this.n; j++) for (let i = 0; i < this.n; i++) {
+      if (this.kind[this.idx(i, j)]) continue;
+      const dx = i + 0.5 - h - 0.5, dz = j + 0.5 - h - 0.5;
+      const ang = Math.atan2(dz, dx), r = Math.hypot(dx, dz);
+      const edge = 1.2 * U.smoothNoise(i * 0.5 + 3, j * 0.5 + 9);
+      if (r < r0 + edge || r > r1 - edge) continue;
+      if (lanes.some(la => Math.abs(Math.atan2(Math.sin(ang - la), Math.cos(ang - la))) < 0.11)) continue;
+      if (clearings.some(cl => Math.hypot(dx - Math.cos(cl.a) * cl.r, dz - Math.sin(cl.a) * cl.r) < cl.rad)) continue;
+      this.kind[this.idx(i, j)] = 5;
+    }
+  }
+  // radial canyon walls with breaks
+  layCanyons(rnd) {
+    const h = this.half, n = 5 + Math.floor(rnd() * 2);
+    for (let k = 0; k < n; k++) {
+      const ang = k / n * Math.PI * 2 + (rnd() - 0.5) * 0.5, wob = rnd() * 10;
+      const gapAt = 18 + rnd() * 10, gap2 = 30 + rnd() * 6;
+      for (let r = 14; r < 36; r += 0.5) {
+        if (Math.abs(r - gapAt) < 1.6 || Math.abs(r - gap2) < 1.4) continue;
+        const a = ang + Math.sin(r * 0.35 + wob) * 0.12;
+        const i = Math.round(h + Math.cos(a) * r), j = Math.round(h + Math.sin(a) * r);
+        for (let dj = 0; dj <= 0; dj++) for (let di = 0; di <= 0; di++) {
+          if (!this.inBounds(i + di, j + dj) || this.kind[this.idx(i + di, j + dj)]) continue;
+          const c = this.cellCenter(i + di, j + dj);
+          if (DATA.spawnPoints.some(sp => U.dist(sp.x, sp.z, c.x, c.z) < 12)) continue;
+          this.kind[this.idx(i + di, j + dj)] = CELL_ROCK;
+        }
+      }
+    }
+  }
+  // dirt roads: the shortest walkable route from each spawn point to the gate
+  layRoads() {
+    const h = this.half, n = this.n;
+    const target = this.idx(h, h + 12);
+    const passable = (k) => !this.blocked(this.kind[k]);
+    const dist = new Int32Array(n * n).fill(-1), prev = new Int32Array(n * n).fill(-1);
+    const q = [target]; dist[target] = 0;
+    for (let qi = 0; qi < q.length; qi++) {
+      const k = q[qi]; const i = k % n, j = (k - i) / n;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const ni = i + di, nj = j + dj; if (!this.inBounds(ni, nj)) continue;
+        const nk = this.idx(ni, nj); if (dist[nk] >= 0 || !passable(nk)) continue;
+        dist[nk] = dist[k] + (this.kind[nk] === 7 ? 3 : 1); prev[nk] = k; q.push(nk);
+      }
+    }
+    for (const sp of DATA.spawnPoints) {
+      let i = Math.floor(sp.x / this.cell + h + 0.5), j = Math.floor(sp.z / this.cell + h + 0.5);
+      let k = this.idx(i, j);
+      if (dist[k] < 0) { let best = -1, bd = 1e9; for (let dj = -3; dj <= 3; dj++) for (let di = -3; di <= 3; di++) { const a = i + di, b = j + dj; if (this.inBounds(a, b) && dist[this.idx(a, b)] >= 0) { const d = di * di + dj * dj; if (d < bd) { bd = d; best = this.idx(a, b); } } } k = best; }
+      let guard = 0;
+      while (k >= 0 && k !== target && guard++ < 4000) { if (this.kind[k] === 0) { const c = this.cellCenter(k % n, (k - k % n) / n); if (Math.max(Math.abs(c.x), Math.abs(c.z)) > 21) this.kind[k] = 6; } k = prev[k]; }
+    }
+  }
+  placeChests(rnd) {
+    const h = this.half;
+    let guard = 0;
+    while (this.chests.length < 4 && guard++ < 200) {
+      const ang = rnd() * Math.PI * 2, rad = 34 + rnd() * 38;
+      const x = Math.cos(ang) * rad, z = Math.sin(ang) * rad;
+      const i = Math.floor(x / this.cell + h + 0.5), j = Math.floor(z / this.cell + h + 0.5);
+      if (!this.inBounds(i, j) || this.kind[this.idx(i, j)] !== 0) continue;
+      if (this.chests.some(c => U.dist(c.x, c.z, x, z) < 20)) continue;
+      this.chests.push({ x: (i - h) * this.cell, z: (j - h) * this.cell, taken: false });
+    }
+  }
+  layRiver(rnd, kind = CELL_WATER) {
     const n = this.n, h = this.half;
     // enters on one side, leaves on the opposite side, bending around the castle
     const vertical = rnd() < 0.5;
@@ -1354,7 +1527,7 @@ class WorldMap {
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
       const d = this.distToPolyline(i, j, pts);
       const c = this.cellCenter(i, j);
-      if (d <= width && Math.max(Math.abs(c.x), Math.abs(c.z)) > 12) this.kind[this.idx(i, j)] = CELL_WATER;
+      if (d <= width && Math.max(Math.abs(c.x), Math.abs(c.z)) > 12) this.kind[this.idx(i, j)] = kind;
     }
     // fords: three crossings, each three cells wide
     for (const t of [0.22, 0.5, 0.78]) {
@@ -1362,7 +1535,7 @@ class WorldMap {
       this.fords.push(p);
       for (let j = Math.floor(p.j) - 3; j <= Math.floor(p.j) + 3; j++) for (let i = Math.floor(p.i) - 3; i <= Math.floor(p.i) + 3; i++) {
         if (!this.inBounds(i, j)) continue;
-        if (Math.hypot(i + 0.5 - p.i, j + 0.5 - p.j) <= 2.2 && this.kind[this.idx(i, j)] === CELL_WATER) this.kind[this.idx(i, j)] = 0;
+        if (Math.hypot(i + 0.5 - p.i, j + 0.5 - p.j) <= 2.2 && this.kind[this.idx(i, j)] === kind) this.kind[this.idx(i, j)] = 0;
       }
     }
   }
@@ -1405,7 +1578,7 @@ class WorldMap {
         if ((ex * ex) / (rx * rx) + (ez * ez) / (rz * rz) > wob) continue;
         const c = this.cellCenter(i, j);
         if (Math.max(Math.abs(c.x), Math.abs(c.z)) < 23 || Math.max(Math.abs(c.x), Math.abs(c.z)) > lim) continue;
-        if (this.kind[this.idx(i, j)]) { blocked = true; break; }
+        if (this.kind[this.idx(i, j)] && !(kind === 7 && this.kind[this.idx(i, j)] === 6)) { blocked = true; break; }
         cells.push([i, j]);
       }
       if (blocked || cells.length < 3) continue;
@@ -1437,7 +1610,7 @@ class WorldMap {
         const ni = i + di, nj = j + dj;
         if (!this.inBounds(ni, nj)) continue;
         const nk = this.idx(ni, nj);
-        if (seen[nk] || this.kind[nk]) continue;
+        if (seen[nk] || this.blocked(this.kind[nk])) continue;
         seen[nk] = 1; q.push(nk);
       }
     }
@@ -1453,10 +1626,12 @@ class WorldMap {
     for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) {
       const x = (i - this.half) * this.cell - this.cell / 2, z = (j - this.half) * this.cell - this.cell / 2;
       let y = this.baseHeight(x, z);
+      this.h0[j * w + i] = y;
       // carve the river bed: a corner is lowered when any touching cell is water
       let water = 0, cnt = 0;
-      for (const [di, dj] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { if (this.inBounds(i + di, j + dj)) { cnt++; if (this.kind[this.idx(i + di, j + dj)] === CELL_WATER) water++; } }
+      for (const [di, dj] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { if (this.inBounds(i + di, j + dj)) { cnt++; const kk = this.kind[this.idx(i + di, j + dj)]; if (kk === CELL_WATER || kk === 8) water++; } }
       if (water) y -= 1.4 * (water / cnt) + 0.3;
+      else { let marsh = 0; for (const [di, dj] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) if (this.inBounds(i + di, j + dj) && this.kind[this.idx(i + di, j + dj)] === 7) marsh++; if (marsh) y -= 0.25 * (marsh / cnt); }
       this.h[j * w + i] = y;
     }
   }
@@ -1465,12 +1640,15 @@ class WorldMap {
   applyToGrid(grid) {
     for (let k = 0; k < this.n * this.n; k++) {
       const kind = this.kind[k];
-      if (!kind) continue;
-      grid.flag[k] = kind === CELL_WATER ? CELL_WATER : CELL_ROCK;
+      grid.terrain[k] = kind;
+      if (!kind || kind === 6) continue;
+      if (kind === 7) { grid.natural[k] = 7; continue; }           // marsh: walkable, slow, unbuildable
+      grid.flag[k] = (kind === CELL_WATER || kind === 8) ? CELL_WATER : CELL_ROCK;
       grid.natural[k] = kind;
     }
     grid.flowDirty = true;
   }
+  kindAtWorld(x, z) { const i = Math.floor(x / this.cell + this.half + 0.5), j = Math.floor(z / this.cell + this.half + 0.5); return this.kindAt(i, j); }
   buildScene(scene) {
     const group = new THREE.Group();
     // ground with heights and painted cells
@@ -1480,45 +1658,72 @@ class WorldMap {
     const pos = geo.attributes.position;
     const colors = new Float32Array(pos.count * 3);
     const pal = this.cfg.palette;
-    const c = new THREE.Color(), grass = new THREE.Color(pal.grass), grass2 = new THREE.Color(pal.grass2), mud = new THREE.Color(0x6b5a3a), rock = new THREE.Color(0x777770), forest = new THREE.Color(0x2f5a2a), dry = new THREE.Color(pal.dry);
+    const c = new THREE.Color(), grass = new THREE.Color(pal.grass), grass2 = new THREE.Color(pal.grass2), mud = new THREE.Color(this.type === 'volcanic' ? 0x2a1a14 : 0x6b5a3a), rock = new THREE.Color(this.type === 'frozen' ? 0x9aa0a8 : 0x777770), forest = new THREE.Color(this.type === 'frozen' ? 0x8aa090 : 0x2f5a2a), dry = new THREE.Color(pal.dry), road = new THREE.Color(pal.road || 0x9a7a4a), marsh = new THREE.Color(pal.marsh || 0x4a5a2a);
     for (let k = 0; k < pos.count; k++) {
       const x = pos.getX(k), z = pos.getZ(k);
-      pos.setY(k, this.heightAt(U.clamp(x, -79, 79), U.clamp(z, -79, 79)));
+      pos.setY(k, this.heightAt(U.clamp(x, -DATA.MAP_HALF, DATA.MAP_HALF), U.clamp(z, -DATA.MAP_HALF, DATA.MAP_HALF)));
       const i = Math.floor(x / this.cell + this.half + 0.5), j = Math.floor(z / this.cell + this.half + 0.5);
       const kind = this.kindAt(i, j);
       const nz = U.smoothNoise(x * 0.08 + 50, z * 0.08 + 50) * 0.6 + U.smoothNoise(x * 0.3, z * 0.3) * 0.4;
       c.copy(grass).lerp(grass2, nz);
       const r = Math.max(Math.abs(x), Math.abs(z));
       if (r > DATA.BUILD_RADIUS + 1) c.lerp(dry, 0.25);
-      if (kind === CELL_WATER) c.copy(mud);
+      if (kind === CELL_WATER || kind === 8) c.copy(mud);
       else if (kind === CELL_ROCK) c.lerp(rock, 0.7);
       else if (kind === 5) c.lerp(forest, 0.6);
+      else if (kind === 6) c.lerp(road, 0.75);
+      else if (kind === 7) c.lerp(marsh, 0.8);
       else {
-        // banks and rock edges
-        let nearWater = false, nearRock = false;
-        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const kk = this.kindAt(i + di, j + dj); if (kk === CELL_WATER) nearWater = true; if (kk === CELL_ROCK) nearRock = true; }
-        if (nearWater) c.lerp(mud, 0.45); else if (nearRock) c.lerp(rock, 0.3);
+        // banks, rock edges, road shoulders
+        let nearWater = false, nearRock = false, nearRoad = false;
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const kk = this.kindAt(i + di, j + dj); if (kk === CELL_WATER || kk === 8) nearWater = true; if (kk === CELL_ROCK) nearRock = true; if (kk === 6) nearRoad = true; }
+        if (nearWater) c.lerp(mud, 0.45); else if (nearRock) c.lerp(rock, 0.3); else if (nearRoad) c.lerp(road, 0.3);
       }
       const y = pos.getY(k); if (y > 1) c.lerp(dry, Math.min(0.35, y * 0.06));
       colors[k * 3] = c.r; colors[k * 3 + 1] = c.g; colors[k * 3 + 2] = c.b;
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
-    const ground = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    const gtex = Models.noiseTexture(256, 0.22, 2); gtex.repeat.set(52, 52);
+    const ground = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, map: gtex }));
     ground.receiveShadow = true;
     group.add(ground); this.ground = ground;
     // water: one big plane just below the plain; it only shows inside the carved bed
-    const water = new THREE.Mesh(new THREE.PlaneGeometry(size + 40, size + 40), new THREE.MeshLambertMaterial({ color: 0x3a7fc0, transparent: true, opacity: 0.78, emissive: 0x0a2a50, emissiveIntensity: 0.4 }));
-    water.rotation.x = -Math.PI / 2; water.position.y = -0.55; water.receiveShadow = true;
+    const wgeo = new THREE.PlaneGeometry(size + 28, size + 28, seg + 14, seg + 14);
+    wgeo.rotateX(-Math.PI / 2);
+    { const wp = wgeo.attributes.position; for (let k = 0; k < wp.count; k++) { const x = wp.getX(k), z = wp.getZ(k); wp.setY(k, this.heightAt(x, z, this.h0) - 0.5); } wgeo.computeVertexNormals(); }
+    const lava = this.type === 'volcanic';
+    const wtex = Models.noiseTexture(256, 0.3, 9); wtex.repeat.set(34, 34);
+    const water = new THREE.Mesh(wgeo, new THREE.MeshPhongMaterial({ color: pal.water || 0x3a7fc0, transparent: !lava, opacity: lava ? 1 : 0.8, emissive: pal.waterGlow || 0x0a2a50, emissiveIntensity: lava ? 0.9 : 0.35, map: wtex, shininess: lava ? 10 : 90, specular: lava ? 0x402000 : 0x9ad0ff }));
+    water.receiveShadow = !lava;
     group.add(water); this.water = water;
     // fords: wooden planks over the crossings
     const plank = Models.mat(0x7a5a38);
     for (const f of this.fords) {
       const cc = this.cellCenter(f.i - 0.5, f.j - 0.5);
       const b = new THREE.Mesh(new THREE.BoxGeometry(7, 0.3, 7), plank);
-      b.position.set(cc.x, -0.05, cc.z); b.castShadow = true; b.receiveShadow = true;
+      b.position.set(cc.x, 0.02, cc.z); b.castShadow = true; b.receiveShadow = true;
       group.add(b);
       for (let k = -3; k <= 3; k++) { const rail = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.9, 0.2), plank); rail.position.set(cc.x + k * 1.1, 0.5, cc.z + 3.4); group.add(rail); const rail2 = rail.clone(); rail2.position.z = cc.z - 3.4; group.add(rail2); }
+    }
+    // marsh reeds and treasure chests
+    const reedMat = Models.mat(this.type === 'frozen' ? 0x8a9a8a : 0x5a6a2a);
+    const reedGeo = new THREE.CylinderGeometry(0.03, 0.05, 1.1, 4);
+    const marshCells = []; for (let j = 0; j < this.n; j++) for (let i = 0; i < this.n; i++) if (this.kind[this.idx(i, j)] === 7) marshCells.push([i, j]);
+    if (marshCells.length) {
+      const reeds = new THREE.InstancedMesh(reedGeo, reedMat, marshCells.length * 4); reeds.frustumCulled = false;
+      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
+      const rr = mulberry32(this.usedSeed + 7); let k = 0;
+      for (const [i, j] of marshCells) { const cc = this.cellCenter(i, j); for (let t = 0; t < 4; t++) { const x = cc.x + (rr() - 0.5) * 1.8, z = cc.z + (rr() - 0.5) * 1.8; q.setFromEuler(new THREE.Euler((rr() - 0.5) * 0.3, rr() * 6, (rr() - 0.5) * 0.3)); p.set(x, this.heightAt(x, z) + 0.5, z); m.compose(p, q, s); reeds.setMatrixAt(k++, m); } }
+      reeds.instanceMatrix.needsUpdate = true; group.add(reeds);
+    }
+    for (const ch of this.chests) {
+      const g = new THREE.Group();
+      g.add(Models.box(1.0, 0.6, 0.7, Models.mat(0x6a4a2a), 0, 0.3, 0));
+      g.add(Models.box(1.04, 0.28, 0.74, Models.mat(0xd8b040, { emissive: 0x604000, emissiveIntensity: 0.3 }), 0, 0.72, 0));
+      g.add(Models.box(0.2, 0.2, 0.1, Models.mat(0x3a3a3a), 0, 0.55, 0.4, false));
+      g.position.set(ch.x, this.heightAt(ch.x, ch.z), ch.z); g.rotation.y = ch.x * 0.3;
+      group.add(g); ch.mesh = g;
     }
     // rocks and forests as instanced meshes
     const rockCells = [], forestCells = [];
@@ -1537,7 +1742,7 @@ class WorldMap {
           p.set(cc.x + (rnd() - 0.5) * 1.2, this.heightAt(cc.x, cc.z) + sy * 0.3, cc.z + (rnd() - 0.5) * 1.2);
           q.setFromEuler(new THREE.Euler(rnd() * 0.6, rnd() * 6, rnd() * 0.6)); s.set(sx, sy, sz);
           m.compose(p, q, s); inst.setMatrixAt(k, m);
-          col.setHex([0x777770, 0x8a8a80, 0x6a6a64, 0x9a958a][Math.floor(rnd() * 4)]); inst.setColorAt(k, col); k++;
+          col.setHex((this.type === 'frozen' ? [0xc8d0d8, 0xb0b8c0, 0xd8e0e8, 0xa0a8b0] : (this.type === 'volcanic' ? [0x3a3a3a, 0x4a4040, 0x2a2a2a, 0x5a4a44] : [0x777770, 0x8a8a80, 0x6a6a64, 0x9a958a]))[Math.floor(rnd() * 4)]); inst.setColorAt(k, col); k++;
         }
       }
       inst.instanceMatrix.needsUpdate = true; if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
@@ -1558,11 +1763,23 @@ class WorldMap {
           q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6); s.set(sc, sc, sc);
           p.set(x, y + 0.8 * sc, z); m.compose(p, q, s); trunks.setMatrixAt(k, m);
           p.set(x, y + 0.8 * sc + 2.1 * sc, z); m.compose(p, q, s); leaves.setMatrixAt(k, m);
-          col.setHex([0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x1f4a25][Math.floor(rnd() * 4)]); leaves.setColorAt(k, col); k++;
+          col.setHex((pal.leaves || [0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x1f4a25])[Math.floor(rnd() * 4)]); leaves.setColorAt(k, col); k++;
         }
       }
       trunks.instanceMatrix.needsUpdate = true; leaves.instanceMatrix.needsUpdate = true; if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
       group.add(trunks); group.add(leaves);
+    }
+    // dead trees on the dry maps (walkable decoration)
+    if (this.cfg.decor === 'dead') {
+      const bark = Models.mat(0x3a2a20);
+      for (let k = 0; k < 40; k++) {
+        let x, z, tries = 0;
+        do { x = (rnd() - 0.5) * 2 * (DATA.MAP_HALF - 4); z = (rnd() - 0.5) * 2 * (DATA.MAP_HALF - 4); tries++; } while (tries < 20 && (Math.max(Math.abs(x), Math.abs(z)) < 24 || this.kindAtWorld(x, z)));
+        const y = this.heightAt(x, z), t = new THREE.Group();
+        t.add(Models.cyl(0.12, 0.22, 3 + rnd() * 2, bark, 0, 1.6 + rnd(), 0, 5));
+        for (let b = 0; b < 3; b++) { const br = Models.box(0.1, 1.4, 0.1, bark, 0, 2.4 + b * 0.5, 0); br.rotation.set((rnd() - 0.5) * 1.4, rnd() * 6, (rnd() - 0.5) * 1.4); t.add(br); }
+        t.position.set(x, y, z); group.add(t);
+      }
     }
     // ruins: a few broken wall stubs for atmosphere (walkable)
     for (let k = 0; k < (this.cfg.ruins || 6); k++) {
@@ -1598,6 +1815,52 @@ const Models = {
     return m;
   },
   freshMat(color) { return new THREE.MeshLambertMaterial({ color }); },
+  // soft procedural grain, shared by ground, stone and water
+  noiseTexture(size = 256, contrast = 0.18, seed = 1) {
+    const key = 'noise' + size + contrast + seed;
+    if (this._tex && this._tex[key]) return this._tex[key];
+    this._tex = this._tex || {};
+    const c = document.createElement('canvas'); c.width = c.height = size;
+    const ctx = c.getContext('2d'); const img = ctx.createImageData(size, size);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const n = U.smoothNoise(x * 0.11 + seed * 7, y * 0.11 + seed * 3) * 0.6 + U.smoothNoise(x * 0.31 + seed, y * 0.31) * 0.3 + U.noise2(x + seed, y) * 0.1;
+      const v = Math.round(255 * (1 - contrast / 2 + contrast * n));
+      const k = (y * size + x) * 4; img.data[k] = v; img.data[k + 1] = v; img.data[k + 2] = v; img.data[k + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;
+    this._tex[key] = t; return t;
+  },
+  skyDome() {
+    const geo = new THREE.SphereGeometry(1000, 24, 12);
+    const pos = geo.attributes.position; const colors = new Float32Array(pos.count * 3);
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+    m.renderOrder = -10; m.frustumCulled = false;
+    this.tintSky(m, 0x9cc4e4, 0x3f7fd0);
+    return m;
+  },
+  tintSky(mesh, horizonHex, zenithHex) {
+    const pos = mesh.geometry.attributes.position, col = mesh.geometry.attributes.color;
+    const hz = new THREE.Color(horizonHex), zn = new THREE.Color(zenithHex), c = new THREE.Color();
+    for (let k = 0; k < pos.count; k++) { const t = U.clamp(pos.getY(k) / 1000, -0.2, 1); const f = Math.pow(Math.max(0, t), 0.6); c.copy(hz).lerp(zn, f); col.setXYZ(k, c.r, c.g, c.b); }
+    col.needsUpdate = true;
+  },
+  clouds(n) {
+    const g = new THREE.Group();
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const ctx = c.getContext('2d');
+    for (let b = 0; b < 6; b++) { const grd = ctx.createRadialGradient(40 + b * 10, 60 + (b % 2) * 14, 2, 40 + b * 10, 60 + (b % 2) * 14, 30); grd.addColorStop(0, 'rgba(255,255,255,0.9)'); grd.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = grd; ctx.fillRect(0, 0, 128, 128); }
+    const tex = new THREE.CanvasTexture(c);
+    for (let k = 0; k < n; k++) {
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.55 + Math.random() * 0.3, depthWrite: false, fog: false }));
+      const sc = 40 + Math.random() * 50; s.scale.set(sc, sc * 0.45, 1);
+      s.position.set((Math.random() - 0.5) * 520, 95 + Math.random() * 40, (Math.random() - 0.5) * 520);
+      g.add(s);
+    }
+    g.renderOrder = -5;
+    return g;
+  },
   box(w, h, d, mat, x = 0, y = 0, z = 0, shadow = true) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
     m.position.set(x, y, z);
@@ -1881,7 +2144,8 @@ const Models = {
   // ------------------------------------------------------------- buildings
   stone: null, stoneDark: null, wood: null, roof: null,
   initMats() {
-    this.stone = this.mat(0x9a9a92); this.stoneDark = this.mat(0x6f6f68); this.wood = this.mat(0x7a5a38);
+    const stoneTex = this.noiseTexture(128, 0.28, 5); stoneTex.repeat.set(1, 1);
+    this.stone = new THREE.MeshLambertMaterial({ color: 0xa0a098, map: stoneTex }); this.stoneDark = new THREE.MeshLambertMaterial({ color: 0x74746c, map: stoneTex }); this.wood = this.mat(0x7a5a38);
     this.roof = this.mat(0x8a3a30); this.plaster = this.mat(0xd8cfb8); this.gold = this.mat(0xe0b040, { emissive: 0x604000, emissiveIntensity: 0.3 });
   },
   merlons(g, w, d, y, step = 1.0) {
@@ -2312,6 +2576,7 @@ class Unit {
   get alive() { return !this.dead; }
   get effSpeed() {
     let s = this.speed;
+    if (!this.flying && this.game.world) { const c = this.game.grid.worldToCell(this.pos.x, this.pos.z); const tk = this.game.grid.terrain[this.game.grid.idx(c.i, c.j)]; if (tk === 6) s *= 1.2; else if (tk === 7) s *= 0.55; }
     if (this.slow && this.slow.until > this.game.time) s *= (1 - this.slow.factor);
     for (const b of this.buffs) if (b.until > this.game.time && b.speedMul) s *= b.speedMul;
     if (this.stunUntil > this.game.time) s = 0;
@@ -2499,6 +2764,7 @@ class Unit {
     return false;
   }
   scaledDmg(dmg, target) {
+    if (target instanceof Building && this.team === 'enemy' && target.def.cat === 'defense') dmg *= 2;
     if (this.def.bonusVsLarge && target.large) dmg *= this.def.bonusVsLarge;
     if (this.def.backstab && target instanceof Unit) {
       // target facing away from us: its forward vector points away from the attacker
@@ -2778,7 +3044,7 @@ class Building {
   upgradeCost() { return Math.round(this.def.cost * DATA.towerUpgrade.costMul * this.level); }
   canUpgrade() { return this.def.tower && this.level < DATA.towerUpgrade.maxLevel; }
   repairCost() { return Math.round((1 - this.hp / this.maxHp) * this.def.cost * 0.5); }
-  sellValue() { return Math.round((this.paid || this.def.cost) * 0.6 * (this.hp / this.maxHp) * (1 + 0.5 * (this.level - 1))); }
+  sellValue() { const paid = this.paid !== undefined ? this.paid : this.def.cost; return Math.round(paid * 0.6 * (this.hp / this.maxHp) * (1 + 0.5 * (this.level - 1))); }
 
   takeDamage(amount, source) {
     if (this.dead) return 0;
@@ -2975,7 +3241,7 @@ class Projectile {
   applyHit(target, mult = 1) {
     let d = this.dmg * mult;
     if (target.large && this.bonusVsLarge > 1) d *= this.bonusVsLarge;
-    if (target instanceof Building) d = this.buildingDmg ? this.buildingDmg * mult : d;
+    if (target instanceof Building) d = this.buildingDmg ? this.buildingDmg * mult : d * (this.magic ? 1 : 0.5);
     const dealt = target.takeDamage(d, this.source, { magic: this.magic });
     if (target instanceof Unit) {
       if (this.slow) target.applySlow(this.slow.factor, this.slow.dur);
@@ -3450,6 +3716,7 @@ Unit.prototype.playerThink = function () {
   if (c && c.type === 'move') { aggro = 0; }
 
   let best = null, bestS = Infinity;
+  if (this.sheltered && this.attackKind !== 'melee') aggro = Math.min(aggro, 3.6); // inside the keep you only fight what comes through the door
   if (aggro > 0) {
     for (const u of game.unitsNear(this.pos.x, this.pos.z, aggro, 'enemy')) {
       if (u.dead) continue;
@@ -4139,6 +4406,7 @@ class Controls {
     if (k === 'Equal') { game.setTimeScale(game.timeScale >= 2 ? 1 : 2); return; }
     if (k === 'KeyN' || (k === 'Space' && this.mode === 'rts')) { e.preventDefault(); game.tryStartWave(); return; }
     if (k === 'F1' || k === 'Slash') { e.preventDefault(); game.ui.toggleHelp(); return; }
+    if (k === 'KeyO' && !e.repeat) { game.ui.toggleSettings(); return; }
 
     if (this.mode === 'fps') {
       const u = this.controlled;
@@ -4502,6 +4770,7 @@ class Controls {
   }
   aimPitch() { return this.fpsPitch; }
   applyLook(dx, dy) {
+    if (this.invertY) dy = -dy;
     const sens = 0.0022 * this.sensMul;
     if (Math.abs(dx) < 400 && Math.abs(dy) < 400) { this.fpsYaw -= dx * sens; this.fpsPitch = U.clamp(this.fpsPitch - dy * sens, -1.35, 1.35); }
   }
@@ -4680,10 +4949,10 @@ class Controls {
     for (const cell of res.cells) { const w = this.game.grid.cellToWorld(cell.i, cell.j); cx += w.x; cz += w.z; }
     this.ghost.position.set(cx / res.cells.length, 0, cz / res.cells.length);
     this.ghost.rotation.y = this.buildRot * Math.PI / 2;
-    this.ghostOk = res.ok && this.game.canAfford(this.game.buildingCost(this.buildDef)) && !(this.buildDef.unique && this.game.hasBuilding(this.buildDef.key));
+    this.ghostOk = res.ok && this.game.canAfford(this.game.buildingCost(this.buildDef)) && !(this.buildDef.unique && this.game.hasBuilding(this.buildDef.key, this.game.localPlayer));
     if (this.buildDef.tower) this.game.showRange(this.ghost.position.x, this.ghost.position.z, this.game.towerRangeFor(this.buildDef));
     Models.setGhostValid(this.ghost, this.ghostOk, this.game.waves && this.game.waves.active);
-    this.game.ui.showBuildHint(res.ok ? (this.ghostOk ? '' : (this.buildDef.unique && this.game.hasBuilding(this.buildDef.key) ? 'Already built' : 'Not enough gold')) : res.reason);
+    this.game.ui.showBuildHint(res.ok ? (this.ghostOk ? '' : (this.buildDef.unique && this.game.hasBuilding(this.buildDef.key, this.game.localPlayer) ? 'Already built' : 'Not enough gold')) : res.reason);
   }
   placeAtGhost() {
     if (!this.buildDef || !this.ghostAnchor) return;
@@ -4888,7 +5157,7 @@ class NetHost {
     this.clients = new Map();
     this.fxQ = []; this.sfxQ = []; this.toastQ = [];
     this.lastB = new Map();
-    this.started = false; this.hostHero = 'knight'; this.difficulty = 'normal'; this.mapType = 'random';
+    this.started = false; this.hostHero = 'knight'; this.difficulty = 'normal'; this.mapType = 'random'; this.ready = new Set();
     this.tr.on('open', (id) => this.onJoin(id));
     this.tr.on('close', (id) => this.onLeave(id));
     this.tr.on('message', (id, m) => { try { this.onMessage(id, m); } catch (e) { console.error('net message failed', e); } });
@@ -4905,7 +5174,7 @@ class NetHost {
     if (!c) return;
     const g = this.game;
     if (c.possessed) { const u = g.unitById(c.possessed); if (u) { u.possessedBy = null; u.remote = null; u.post = { x: u.pos.x, z: u.pos.z }; } }
-    this.clients.delete(id);
+    this.clients.delete(id); this.ready.delete(id);
     if (this.started) {
       for (const u of g.units) if (u.owner === id) u.owner = null;      // their forces become shared
       for (const b of g.buildings) if (b.owner === id) b.owner = null;
@@ -4916,8 +5185,17 @@ class NetHost {
   roster() { return [{ id: 'host', name: this.game.players.host ? this.game.players.host.name : 'Host', hero: this.hostHero }].concat([...this.clients].filter(([id, c]) => c.hero).map(([id, c]) => ({ id, name: c.name, hero: c.hero }))); }
   lobbyState() { return { t: 'lobby', code: this.code, players: this.roster(), difficulty: this.difficulty, mapType: this.mapType, started: this.started }; }
   broadcastLobby() { this.tr.broadcast(this.lobbyState()); this.game.ui.renderLobby(this.lobbyState(), true); }
+  toggleReady(id) {
+    const g = this.game;
+    if (g.waves.active) return;
+    if (this.ready.has(id)) this.ready.delete(id); else this.ready.add(id);
+    const total = this.playerCount;
+    if (this.ready.size >= total) { this.ready.clear(); g.startWaveNow(); return; }
+    g.ui.toast(`${g.playerName(id)} is ${this.ready.has(id) ? 'ready' : 'no longer ready'} for the next wave (${this.ready.size}/${total})`, 'info');
+    g.ui.dirty = true;
+  }
   begin(info) {
-    this.started = true; this.lastB.clear();
+    this.started = true; this.lastB.clear(); this.ready.clear();
     for (const c of this.clients.values()) { c.known.clear(); c.knownB.clear(); c.possessed = null; c.inLobby = false; }
     this.tr.broadcast(Object.assign({ t: 'start' }, info));
   }
@@ -4967,9 +5245,9 @@ class NetHost {
       case 'buy': g.buyUnit(m.key); break;
       case 'hero': g.buyHero(m.key); break;
       case 'upg': g.buyUpgrade(m.key); break;
-      case 'wave': g.tryStartWave(); break;
+      case 'wave': if (!g.waves.active) this.toggleReady(id); break;
       case 'repairAll': g.repairAll(); break;
-      case 'autoRepair': g.autoRepair = !!m.on; g.ui.toast(`${c.name} turned auto-repair ${g.autoRepair ? 'on' : 'off'}`); g.ui.dirty = true; break;
+      case 'autoRepair': g.players[id].autoRepair = !!m.on; g.ui.dirty = true; break;
       case 'bld': { const b = g.buildingById(m.id); if (!b) break; if (m.op === 'repair') g.repairBuilding(b); else if (m.op === 'sell') g.sellBuilding(b); else if (m.op === 'upgrade') g.upgradeBuilding(b); break; }
       case 'cmd': {
         const us = orderable(m.ids || []);
@@ -5031,11 +5309,12 @@ class NetHost {
     const w = g.waves;
     const base = {
       t: 'snap', seq: this.seq, time: +g.time.toFixed(3), paused: g.paused, over: g.over, timeScale: g.timeScale,
-      players: g.playerOrder.map(id => { const p = g.players[id]; return { id, name: p.name, hero: p.hero, gold: Math.round(p.gold), heroes: p.heroes, heroesBought: p.heroesBought || 0, cap: g.soldierCap(id) }; }),
+      players: g.playerOrder.map(id => { const p = g.players[id]; return { id, name: p.name, hero: p.hero, gold: Math.round(p.gold), heroes: p.heroes, heroesBought: p.heroesBought || 0, cap: g.soldierCap(id), upgrades: p.upgrades, autoRepair: !!p.autoRepair }; }),
+      ready: [...this.ready],
       wave: { n: w.number, active: w.active, pending: w.pending.length, total: w.total || 0, preview: w.preview ? { n: w.preview.n, d: w.describe(w.preview), dirs: w.preview.dirs } : null },
       king: g.king ? g.king.id : 0, boss: g.boss && !g.boss.dead ? g.boss.id : 0,
-      upgrades: g.upgrades, autoRepair: g.autoRepair, fallen: g.fallenHeroes.map(f => f.key),
-      code: this.code,
+      fallen: g.fallenHeroes.map(f => f.key),
+      code: this.code, chests: g.world ? g.world.chests.map(c => c.taken ? 1 : 0) : [],
       units: urec, bld, proj, zones, fx: this.fxQ, sfx: this.sfxQ, toasts: this.toastQ,
     };
     this.fxQ = []; this.sfxQ = []; this.toastQ = [];
@@ -5161,14 +5440,16 @@ class NetClient {
     for (const n of s.sfx || []) SFX.play(n, 0.8);
     for (const t of s.toasts || []) g.ui.toast(t[0], t[1] || 'info', t[2] || 3200);
     // game state
-    if (s.players) { for (const p of s.players) { const w = g.players[p.id] || (g.players[p.id] = { id: p.id, name: p.name, heroes: [], heroesBought: 0, gold: 0 }); w.name = p.name; w.hero = p.hero; w.gold = p.gold; w.heroes = p.heroes || []; w.heroesBought = p.heroesBought || 0; w.cap = p.cap; } g.playerOrder = s.players.map(p => p.id); const me = g.players[g.localPlayer]; g.replicaCap = me ? me.cap : 0; }
+    if (s.players) { for (const p of s.players) { const w = g.players[p.id] || (g.players[p.id] = g.newWallet(p.id, p.name, p.hero)); w.name = p.name; w.hero = p.hero; w.gold = p.gold; w.heroes = p.heroes || []; w.heroesBought = p.heroesBought || 0; w.cap = p.cap; w.upgrades = p.upgrades || w.upgrades; w.autoRepair = !!p.autoRepair; } g.playerOrder = s.players.map(p => p.id); const me = g.players[g.localPlayer]; g.replicaCap = me ? me.cap : 0; }
+    g.readySet = s.ready || [];
+    if (s.chests && g.world) s.chests.forEach((tk, k) => { const ch = g.world.chests[k]; if (ch && tk && !ch.taken) { ch.taken = true; if (ch.mesh) ch.mesh.visible = false; } });
     g.paused = s.paused; g.timeScale = s.timeScale;
     if (s.over && !g.over) { g.over = true; g.ui.showGameOver(); }
     const w = s.wave;
     g.waves = { number: w.n, active: w.active, pending: { length: w.pending }, total: w.total, preview: w.preview ? { n: w.preview.n, d: w.preview.d, dirs: w.preview.dirs } : { n: w.n + 1, d: { units: [], from: [] } }, describe: (p) => p.d };
     g.king = this.units.get(s.king) || g.king;
     g.boss = s.boss ? this.units.get(s.boss) : null;
-    g.upgrades = s.upgrades || {}; g.autoRepair = !!s.autoRepair; g.fallenHeroes = (s.fallen || []).map(k => ({ key: k }));
+    g.fallenHeroes = (s.fallen || []).map(k => ({ key: k }));
     this.players = s.players ? s.players.length : this.players; this.code = s.code;
     g.time = s.time;
     g.ui.dirty = true;
@@ -5234,6 +5515,7 @@ class UI {
 
   // ------------------------------------------------------------ menu
   buildMenu() {
+    if (this.$('buildstamp')) this.$('buildstamp').textContent = 'build ' + DATA.build;
     const cards = this.$('herocards');
     cards.innerHTML = '';
     for (const h of Object.values(DATA.heroes)) {
@@ -5260,6 +5542,9 @@ class UI {
     this.$('startbtn').addEventListener('click', () => { SFX.init(); SFX.resume(); this.hideMenu(); this.game.newGame(this.selectedHero, this.difficulty); });
     document.querySelectorAll('.settings').forEach(r => this.bindSettings(r));
     this.refreshSettings();
+    this.$('settingsbtn').addEventListener('click', () => this.toggleSettings());
+    this.$('menusettings').addEventListener('click', () => this.toggleSettings(true));
+    this.$('settingsclose').addEventListener('click', () => this.toggleSettings(false));
     this.$('copycode').addEventListener('click', () => { const g = this.game; const code = g.netHost ? g.netHost.code : (g.netClient ? g.netClient.code : ''); if (code) this.copyText(code, this.$('copycode')); });
     this.$('copylink').addEventListener('click', () => { const g = this.game; const code = g.netHost ? g.netHost.code : (g.netClient ? g.netClient.code : ''); if (code) this.copyText(this.inviteLink(code), this.$('copylink')); });
     { const jc = new URLSearchParams(location.search).get('join'); if (jc) { this.$('joincode').value = jc.toUpperCase().slice(0, 6); this.mpStatus(`Room code ${jc.toUpperCase()} filled in. Pick your hero, enter a name, and press Join.`); } }
@@ -5304,7 +5589,7 @@ class UI {
     const me = isHost ? 'host' : (g.netClient ? g.netClient.myId : null);
     this.$('lobbyplayers').innerHTML = state.players.map((p, k) => { const h = DATA.heroes[p.hero]; return `<div class="p"><span class="sw" style="background:#${(h ? h.color : 0x888888).toString(16).padStart(6, '0')}"></span><span class="nm">${p.name}</span><span class="hero">${h ? h.name + ', ' + h.title : ''}</span>${p.id === 'host' ? '<span class="tag">host</span>' : ''}${p.id === me ? '<span class="tag">you</span>' : ''}</div>`; }).join('');
     const mt = state.mapType && DATA.mapTypes[state.mapType] ? DATA.mapTypes[state.mapType].label : 'Random map';
-    this.$('lobbyinfo').textContent = `${mt} · ${DATA.difficulties[state.difficulty] ? DATA.difficulties[state.difficulty].label : 'Normal'} difficulty · ${state.players.length} defender${state.players.length === 1 ? '' : 's'}. Everyone shares the King and the starting castle; each defender has their own gold, hero, soldiers and buildings.`;
+    this.$('lobbyinfo').textContent = `${mt} · ${DATA.difficulties[state.difficulty] ? DATA.difficulties[state.difficulty].label : 'Normal'} difficulty · ${state.players.length} defender${state.players.length === 1 ? '' : 's'}. Shared: the King and the starting castle. Yours alone: gold, hero, soldiers, buildings and upgrades. Waves start when every defender is ready.`;
     this.$('lobbystart').classList.toggle('hidden', !isHost);
     this.$('lobbywait').classList.toggle('hidden', isHost);
   }
@@ -5328,20 +5613,36 @@ class UI {
   inviteLink(code) { return DATA.siteUrl + '?join=' + code; }
   // sensitivity slider + raw-input toggle, present on the menu and in the help screen
   bindSettings(root) {
-    const c = this.game.controls;
-    const sl = root.querySelector('.sens'), ri = root.querySelector('.raw');
-    if (sl) { sl.addEventListener('input', () => c.setSensitivity(parseInt(sl.value, 10) / 100, true)); }
-    if (ri) ri.addEventListener('change', () => c.setRawInput(ri.checked));
+    const c = this.game.controls, g = this.game;
+    const q = (s) => root.querySelector(s);
+    if (q('.sens')) q('.sens').addEventListener('input', () => c.setSensitivity(parseInt(q('.sens').value, 10) / 100, true));
+    if (q('.raw')) q('.raw').addEventListener('change', () => c.setRawInput(q('.raw').checked));
+    if (q('.inverty')) q('.inverty').addEventListener('change', () => { c.invertY = q('.inverty').checked; g.savePref('inverty', c.invertY ? '1' : '0'); });
+    if (q('.vol')) q('.vol').addEventListener('input', () => { SFX.setVolume(parseInt(q('.vol').value, 10) / 100); g.savePref('volume', q('.vol').value); this.refreshSettings(); });
+    if (q('.shadows')) q('.shadows').addEventListener('change', () => g.setShadows(q('.shadows').checked));
+    if (q('.showfps')) q('.showfps').addEventListener('change', () => { g.showFps = q('.showfps').checked; g.savePref('showfps', g.showFps ? '1' : '0'); this.$('fpscounter').classList.toggle('hidden', !g.showFps); });
     root.querySelectorAll('input').forEach(i => i.addEventListener('keydown', (e) => e.stopPropagation()));
   }
   refreshSettings() {
-    const c = this.game.controls;
+    const c = this.game.controls, g = this.game;
     document.querySelectorAll('.settings').forEach(root => {
-      const sl = root.querySelector('.sens'), lab = root.querySelector('.sensval'), ri = root.querySelector('.raw');
-      if (sl && document.activeElement !== sl) sl.value = Math.round(c.sensMul * 100);
-      if (lab) lab.textContent = Math.round(c.sensMul * 100) + '%';
-      if (ri) ri.checked = !!c.rawInput;
+      const q = (s) => root.querySelector(s);
+      if (q('.sens') && document.activeElement !== q('.sens')) q('.sens').value = Math.round(c.sensMul * 100);
+      if (q('.sensval')) q('.sensval').textContent = Math.round(c.sensMul * 100) + '%';
+      if (q('.raw')) q('.raw').checked = !!c.rawInput;
+      if (q('.inverty')) q('.inverty').checked = !!c.invertY;
+      if (q('.vol') && document.activeElement !== q('.vol')) q('.vol').value = Math.round(SFX.volume * 100);
+      if (q('.volval')) q('.volval').textContent = Math.round(SFX.volume * 100) + '%';
+      if (q('.shadows')) q('.shadows').checked = !!g.shadowsOn;
+      if (q('.showfps')) q('.showfps').checked = !!g.showFps;
     });
+  }
+  toggleSettings(force) {
+    const el = this.$('settings');
+    const show = force !== undefined ? force : el.classList.contains('hidden');
+    el.classList.toggle('hidden', !show);
+    if (show) this.refreshSettings();
+    if (this.game.started && !this.game.over && !this.game.replica) { if (show && !this.game.paused) { this.game.togglePause(); this.settingsPaused = true; } else if (!show && this.settingsPaused) { this.settingsPaused = false; if (this.game.paused) this.game.togglePause(); } }
   }
   urlBox() {
     return `<span class="url"><input type="text" readonly value="${DATA.siteUrl}" onclick="this.select()"><button data-a="copy">Copy</button></span>`;
@@ -5402,6 +5703,7 @@ class UI {
     el.classList.toggle('hidden', !show);
     if (this.game.started && !this.game.over && !this.game.replica) { if (show && !this.game.paused) { this.game.togglePause(); this.helpPaused = true; } else if (!show && this.helpPaused) { this.helpPaused = false; if (this.game.paused) this.game.togglePause(); } }
   }
+  closePanels() { this.toggleSettings(false); }
 
   // ------------------------------------------------------------ panels
   buildPanels() {
@@ -5457,16 +5759,16 @@ class UI {
     this.activeTab = name;
   }
   togglePanel(name) { this.showTab(name); }
-  closePanels() {}
   refreshPanels() {
     const g = this.game;
     document.querySelectorAll('[data-build]').forEach(b => {
       const d = DATA.buildings[b.dataset.build];
       const cost = g.buildingCost(d);
-      const cannot = !g.canAfford(cost) || !!(d.unique && g.hasBuilding(d.key));
+      const built = !!(d.unique && g.hasBuilding(d.key, g.localPlayer));
+      const cannot = !g.canAfford(cost) || built;
       b.classList.toggle('disabled', cannot);
       b.classList.toggle('on', !!(g.controls.buildDef && g.controls.buildDef.key === d.key));
-      if (d.unique && g.hasBuilding(d.key)) b.querySelector('.cost').textContent = 'built'; else b.querySelector('.cost').textContent = cost;
+      b.querySelector('.cost').textContent = built ? 'built' : cost;
     });
     const capFull = g.soldierCount() >= g.soldierCap();
     document.querySelectorAll('[data-unit]').forEach(b => { const d = DATA.units[b.dataset.unit]; const full = d.noCap ? g.engineerCount() >= d.maxCount : capFull; b.classList.toggle('disabled', !!(!g.canAfford(d.cost) || full)); });
@@ -5481,8 +5783,8 @@ class UI {
     document.querySelectorAll('[data-upgrade]').forEach(b => {
       const d = DATA.upgrades[b.dataset.upgrade]; const lvl = g.upgrades[d.key] || 0;
       const maxed = lvl >= d.max; const cost = g.upgradeCost(d.key);
-      const locked = !!(d.requires && !g.hasBuilding(d.requires));
-      b.querySelector('.lvl').textContent = maxed ? `Level ${lvl} (max)` : `Level ${lvl}/${d.max}` + (locked ? ` · needs ${DATA.buildings[d.requires].name}` : '');
+      const locked = !!(d.requires && !g.hasActive(d.requires, g.localPlayer));
+      b.querySelector('.lvl').textContent = maxed ? `Level ${lvl} (max)` : `Level ${lvl}/${d.max}` + (locked ? ` · needs your own ${DATA.buildings[d.requires].name}` : '');
       b.querySelector('.cost').textContent = maxed ? '—' : cost;
       b.classList.toggle('disabled', !!(maxed || locked || !g.canAfford(cost)));
     });
@@ -5706,7 +6008,7 @@ class UI {
     this.tick += dt; this.mapTick += dt;
     if (this.tick < 0.12 && !this.dirty) return;
     this.tick = 0;
-    this.$('gold').textContent = U.fmt(g.gold) + (g.playerOrder.length > 1 ? ' (yours)' : '');
+    this.$('gold').textContent = U.fmt(g.gold);
     this.$('wave').textContent = g.waves.active ? g.waves.number : `${g.waves.number} done`;
     this.$('enemies').textContent = g.waves.active ? `${g.enemiesAlive()} (+${g.waves.pending.length} coming)` : '0';
     this.$('soldiers').textContent = `${g.soldierCount()}/${g.soldierCap()}`;
@@ -5716,7 +6018,9 @@ class UI {
     if (boss) { this.$('bossname').textContent = boss.name; this.$('bosshp').style.width = Math.max(0, boss.hp / boss.maxHp * 100) + '%'; }
     const nw = this.$('nextwave');
     nw.classList.toggle('disabled', g.waves.active || g.over);
-    nw.innerHTML = g.waves.active ? `Wave ${g.waves.number} in progress` : `Start Wave ${g.waves.preview.n} <kbd>N</kbd>`;
+    const coop = g.playerOrder.length > 1;
+    nw.innerHTML = g.waves.active ? `Wave ${g.waves.number} in progress` : (coop ? `${g.isReady(g.localPlayer) ? 'Ready' : 'Ready up'} for wave ${g.waves.preview.n} (${g.readyCount()}/${g.playerOrder.length}) <kbd>N</kbd>` : `Start Wave ${g.waves.preview.n} <kbd>N</kbd>`);
+    nw.classList.toggle('on', coop && !g.waves.active && g.isReady(g.localPlayer));
     if (this.dirty || this.tick === 0) {
       const d = g.waves.describe(g.waves.preview);
       this.$('wavepreview').innerHTML = g.waves.active ? `<b>Wave ${g.waves.number}</b>: ${g.waves.total} enemies` : `<b>Next: wave ${g.waves.preview.n}</b> from the ${d.from.join(', ')}<br>${d.units.map(u => u.startsWith('BOSS') ? `<span class="boss">${u}</span>` : u).join(', ')}`;
@@ -5729,8 +6033,9 @@ class UI {
       ra.classList.toggle('disabled', !damaged || locked); }
     this.$('autorepairbox').checked = !!g.autoRepair;
     { const rs = this.$('roomstat'), rt = this.$('roomtext');
-      if (g.netHost) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netHost.code}</b> · ${g.netHost.playerCount} player${g.netHost.playerCount === 1 ? '' : 's'}`; }
-      else if (g.netClient) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netClient.code || ''}</b> · ${g.playerOrder.length} players${g.netClient.lost ? ' · <span class="bad">disconnected</span>' : ''}`; }
+      const roster = g.playerOrder.map(id => { const p = g.players[id]; return `${p.name}${id === g.localPlayer ? ' (you)' : ''} ${U.fmt(p.gold)}g`; }).join(' · ');
+      if (g.netHost) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netHost.code}</b> · ${roster}`; }
+      else if (g.netClient) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netClient.code || ''}</b> · ${roster}${g.netClient.lost ? ' · <span class="bad">disconnected</span>' : ''}`; }
       else rs.classList.add('hidden'); }
     if (this.dirty) { this.refreshPanels(); this.dirty = false; }
     this.updateSelPanel();
@@ -5758,7 +6063,7 @@ class UI {
       const cs = DATA.CELL * s;
       for (let j = 0; j < g.world.n; j++) for (let i = 0; i < g.world.n; i++) {
         const k = g.world.kind[g.world.idx(i, j)]; if (!k) continue;
-        ctx.fillStyle = k === CELL_WATER ? '#3a7fc0' : (k === CELL_ROCK ? '#6a6a64' : '#1f4a25');
+        ctx.fillStyle = k === CELL_WATER ? '#3a7fc0' : (k === CELL_ROCK ? '#6a6a64' : (k === 6 ? '#8a7048' : (k === 7 ? '#3a4a24' : (k === 8 ? '#ff6a10' : '#1f4a25'))));
         const c = g.world.cellCenter(i, j); ctx.fillRect(px(c.x - 1), pz(c.z - 1), cs + 0.5, cs + 0.5);
       }
     }
@@ -5793,12 +6098,11 @@ class Game {
     this.maxFrames = opts.maxFrames || 0; this.frameCount = 0;
     this.started = false; this.over = false; this.paused = false; this.timeScale = 1; this.time = 0;
     this.units = []; this.buildings = []; this.projectiles = []; this.zones = [];
-    this.players = { host: { id: 'host', name: 'You', hero: null, gold: 0, heroes: [], heroesBought: 0 } }; this.playerOrder = ['host'];
-    this.localPlayer = 'host'; this.actor = 'host';
-    this.upgrades = {}; this.stats = { kills: 0, goldEarned: 0, buildingsLost: 0, wavesCleared: 0 };
+    this.players = { host: { id: 'host', name: 'You', hero: null, gold: 0, heroes: [], heroesBought: 0, upgrades: {}, autoRepair: false } }; this.playerOrder = ['host'];
+    this.localPlayer = 'host'; this.actor = 'host'; this.stats = { kills: 0, goldEarned: 0, buildingsLost: 0, wavesCleared: 0 };
     this.difficulty = DATA.difficulties.normal;
     this.king = null; this.boss = null; this.heroesOwned = []; this.fallenHeroes = [];
-    this.autoRepair = false; this.warnedNoEngineer = false; this.heroesBought = 0;
+    this.warnedNoEngineer = false;
     this.flowTimer = 0; this.scratch = []; this.scratch2 = []; this.lastEnemyDeath = 0; this.lastStallHint = 0;
     this.setupRenderer();
     this.setupScene();
@@ -5808,6 +6112,7 @@ class Game {
     this.hash = new SpatialHash(4);
     this.controls = new Controls(this);
     this.ui = new UI(this);
+    this.loadPrefs();
     this.waves = null;
     this.lastT = performance.now();
     this.acc = 0;
@@ -5821,22 +6126,23 @@ class Game {
     const r = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: /[?&](autostart|test)/.test(location.search) });
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
     if (this.testMode) r.setSize(96, 64); else r.setSize(window.innerWidth, window.innerHeight);
-    r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFShadowMap;
+    r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+    r.toneMapping = THREE.NoToneMapping;
     document.getElementById('game').appendChild(r.domElement);
     this.renderer = r;
-    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.2, 800);
+    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.2, 1200);
   }
   setupScene() {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x9cc4e4);
-    scene.fog = new THREE.Fog(0xb8cfe4, DATA.MAP_HALF * 1.7, DATA.MAP_HALF * 4);
+    scene.fog = new THREE.Fog(0xb8cfe4, DATA.MAP_HALF * 3.2, DATA.MAP_HALF * 9);
     this.scene = scene;
     scene.add(this.camera);
-    const hemi = new THREE.HemisphereLight(0xcfe3ff, 0x4a6a35, 0.75); scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff1d6, 1.15);
+    const hemi = new THREE.HemisphereLight(0xdfeeff, 0x5a7a40, 0.85); scene.add(hemi); this.hemi = hemi;
+    const sun = new THREE.DirectionalLight(0xfff0d0, 1.45);
     sun.position.set(60, 90, 30); sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    const sc = sun.shadow.camera; sc.left = -75; sc.right = 75; sc.top = 75; sc.bottom = -75; sc.near = 10; sc.far = 400;
+    const sc = sun.shadow.camera; sc.left = -75; sc.right = 75; sc.top = 75; sc.bottom = -75; sc.near = 1; sc.far = 500;
     this.shadowExtent = 75;
     sun.shadow.bias = -0.0008;
     scene.add(sun); scene.add(sun.target);
@@ -5847,7 +6153,10 @@ class Game {
     this.sunRight = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), this.sunDir).normalize();
     this.sunUp = new THREE.Vector3().crossVectors(this.sunDir, this.sunRight).normalize();
     this.sunTexel = (sc.right - sc.left) / sun.shadow.mapSize.x;
-    const ambient = new THREE.AmbientLight(0xffffff, 0.12); scene.add(ambient);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.14); scene.add(ambient);
+    // sky dome with a zenith-to-horizon gradient, and a few drifting clouds
+    this.sky = Models.skyDome(); scene.add(this.sky);
+    this.clouds = Models.clouds(14); scene.add(this.clouds);
     this.decor = new THREE.Group(); scene.add(this.decor);
     this.buildDecor();
     const gh = new THREE.GridHelper(DATA.BUILD_RADIUS * 2 + 2, DATA.BUILD_RADIUS + 1, 0x335533, 0x335533);
@@ -5859,10 +6168,10 @@ class Game {
     scene.add(outline); this.buildOutline = outline;
     // command marker
     this.marker = Models.ring(0.9, 0x50ff80); this.marker.visible = false; scene.add(this.marker); this.markerT = 0;
-    // tower range indicator (selected tower, or a tower being placed)
-    this.rangeRing = new THREE.Group();
-    this.rangeRing.add(Models.disc(1, 0x80c0ff, 0.12)); this.rangeRing.add(Models.ring(1, 0x9ad0ff, 0.7));
-    this.rangeRing.visible = false; scene.add(this.rangeRing);
+    // tower range indicator (selected tower, or a tower being placed): rebuilt to follow the terrain
+    this.rangeRing = new THREE.Group(); this.rangeRing.visible = false; scene.add(this.rangeRing);
+    this.rangeRingMats = { fill: new THREE.MeshBasicMaterial({ color: 0x80c0ff, transparent: true, opacity: 0.14, depthWrite: false, side: THREE.DoubleSide }), edge: new THREE.MeshBasicMaterial({ color: 0x9ad0ff, transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide }) };
+    this.rangeKey = '';
   }
   buildDecor() {
     // forest border with instanced meshes
@@ -5882,7 +6191,7 @@ class Game {
       p.set(x, gy + 0.9 * sc, z); s.set(sc, sc, sc); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * 6);
       m.compose(p, q, s); trunks.setMatrixAt(k, m);
       p.set(x, gy + 0.9 * sc + 2.3 * sc, z); m.compose(p, q, s); leaves.setMatrixAt(k, m);
-      col.setHex(U.choice([0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x4a8a3a])); leaves.setColorAt(k, col);
+      col.setHex(U.choice((this.world && this.world.cfg.palette.leaves) || [0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x4a8a3a])); leaves.setColorAt(k, col);
     }
     trunks.instanceMatrix.needsUpdate = true; leaves.instanceMatrix.needsUpdate = true;
     if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
@@ -5904,7 +6213,23 @@ class Game {
   }
   showRange(x, z, r) {
     if (!r) { this.rangeRing.visible = false; return; }
-    this.rangeRing.visible = true; this.rangeRing.position.set(x, this.groundY(x, z) + 0.1, z); this.rangeRing.scale.set(r, 1, r);
+    const key = `${x.toFixed(1)},${z.toFixed(1)},${r.toFixed(1)},${this.worldSeed}`;
+    if (key !== this.rangeKey) {
+      this.rangeKey = key;
+      for (const c of [...this.rangeRing.children]) { this.rangeRing.remove(c); c.geometry.dispose(); }
+      // polar mesh draped over the ground: a translucent fill plus a bright rim
+      const seg = 96, rings = 8;
+      const build = (r0, r1, nr, mat, lift) => {
+        const pos = [], idx = [];
+        for (let k = 0; k <= nr; k++) { const rr = r0 + (r1 - r0) * k / nr; for (let s = 0; s <= seg; s++) { const a = s / seg * Math.PI * 2; const px = x + Math.cos(a) * rr, pz = z + Math.sin(a) * rr; pos.push(px, this.groundY(px, pz) + lift, pz); } }
+        for (let k = 0; k < nr; k++) for (let s = 0; s < seg; s++) { const a = k * (seg + 1) + s, b = a + seg + 1; idx.push(a, b, a + 1, a + 1, b, b + 1); }
+        const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
+        const m = new THREE.Mesh(g, mat); m.renderOrder = 4; return m;
+      };
+      this.rangeRing.add(build(0, r, rings, this.rangeRingMats.fill, 0.12));
+      this.rangeRing.add(build(r * 0.965, r, 1, this.rangeRingMats.edge, 0.16));
+    }
+    this.rangeRing.visible = true;
   }
   towerRangeFor(def, level = 1) { return def.range * (1 + 0.08 * (this.upgrades.towers || 0)) * Math.pow(DATA.towerUpgrade.range, level - 1); }
   groundY(x, z) { return this.world ? this.world.heightAt(x, z) : 0; }
@@ -5915,11 +6240,29 @@ class Game {
     this.world = new WorldMap(seed, type);
     const pal = DATA.mapTypes[type].palette;
     this.scene.background.setHex(pal.sky); this.scene.fog.color.setHex(pal.sky);
+    Models.tintSky(this.sky, pal.sky, DATA.mapTypes[type].zenith || 0x3f7fd0);
+    this.hemi.color.setHex(pal.sky); this.hemi.groundColor.setHex(pal.grass);
     this.worldType = type;
     this.world.applyToGrid(this.grid);
     this.world.buildScene(this.scene);
     this.scene.remove(this.decor); this.decor = new THREE.Group(); this.scene.add(this.decor); this.buildDecor();
     this.worldSeed = seed;
+  }
+  savePref(k, v) { try { localStorage.setItem('crownhold_' + k, v); } catch (e) {} }
+  loadPref(k) { try { return localStorage.getItem('crownhold_' + k); } catch (e) { return null; } }
+  setShadows(on) {
+    this.shadowsOn = !!on;
+    this.renderer.shadowMap.enabled = this.shadowsOn;
+    this.scene.traverse(o => { if (o.isMesh && o.material) { const ms = Array.isArray(o.material) ? o.material : [o.material]; for (const m of ms) m.needsUpdate = true; } });
+    this.savePref('shadows', on ? '1' : '0');
+  }
+  loadPrefs() {
+    this.shadowsOn = this.loadPref('shadows') !== '0';
+    if (!this.shadowsOn) this.renderer.shadowMap.enabled = false;
+    this.showFps = this.loadPref('showfps') === '1';
+    this.controls.invertY = this.loadPref('inverty') === '1';
+    const v = parseFloat(this.loadPref('volume')); if (!isNaN(v)) SFX.setVolume(v / 100);
+    this.ui.$('fpscounter').classList.toggle('hidden', !this.showFps);
   }
   onResize() {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -5933,11 +6276,10 @@ class Game {
     this.setWorld(opts.seed !== undefined ? opts.seed : (Math.random() * 0xffffffff) >>> 0, opts.mapType || this.ui.selectedMap || 'random');
     this.difficulty = DATA.difficulties[difficultyKey] || DATA.difficulties.normal;
     this.difficultyKey = difficultyKey;
-    for (const k of Object.keys(DATA.upgrades)) this.upgrades[k] = 0;
-    const roster = opts.players || [{ id: 'host', name: this.playerName('host') === 'a player' ? 'You' : (this.players.host ? this.players.host.name : 'You'), hero: heroKey }];
+    const roster = opts.players || [{ id: 'host', name: this.players.host ? this.players.host.name : 'You', hero: heroKey }];
     this.players = {}; this.playerOrder = [];
-    for (const p of roster) { this.players[p.id] = { id: p.id, name: p.name || 'Player', hero: p.hero || heroKey, gold: DATA.startGold, heroes: [], heroesBought: 0 }; this.playerOrder.push(p.id); }
-    if (!this.players.host) { this.players.host = { id: 'host', name: 'You', hero: heroKey, gold: DATA.startGold, heroes: [], heroesBought: 0 }; this.playerOrder.unshift('host'); }
+    for (const p of roster) { this.players[p.id] = this.newWallet(p.id, p.name || 'Player', p.hero || heroKey); this.playerOrder.push(p.id); }
+    if (!this.players.host) { this.players.host = this.newWallet('host', 'You', heroKey); this.playerOrder.unshift('host'); }
     this.localPlayer = 'host'; this.actor = 'host';
     const g = this.grid, h = g.half;
     // keep
@@ -5986,10 +6328,10 @@ class Game {
     this.setWorld(seed !== undefined ? seed : 1, type || 'valley');
     this.replica = true;
     this.players = {}; this.playerOrder = [];
-    for (const p of roster || [{ id: myId || 'host', name: 'You' }]) { this.players[p.id] = { id: p.id, name: p.name, hero: p.hero, gold: 0, heroes: [], heroesBought: 0 }; this.playerOrder.push(p.id); }
+    for (const p of roster || [{ id: myId || 'host', name: 'You' }]) { this.players[p.id] = this.newWallet(p.id, p.name, p.hero); this.players[p.id].gold = 0; this.playerOrder.push(p.id); }
     this.localPlayer = myId || this.playerOrder[0]; this.actor = this.localPlayer;
-    if (!this.players[this.localPlayer]) { this.players[this.localPlayer] = { id: this.localPlayer, name: 'You', gold: 0, heroes: [], heroesBought: 0 }; this.playerOrder.push(this.localPlayer); }
-    this.upgrades = {}; this.replicaCap = 0;
+    if (!this.players[this.localPlayer]) { this.players[this.localPlayer] = this.newWallet(this.localPlayer, 'You', null); this.playerOrder.push(this.localPlayer); }
+    this.replicaCap = 0;
     this.waves = { number: 0, active: false, pending: { length: 0 }, total: 0, preview: { n: 1, d: { units: [], from: [] } }, describe: (p) => p.d };
     this.started = true; this.over = false; this.paused = false; this.time = 0;
     this.controls.focus.set(0, 0, 10); this.controls.camYaw = 0; this.controls.camDist = 52;
@@ -6001,7 +6343,7 @@ class Game {
     const code = makeRoomCode();
     const open = (err) => {
       if (err) { cb(err); return; }
-      this.players = { host: { id: 'host', name, hero: heroKey, gold: 0, heroes: [], heroesBought: 0 } }; this.playerOrder = ['host'];
+      this.players = { host: this.newWallet('host', name, heroKey) }; this.playerOrder = ['host'];
       this.localPlayer = 'host'; this.actor = 'host';
       const nh = new NetHost(this, tr, code);
       nh.hostHero = heroKey; nh.difficulty = difficultyKey; nh.mapType = this.ui.selectedMap || 'random';
@@ -6034,16 +6376,16 @@ class Game {
 
   // ------------------------------------------------------------------ stats
   applyStats(u, initial) {
-    const def = u.def, up = this.upgrades, diff = this.difficulty;
+    const def = u.def, up = this.upgradesFor(u.owner), diff = this.difficulty, pid = u.owner || 'host';
     let hpMul = 1, dmgMul = 1, armorAdd = 0, regen = def.regen || 0;
     if (u.team === 'enemy') { hpMul = u.hpMul; dmgMul = diff.dmg; }
     else if (u.isKing) { hpMul = 1 + 0.25 * (up.royal || 0); regen += 2 * (up.royal || 0); }
     else if (u.isHero) { hpMul = 1 + 0.15 * (up.hero || 0); dmgMul = 1 + 0.15 * (up.hero || 0); }
-    else if (u.isSoldier) { dmgMul = (1 + 0.15 * (up.weapons || 0)) * (this.hasActive('blacksmith') ? 1 + DATA.buildings.blacksmith.soldierDmg : 1); armorAdd = 0.08 * (up.armor || 0); }
+    else if (u.isSoldier) { dmgMul = (1 + 0.15 * (up.weapons || 0)) * (this.hasActive('blacksmith', pid) ? 1 + DATA.buildings.blacksmith.soldierDmg : 1); armorAdd = 0.08 * (up.armor || 0); }
     const frac = initial ? 1 : u.hp / u.maxHp;
     let rangeMul = 1, speedMul = 1;
     if (u.isSoldier && def.attack === 'ranged') { rangeMul = 1 + 0.12 * (up.marksman || 0); dmgMul *= 1 + 0.1 * (up.marksman || 0); }
-    if (u.isSoldier && this.hasActive('tavern')) speedMul = 1 + DATA.buildings.tavern.soldierSpeed;
+    if (u.isSoldier && this.hasActive('tavern', pid)) speedMul = 1 + DATA.buildings.tavern.soldierSpeed;
     u.maxHp = def.hp * hpMul; u.hp = u.maxHp * frac;
     u.dmg = def.dmg * dmgMul; u.dmgMul = dmgMul;
     u.speed = def.speed * speedMul; u.range = def.range * rangeMul; u.cd = def.cd;
@@ -6051,7 +6393,7 @@ class Game {
     u.regen = regen;
   }
   applyBuildingStats(b, initial) {
-    const def = b.def, up = this.upgrades;
+    const def = b.def, up = this.upgradesFor(b.owner);
     let hpMul = 1;
     if (def.key === 'wall' || def.key === 'gate' || def.keep) hpMul *= 1 + 0.4 * (up.walls || 0);
     if (def.tower) hpMul *= Math.pow(DATA.towerUpgrade.hp, b.level - 1);
@@ -6129,7 +6471,23 @@ class Game {
   spend(c, pid) { const w = this.wallet(pid); if (w) w.gold -= c; this.ui.dirty = true; }
   addGold(n, pid) { const w = this.wallet(pid); if (w) w.gold += n; this.stats.goldEarned += n; this.ui.dirty = true; }
   addGoldAll(n) { for (const id of this.playerOrder) { const w = this.players[id]; if (w) w.gold += n; } this.stats.goldEarned += n; this.ui.dirty = true; }
-  rewardOwner(owner, n) { if (owner && this.players[owner]) this.addGold(n, owner); else this.addGoldAll(n); }
+  killMult(pid) { return this.difficulty.gold * (1 + (this.hasActive('market', pid) ? DATA.buildings.market.killBonus : 0)) * (1 + 0.1 * (this.upgradesFor(pid).fortune || 0)); }
+  rewardOwner(owner, base) {
+    const ids = owner && this.players[owner] ? [owner] : this.playerOrder;
+    for (const id of ids) this.addGold(Math.round(base * this.killMult(id)), id);
+  }
+  get upgrades() { return this.wallet(this.localPlayer).upgrades; }
+  set upgrades(v) { this.wallet(this.localPlayer).upgrades = v; }
+  // a player's own upgrades apply to their things; shared things (the King, the starting castle) take the best level any player has
+  upgradesFor(owner) {
+    if (owner && this.players[owner]) return this.players[owner].upgrades || {};
+    const out = {};
+    for (const id of this.playerOrder) { const up = (this.players[id] && this.players[id].upgrades) || {}; for (const k in up) out[k] = Math.max(out[k] || 0, up[k]); }
+    return out;
+  }
+  get autoRepair() { return !!this.wallet(this.localPlayer).autoRepair; }
+  set autoRepair(v) { this.wallet(this.localPlayer).autoRepair = !!v; }
+  newWallet(id, name, hero) { const upgrades = {}; for (const k of Object.keys(DATA.upgrades)) upgrades[k] = 0; return { id, name, hero, gold: DATA.startGold, heroes: [], heroesBought: 0, upgrades, autoRepair: false }; }
   get heroesOwned() { return this.wallet(this.localPlayer).heroes; }
   set heroesOwned(v) { this.wallet(this.localPlayer).heroes = v; }
   get heroesBought() { return this.wallet(this.localPlayer).heroesBought || 0; }
@@ -6137,38 +6495,38 @@ class Game {
   heroInPlay(key) { return this.units.some(u => u.isHero && u.heroKey === key && !u.dead); }
   playerName(id) { const p = this.players[id]; return p ? p.name : 'a player'; }
   ownsOrShared(o) { return !o.owner || o.owner === this.actor; }
-  hasBuilding(key) { return this.buildings.some(b => b.def.key === key && !b.dead); }
-  hasActive(key) { return this.buildings.some(b => b.def.key === key && b.active); }
+  hasBuilding(key, pid) { return this.buildings.some(b => b.def.key === key && !b.dead && (pid === undefined || !b.owner || b.owner === pid)); }
+  hasActive(key, pid) { return this.buildings.some(b => b.def.key === key && b.active && (pid === undefined || !b.owner || b.owner === pid)); }
   soldierCap(pid) {
     pid = pid || this.actor;
     if (this.replica) return this.replicaCap || 0;
-    let cap = DATA.baseSoldierCap + 3 * (this.upgrades.garrison || 0);
+    let cap = DATA.baseSoldierCap + 3 * (this.upgradesFor(pid).garrison || 0);
     for (const b of this.buildings) if (b.def.soldierCap && b.active && (!b.owner || b.owner === pid)) cap += b.def.soldierCap;
     return cap;
   }
   soldierCount(pid) { pid = pid || this.actor; return this.units.filter(u => u.isSoldier && !u.dead && !u.def.noCap && (u.owner || 'host') === pid).length; }
   engineerCount(pid) { pid = pid || this.actor; return this.units.filter(u => u.def.repair && !u.dead && (u.owner || 'host') === pid).length; }
-  upgradeCost(key) { const d = DATA.upgrades[key]; return Math.round(d.cost * Math.pow(DATA.upgradeCostGrowth, this.upgrades[key] || 0)); }
+  upgradeCost(key, pid) { const d = DATA.upgrades[key]; return Math.round(d.cost * Math.pow(DATA.upgradeCostGrowth, (this.upgradesFor(pid || this.localPlayer)[key] || 0))); }
   // buildings with costGrowth get pricier for every one you already own (destroyed ones do not count)
   buildingCost(def) {
-    if (!def.costGrowth) return def.cost;
-    const n = this.buildings.filter(b => b.def.key === def.key && !b.dead).length;
-    return Math.round(def.cost * Math.pow(def.costGrowth, n));
+    if (!def.costGrowth && !def.costLinear) return def.cost;
+    const n = this.buildings.filter(b => b.def.key === def.key && !b.dead && b.paid > 0).length;
+    return Math.round(def.cost * (def.costGrowth ? Math.pow(def.costGrowth, n) : 1) * (1 + (def.costLinear || 0) * n));
   }
   heroCost(pid) { return Math.round(DATA.heroBaseCost * Math.pow(DATA.heroCostGrowth, (this.wallet(pid).heroesBought || 0))); }
 
   placeBuilding(key, i, j, rot, quiet = false, free = false) {
     const def = DATA.buildings[key];
     if (!def) return null;
-    if (this.replica) { if (this.canAfford(this.buildingCost(def)) && this.grid.canPlace(def, i, j, rot, this).ok) this.net.send({ t: 'build', key, i, j, rot }); else if (!quiet) this.ui.toast('Cannot build there', 'error'); return null; }
-    if (def.unique && this.hasBuilding(key)) { if (!quiet) this.ui.toast('You can only build one ' + def.name, 'error'); return null; }
+    if (this.replica) { if (def.unique && this.hasBuilding(key, this.localPlayer)) { if (!quiet) this.ui.toast('You can only build one ' + def.name, 'error'); return null; } if (this.canAfford(this.buildingCost(def)) && this.grid.canPlace(def, i, j, rot, this).ok) this.net.send({ t: 'build', key, i, j, rot }); else if (!quiet) this.ui.toast('Cannot build there', 'error'); return null; }
+    if (def.unique && this.hasBuilding(key, this.actor)) { if (!quiet) this.ui.toast('You can only build one ' + def.name, 'error'); return null; }
     const res = this.grid.canPlace(def, i, j, rot, this);
     if (!res.ok) { if (!quiet) this.ui.toast(res.reason, 'error'); return null; }
     const cost = this.buildingCost(def);
     if (!free && !this.canAfford(cost)) { if (!quiet) { this.ui.toast('Not enough gold', 'error'); SFX.play('error'); } return null; }
     if (!free) this.spend(cost);
     const b = new Building(this, def, i, j, rot, res.cells);
-    b.paid = free ? def.cost : cost;
+    b.paid = free ? 0 : cost;
     b.owner = free ? null : this.actor;
     this.grid.place(b);
     this.buildings.push(b);
@@ -6275,14 +6633,14 @@ class Game {
   }
   buyUpgrade(key) {
     if (this.replica) { this.net.send({ t: 'upg', key }); return; }
-    const d = DATA.upgrades[key];
-    const lvl = this.upgrades[key] || 0;
+    const d = DATA.upgrades[key], w = this.wallet(this.actor);
+    const lvl = w.upgrades[key] || 0;
     if (lvl >= d.max) return;
-    if (d.requires && !this.hasBuilding(d.requires)) { this.ui.toast(`Requires a ${DATA.buildings[d.requires].name}`, 'error'); SFX.play('error'); return; }
-    const c = this.upgradeCost(key);
+    if (d.requires && !this.hasActive(d.requires, this.actor)) { this.ui.toast(`Requires your own ${DATA.buildings[d.requires].name}`, 'error'); SFX.play('error'); return; }
+    const c = this.upgradeCost(key, this.actor);
     if (!this.canAfford(c)) { this.ui.toast('Not enough gold', 'error'); SFX.play('error'); return; }
     this.spend(c);
-    this.upgrades[key] = lvl + 1;
+    w.upgrades[key] = lvl + 1;
     this.refreshStats();
     this.ui.toast(`${d.name} level ${lvl + 1}`);
     SFX.play('levelup');
@@ -6370,9 +6728,7 @@ class Game {
   // ------------------------------------------------------------------ events
   onUnitDied(u, source) {
     if (u.team === 'enemy') {
-      const mult = this.difficulty.gold * (1 + (this.hasActive('market') ? DATA.buildings.market.killBonus : 0)) * (1 + 0.1 * (this.upgrades.fortune || 0));
-      const reward = Math.round((u.def.reward || 0) * mult);
-      if (reward) this.rewardOwner(source && source.owner !== undefined ? source.owner : null, reward);
+      if (u.def.reward) this.rewardOwner(source && source.owner !== undefined ? source.owner : null, u.def.reward);
       this.stats.kills++;
       this.lastEnemyDeath = this.time;
       if (u.isBoss) { this.boss = null; this.ui.toast(`${u.name} is slain!`, 'boss'); }
@@ -6402,12 +6758,12 @@ class Game {
   onWaveCleared(n) {
     let income = 0;
     for (const b of this.buildings) if (b.underConstruction) b.finishConstruction();
-    for (const b of this.buildings) if (b.def.income && b.active) { income += b.def.income; this.rewardOwner(b.owner, b.def.income); }
-    const bonus = Math.round(DATA.waves.clearBonus(n) * this.difficulty.gold * (1 + 0.1 * (this.upgrades.fortune || 0)));
-    this.addGoldAll(bonus);
+    for (const b of this.buildings) if (b.def.income && b.active) { income += b.def.income; const ids = b.owner ? [b.owner] : this.playerOrder; for (const id of ids) this.addGold(Math.round(b.def.income * (1 + 0.1 * (this.upgradesFor(id).fortune || 0))), id); }
+    const bonus = Math.round(DATA.waves.clearBonus(n) * this.difficulty.gold);
+    for (const id of this.playerOrder) this.addGold(Math.round(bonus * (1 + 0.1 * (this.upgradesFor(id).fortune || 0))), id);
     this.stats.wavesCleared = n;
     for (const u of this.units) if (u.team === 'player' && !u.dead) { u.heal(u.maxHp); u.burn = null; u.slow = null; }
-    if (this.autoRepair) setTimeout(() => { if (this.started && !this.over) this.repairAll(true); }, 800);
+    setTimeout(() => { if (!this.started || this.over) return; for (const id of this.playerOrder) if (this.players[id].autoRepair) { const prev = this.actor; this.actor = id; try { this.repairAll(true); } finally { this.actor = prev; } } }, 800);
 
 
     this.ui.toast(`Wave ${n} cleared! +${bonus} gold${income ? `, +${income} from farms and mines` : ''}. Everyone healed.`, 'good', 6000);
@@ -6418,11 +6774,17 @@ class Game {
     if (!this.started || this.over) return;
     if (this.replica) { if (this.waves.active) this.ui.toast('Clear the current wave first', 'error'); else this.net.send({ t: 'wave' }); return; }
     if (this.waves.active) { this.ui.toast('Clear the current wave first', 'error'); return; }
+    if (this.netHost && this.netHost.playerCount > 1) { this.netHost.toggleReady('host'); return; }
+    this.startWaveNow();
+  }
+  startWaveNow() {
     if (this.paused) this.togglePause();
     this.waves.start();
     this.lastEnemyDeath = this.time;
     this.ui.dirty = true;
   }
+  readyCount() { return this.netHost ? this.netHost.ready.size : (this.readySet ? this.readySet.length : 0); }
+  isReady(pid) { return this.netHost ? this.netHost.ready.has(pid) : !!(this.readySet && this.readySet.includes(pid)); }
   gameOver() {
     if (this.over) return;
     this.over = true;
@@ -6442,7 +6804,7 @@ class Game {
     const realDt = Math.min(0.05, (t - this.lastT) / 1000);
     this.lastT = t;
     this.fpsCounter.frames++; this.fpsCounter.t += realDt;
-    if (this.fpsCounter.t >= 1) { this.fpsCounter.fps = this.fpsCounter.frames; this.fpsCounter.frames = 0; this.fpsCounter.t = 0; }
+    if (this.fpsCounter.t >= 1) { this.fpsCounter.fps = this.fpsCounter.frames; this.fpsCounter.frames = 0; this.fpsCounter.t = 0; if (this.showFps) this.ui.$('fpscounter').textContent = this.fpsCounter.fps + ' fps'; }
     if (!this.started && this.net && this.net.tr) this.net.tr.pump();
     if (this.started) {
       const active = !this.paused && !this.over;
@@ -6463,17 +6825,21 @@ class Game {
   updateVisualsOnly(realDt) {
     // things that should keep moving while paused: shadows follow camera, command marker fade
     const f = this.controls.mode === 'fps' ? this.controls.controlled.pos : this.controls.focus;
-    const wantExtent = this.controls.mode === 'fps' ? 60 : U.clamp(this.controls.camDist * 1.5, 70, DATA.MAP_HALF + 30);
+    const wantExtent = this.controls.mode === 'fps' ? 60 : U.clamp(this.controls.camDist * 1.6, 70, DATA.MAP_HALF + 24);
     if (Math.abs(wantExtent - this.shadowExtent) > 4) {
       this.shadowExtent = wantExtent;
       const sc = this.sun.shadow.camera; sc.left = -wantExtent; sc.right = wantExtent; sc.top = wantExtent; sc.bottom = -wantExtent; sc.updateProjectionMatrix();
       this.sunTexel = (wantExtent * 2) / this.sun.shadow.mapSize.x;
     }
-    const t = new THREE.Vector3(f.x, 0, f.z);
+    const ext = this.shadowExtent, MAPEXT = DATA.MAP_HALF + 21;
+    const lim = Math.max(0, MAPEXT - ext);
+    const t = new THREE.Vector3(U.clamp(f.x, -lim, lim), 0, U.clamp(f.z, -lim, lim));
     const tx = t.dot(this.sunRight), ty = t.dot(this.sunUp);
     const sx = Math.round(tx / this.sunTexel) * this.sunTexel - tx, sy = Math.round(ty / this.sunTexel) * this.sunTexel - ty;
     t.addScaledVector(this.sunRight, sx).addScaledVector(this.sunUp, sy);
     this.sun.target.position.copy(t); this.sun.position.copy(t).add(this.sunOffset);
+    if (this.clouds) { this.clouds.position.x = (this.clouds.position.x + realDt * 0.6) % 60; }
+    if (this.world && this.world.water && this.world.water.material.map) { const off = this.world.water.material.map.offset; off.x += realDt * 0.01; off.y += realDt * 0.006; }
     if (this.markerT > 0) { this.markerT -= realDt; this.marker.scale.setScalar(0.6 + (1 - this.markerT / 0.7) * 1.5); this.marker.material.opacity = Math.max(0, this.markerT); if (this.markerT <= 0) this.marker.visible = false; }
     this.effects.update(realDt * (this.paused ? 0 : this.timeScale));
   }
@@ -6495,6 +6861,21 @@ class Game {
     }
     t1 = performance.now(); prof.flow += t1 - t0; t0 = t1;
     this.waves.update(dt);
+    this.chestTimer = (this.chestTimer || 0) + dt;
+    if (this.chestTimer > 0.4 && this.world) {
+      this.chestTimer = 0;
+      for (const ch of this.world.chests) {
+        if (ch.taken) continue;
+        const finder = this.unitsNear(ch.x, ch.z, 1.8, 'player')[0];
+        if (!finder) continue;
+        ch.taken = true; if (ch.mesh) ch.mesh.visible = false;
+        const gold = 120 + 30 * this.waves.number;
+        this.rewardOwner(finder.owner, gold / this.difficulty.gold);
+        this.effects.spawn('ring', ch.x, 0.3, ch.z, { radius: 2.5, color: 0xffd040, dur: 0.8 });
+        this.ui.toast(`${finder.name} found a hidden cache: ${Math.round(gold)} gold`, 'good', 5000);
+        SFX.play('coin');
+      }
+    }
     if (this.waves.active && !this.waves.pending.length && this.time - this.lastEnemyDeath > 25 && this.time - this.lastStallHint > 30) {
       this.lastStallHint = this.time;
       const rem = this.units.filter(u => u.team === 'enemy' && !u.dead);
@@ -6686,7 +7067,12 @@ function runSelfTest(game, params) {
       say(`mp: client spent: host gold ${g0h}->${host.players.host.gold} (unchanged), client ${g0c}->${host.players.B.gold}; new wall owner=${wall && wall.owner}; client archers=${host.units.filter(u => u.def.key === 'archer' && u.owner === 'B').length}`);
       // host cannot sell the client's wall
       host.actor = 'host'; const nb = host.buildings.length; host.sellBuilding(wall); say(`mp: host selling client's wall: buildings ${nb}->${host.buildings.length} (expect unchanged)`);
-      client.tryStartWave(); step(900);
+      const upH0 = host.players.host.upgrades.towers, sharedTower = host.buildings.find(b => b.def.tower && !b.owner);
+      client.buyUpgrade('towers'); step(20);
+      say(`mp: client bought Tower Engineering: client level=${host.players.B.upgrades.towers} host level=${host.players.host.upgrades.towers} (was ${upH0}); shared tower dmg=${sharedTower.dmg.toFixed(1)} (base ${sharedTower.def.dmg}, expect +20% from the best level)`);
+      client.tryStartWave(); step(30);
+      say(`mp: client ready: wave active=${host.waves.active} ready=${hn.ready.size}/${hn.playerCount} (expect false, 1/2)`);
+      host.tryStartWave(); step(900);
       say(`mp: wave: host active=${host.waves.active} enemies host=${host.enemiesAlive()} client=${client.enemiesAlive()} kills=${host.stats.kills} gold host=${host.players.host.gold} client=${host.players.B.gold}`);
       hn.toLobby(); pump(); pump();
       say(`mp: back to lobby: host started=${host.started} client started=${client.started} lobby players=${cn.lobby ? cn.lobby.players.length : 'n/a'}`);
@@ -6714,6 +7100,17 @@ function runSelfTest(game, params) {
       c.setRawInput(false); say(`settings: raw=${c.rawInput} stored=${localStorage.getItem('crownhold_raw')} box=${document.querySelector('.settings .raw').checked}`);
       c.setSensitivity(1, true); c.setRawInput(true);
       say(`settings: invite link=${game.ui.inviteLink('ABCDEF')} joincode field=${document.getElementById('joincode').value}`);
+    }
+    if (params.get('balance')) {
+      const tower = game.buildings.find(b => b.def.tower), wall = game.buildings.find(b => b.def.key === 'wall');
+      say(`balance: starting tower sell value=${tower.sellValue()} wall=${wall.sellValue()} (expect 0)`);
+      const raider = game.spawnEnemy('grunt', wall.pos.x, wall.pos.z + 3, { hpMul: 1 }); raider.target = wall; raider.attackTimer = 0;
+      const h0 = wall.hp; raider.attack(wall); say(`balance: raider hit on a wall: ${Math.round(h0 - wall.hp)} (raw ${raider.dmg}, expect x2)`);
+      const t0 = tower.hp; raider.attackTimer = 0; raider.attack(tower); say(`balance: raider hit on a tower: ${Math.round(t0 - tower.hp)} (expect x1)`);
+      const archer = game.units.find(u => u.def.key === 'archer'); archer.pos.set(0, 0, 0); game.update(1 / 60);
+      const foe = game.spawnEnemy('grunt', 0, -14, { hpMul: 1 }); game.update(1 / 60); archer.playerThink();
+      say(`balance: archer inside the keep, enemy 14m away outside: sheltered=${archer.sheltered} target=${archer.target ? archer.target.name : 'none'} (expect none)`);
+      raider.die(); foe.die();
     }
     if (params.get('herodeath')) {
       const hero = game.units.find(u => u.isHero);
@@ -6853,7 +7250,12 @@ function runSelfTest(game, params) {
       game.controls.camDist = 55; game.controls.focus.set(fc.x, 0, fc.z); game.controls.camPitch = 0.75; snap('valley_ford');
       const tw = game.buildings.find(b => b.def.tower); game.controls.clearSelection(); game.controls.selectedBuilding = tw; tw.selected = true; game.ui.onSelectionChanged();
       game.controls.camDist = 42; game.controls.focus.set(tw.pos.x, 0, tw.pos.z); game.controls.camPitch = 0.95; snap('tower_ring');
-      game.controls.clearSelection(); game.controls.camDist = 230; game.controls.focus.set(60, 0, 60); game.controls.camPitch = 0.8; snap('zoomed_out_corner');
+      game.controls.clearSelection(); game.controls.camDist = 230; game.controls.focus.set(100, 0, 100); game.controls.camPitch = 0.8; game.controls.camYaw = 0.6; snap('zoomed_out_corner');
+      game.controls.camDist = 230; game.controls.focus.set(-110, 0, -110); game.controls.camPitch = 0.6; game.controls.camYaw = -2.2; snap('zoomed_out_far');
+      { const hero = game.units.find(u => u.isHero); hero.pos.set(-3, 0, 14); game.controls.enterControl(hero); game.controls.fpsYaw = 2.6; game.controls.fpsPitch = 0.08; game.update(1 / 60); snap('fps_look');
+        game.controls.fpsYaw = 0.4; game.controls.fpsPitch = 0.3; game.update(1 / 60); snap('fps_sky');
+        game.controls.exitControl(); }
+      game.showRange(88, 88, 22); game.controls.camDist = 60; game.controls.focus.set(88, 0, 88); game.controls.camPitch = 0.7; game.controls.camYaw = 0.5; snap('range_on_hills'); game.showRange(null);
       say('probe5 done');
     }
     if (params.get('probe4')) {

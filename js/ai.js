@@ -268,6 +268,7 @@ Unit.prototype.playerThink = function () {
   if (c && c.type === 'move') { aggro = 0; }
 
   let best = null, bestS = Infinity;
+  if (this.sheltered && this.attackKind !== 'melee') aggro = Math.min(aggro, 3.6); // inside the keep you only fight what comes through the door
   if (aggro > 0) {
     for (const u of game.unitsNear(this.pos.x, this.pos.z, aggro, 'enemy')) {
       if (u.dead) continue;

@@ -9,7 +9,8 @@ class Grid {
     this.occ = new Array(n * n).fill(null);   // building occupying the cell
     this.flag = new Uint8Array(n * n);        // CELL_FREE / CELL_SOLID / CELL_GATE
     this.shelter = new Uint8Array(n * n);     // 1 = keep interior
-    this.natural = new Uint8Array(n * n);     // water / rock / forest: impassable, unbuildable, unbreakable
+    this.natural = new Uint8Array(n * n);     // water / rock / forest: impassable, unbuildable, unbreakable (7 = marsh: walkable, unbuildable)
+    this.terrain = new Uint8Array(n * n);     // full terrain kind per cell (0 open, 6 road, 7 marsh, ...)
     this.integ = new Float64Array(n * n);     // flow-field integration values (enemy -> king)
     this.flowDirty = true;
     this.flowTarget = null;
@@ -105,7 +106,7 @@ class Grid {
       if (!this.inBounds(c.i, c.j)) return { ok: false, reason: 'Out of bounds', cells: fp.cells };
       const w = this.cellToWorld(c.i, c.j);
       if (!def.temporary && (Math.abs(w.x) > lim || Math.abs(w.z) > lim)) return { ok: false, reason: 'Outside the buildable area', cells: fp.cells };
-      if (this.natural[this.idx(c.i, c.j)]) return { ok: false, reason: this.natural[this.idx(c.i, c.j)] === CELL_WATER ? 'Cannot build on water' : 'Blocked by rock or forest', cells: fp.cells };
+      if (this.natural[this.idx(c.i, c.j)]) { const nk = this.natural[this.idx(c.i, c.j)]; return { ok: false, reason: nk === CELL_WATER ? 'Cannot build on water' : (nk === 8 ? 'Cannot build on lava' : (nk === 7 ? 'Too soft: marsh' : 'Blocked by rock or forest')), cells: fp.cells }; }
       if (this.occ[this.idx(c.i, c.j)]) return { ok: false, reason: 'Occupied', cells: fp.cells };
     }
     if (game) {
@@ -130,7 +131,7 @@ class Grid {
   remove(b) {
     for (const c of b.cells) {
       const k = this.idx(c.i, c.j);
-      if (this.occ[k] === b) { this.occ[k] = null; this.flag[k] = this.natural[k] ? (this.natural[k] === CELL_WATER ? CELL_WATER : CELL_ROCK) : CELL_FREE; this.shelter[k] = 0; }
+      if (this.occ[k] === b) { this.occ[k] = null; const nk = this.natural[k]; this.flag[k] = (nk && nk !== 7) ? ((nk === CELL_WATER || nk === 8) ? CELL_WATER : CELL_ROCK) : CELL_FREE; this.shelter[k] = 0; }
     }
     this.flowDirty = true;
   }

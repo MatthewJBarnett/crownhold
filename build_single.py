@@ -4,12 +4,21 @@ import re, pathlib
 root = pathlib.Path(__file__).parent
 html = (root / 'index.html').read_text()
 css = (root / 'css/style.css').read_text()
-html = html.replace('<link rel="stylesheet" href="css/style.css">', '<style>\n' + css + '\n</style>')
+html = re.sub(r'<link rel="stylesheet" href="css/style.css(\?v=[^"]*)?">', lambda m: '<style>\n' + css + '\n</style>', html)
 def inline(m):
     src = m.group(1)
     return '<script>\n' + (root / src).read_text() + '\n</script>'
-html = re.sub(r'<script src="(js/[^"]+)"></script>', inline, html)
+html = re.sub(r'<script src="(js/[^"?]+)(\?v=[^"]*)?"></script>', inline, html)
 (root / 'crownhold.html').write_text(html)
+
+# stamp the multi-file page's script/css links so browsers never serve a stale mix after a deploy
+import hashlib
+ver = hashlib.md5(html.encode()).hexdigest()[:8]
+idx = (root / 'index.html').read_text()
+idx = re.sub(r'(<script src="js/[^"?]+)(\?v=[^"]*)?"', lambda m: m.group(1) + '?v=' + ver + '"', idx)
+idx = re.sub(r'(href="css/style.css)(\?v=[^"]*)?"', lambda m: m.group(1) + '?v=' + ver + '"', idx)
+(root / 'index.html').write_text(idx)
+print('stamped index.html with', ver)
 print('wrote crownhold.html', len(html), 'bytes')
 
 # artifact variant: no doctype/html/head/body wrapper (the artifact host supplies those)

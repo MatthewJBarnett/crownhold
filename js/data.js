@@ -176,7 +176,7 @@ DATA.units = {
   },
   pikeman: {
     key: 'pikeman', name: 'Pikeman', cost: 85, hp: 180, dmg: 28, range: 3.3, cd: 1.5, armor: 0.2, speed: 5.0, radius: 0.45,
-    attack: 'melee', bonusVsLarge: 2.0, desc: 'Long reach. Double damage against large enemies and bosses.',
+    attack: 'melee', bonusVsLarge: 1.6, desc: 'Long reach. +60% damage against large enemies and bosses.',
     color: 0x9a9a9a, cloth: 0x6b3a2a, weapon: 'pike', helmet: true,
   },
 };
@@ -265,14 +265,14 @@ DATA.projectiles = {
 // footprint: w x d cells. interior: list of [dx,dz] cells that are walkable (relative to top-left)
 // ---------------------------------------------------------------------------
 DATA.buildings = {
-  wall:     { key: 'wall', name: 'Stone Wall', cost: 12, hp: 600, w: 1, d: 1, cat: 'defense', drag: true,
-              desc: 'Cheap and sturdy. Drag to build long stretches.' },
-  gate:     { key: 'gate', name: 'Gate', cost: 35, hp: 500, w: 1, d: 1, cat: 'defense', gate: true,
+  wall:     { key: 'wall', name: 'Stone Wall', cost: 40, hp: 520, w: 1, d: 1, cat: 'defense', drag: true,
+              desc: 'Sturdy stone. Drag to build long stretches. Enemies hack at walls twice as hard as at anything else.' },
+  gate:     { key: 'gate', name: 'Gate', cost: 80, hp: 500, w: 1, d: 1, cat: 'defense', gate: true,
               desc: 'Your units pass through; enemies must break it.' },
   arrow_tower:   { key: 'arrow_tower', name: 'Arrow Tower', cost: 130, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 20, dmg: 18, cd: 1.1, projectile: 'arrow', desc: 'Fast-firing tower. Good all-rounder.' },
   ballista_tower:{ key: 'ballista_tower', name: 'Ballista Tower', cost: 240, hp: 1000, w: 2, d: 2, cat: 'tower', tower: true,
-                   range: 28, dmg: 95, cd: 2.8, projectile: 'ballista', bonusVsLarge: 2, desc: 'Slow, huge single hits. Double damage to large enemies.' },
+                   range: 28, dmg: 95, cd: 2.8, projectile: 'ballista', bonusVsLarge: 1.7, desc: 'Slow, huge single hits. +70% damage to large enemies.' },
   mage_tower:    { key: 'mage_tower', name: 'Mage Tower', cost: 320, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 22, dmg: 45, cd: 2.2, projectile: 'magic', desc: 'Lobs exploding fire that splashes in 3.5m and burns.' },
   frost_tower:   { key: 'frost_tower', name: 'Frost Tower', cost: 260, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
@@ -280,13 +280,13 @@ DATA.buildings = {
   cannon_tower:  { key: 'cannon_tower', name: 'Cannon Tower', cost: 380, hp: 1100, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 24, dmg: 120, cd: 4.0, projectile: 'cannon', minRange: 6, desc: 'Lobs iron shot that splashes in 3m. Cannot hit anything closer than 6m.' },
   lightning_tower:{ key: 'lightning_tower', name: 'Lightning Tower', cost: 340, hp: 850, w: 2, d: 2, cat: 'tower', tower: true,
-                   range: 18, dmg: 32, cd: 1.5, chain: { count: 4, radius: 6 }, desc: 'Chain lightning that arcs to four enemies and ignores armour.' },
+                   range: 18, dmg: 28, cd: 1.7, chain: { count: 4, radius: 6 }, desc: 'Chain lightning that arcs to four enemies and ignores armour.' },
   poison_tower:  { key: 'poison_tower', name: 'Poison Tower', cost: 240, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 18, dmg: 8, cd: 1.1, projectile: 'poison', desc: 'Darts that poison for 12 damage/s over 4s. Stacks nothing, but never misses.' },
-  watchtower:    { key: 'watchtower', name: 'Watchtower', cost: 300, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
-                   range: 36, dmg: 65, cd: 3.2, projectile: 'sniper', prefersCasters: true, desc: 'Marksmen with a 36m reach who pick off casters and artillery first.' },
-  barricade: { key: 'barricade', name: 'Spiked Barricade', cost: 9, hp: 320, w: 1, d: 1, cat: 'defense', drag: true, spikes: 7,
-              desc: 'Cheap and weak, but every melee blow against it wounds the attacker for 7.' },
+  watchtower:    { key: 'watchtower', name: 'Watchtower', cost: 340, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
+                   range: 32, dmg: 52, cd: 3.6, projectile: 'sniper', prefersCasters: true, desc: 'Marksmen with a 32m reach who pick off casters and catapults first. Trebuchets still outrange them.' },
+  barricade: { key: 'barricade', name: 'Spiked Barricade', cost: 24, hp: 240, w: 1, d: 1, cat: 'defense', drag: true, spikes: 3,
+              desc: 'Cheap and weak, but every melee blow against it wounds the attacker for 3.' },
   trap:     { key: 'trap', name: 'Spike Trap', cost: 45, hp: 200, w: 1, d: 1, cat: 'defense', interior: [[0, 0]], trap: { dmg: 70, radius: 1.6, slow: 0.5, rearm: 20 },
               desc: 'Hidden in the ground. Enemies stepping on it take 70 damage and are slowed. Rearms after 20s.' },
   barracks: { key: 'barracks', name: 'Barracks', cost: 160, hp: 1200, w: 3, d: 3, cat: 'economy', soldierCap: 6,
@@ -297,8 +297,8 @@ DATA.buildings = {
               desc: '+90 gold at the end of each wave. Each mine you own makes the next one 60% pricier.' },
   blacksmith: { key: 'blacksmith', name: 'Blacksmith', cost: 300, hp: 900, w: 3, d: 3, cat: 'economy', unique: true, soldierDmg: 0.15,
               desc: 'Soldiers deal +15% damage. Unlocks the Weapon and Armor upgrades.' },
-  shrine:   { key: 'shrine', name: 'Healing Shrine', cost: 220, hp: 600, w: 2, d: 2, cat: 'economy', heal: { radius: 10, hps: 7 },
-              desc: 'During a wave, heals friendly units within 10m for 7 HP/s. Everyone is healed fully between waves anyway.' },
+  shrine:   { key: 'shrine', name: 'Healing Shrine', cost: 220, hp: 600, w: 2, d: 2, cat: 'economy', heal: { radius: 12, hps: 10 },
+              desc: 'During a wave, heals friendly units within 12m for 10 HP/s. Everyone is healed fully between waves anyway.' },
   market:   { key: 'market', name: 'Market', cost: 350, hp: 700, w: 3, d: 3, cat: 'economy', unique: true, killBonus: 0.25,
               desc: '+25% gold from kills. One per fortress.' },
   tavern:   { key: 'tavern', name: 'Tavern', cost: 260, hp: 800, w: 3, d: 3, cat: 'economy', unique: true, soldierCap: 3, soldierSpeed: 0.12,
@@ -336,7 +336,7 @@ DATA.waves = {
   budget: (n) => 48 + 38 * n + 6 * n * n,
   clearBonus: (n) => 70 + 35 * n,
   hpScale: (n) => n <= 6 ? 1 : 1 + (n - 6) * 0.055,
-  playerScale: (players) => 1 + 0.65 * Math.max(0, players - 1),
+  playerScale: (players) => 1 + 0.8 * Math.max(0, players - 1),
   bossEvery: 5,
   maxCount: 130,
 };
@@ -352,11 +352,20 @@ DATA.spawnPoints = (() => {
 })();
 
 DATA.mapTypes = {
-  valley:    { label: 'River Valley', desc: 'A river with three fords splits the plain; scattered rocks and woods.', river: true, rocks: [5, 7], forests: [3, 4], lakes: 0, hills: 1, palette: { grass: 0x4f8a3a, grass2: 0x7aa14a, dry: 0x8a9a4a, sky: 0x9cc4e4 } },
-  highlands: { label: 'Highlands', desc: 'Rock ridges and two mountain lakes; enemies funnel through the gaps.', river: false, rocks: [9, 12], forests: [1, 2], lakes: 2, hills: 1.6, palette: { grass: 0x5a8a4a, grass2: 0x8aa060, dry: 0x9a9a6a, sky: 0xa8c8e8 } },
-  darkwood:  { label: 'Darkwood', desc: 'Dense forests everywhere, a slow stream, and few open lanes.', river: true, rocks: [2, 3], forests: [7, 9], lakes: 0, hills: 0.7, palette: { grass: 0x3f6f32, grass2: 0x5a8a40, dry: 0x6a7a3a, sky: 0x8ab0cc } },
-  badlands:  { label: 'Badlands', desc: 'Dry, open ground with ruins and a few crags. Nowhere to hide.', river: false, rocks: [4, 6], forests: [0, 1], lakes: 1, hills: 1.2, palette: { grass: 0x9a8a4a, grass2: 0xb8a060, dry: 0xc0a870, sky: 0xd8c4a0 }, ruins: 14 },
+  valley:    { zenith: 0x3f7fd0, label: 'River Valley', desc: 'A river and its tributary with fords, marshes along the banks, woods and rocks.', rocks: [5, 7], forests: [3, 4], hills: 1, ruins: 6,
+               palette: { grass: 0x4f8a3a, grass2: 0x7aa14a, dry: 0x8a9a4a, sky: 0x9cc4e4, water: 0x3a7fc0, road: 0x9a7a4a, marsh: 0x4a5a2a, leaves: [0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x4a8a3a] } },
+  highlands: { zenith: 0x3a6fc8, label: 'Highlands', desc: 'Two rings of rock ridges around the castle with a few passes, and mountain lakes.', rocks: [3, 5], forests: [2, 3], hills: 1.7, ruins: 5,
+               palette: { grass: 0x5a8a4a, grass2: 0x8aa060, dry: 0x9a9a6a, sky: 0xa8c8e8, water: 0x2a6ab0, road: 0x8a7a5a, marsh: 0x4a5a3a, leaves: [0x2a5a30, 0x1f4a28, 0x3a6a3a, 0x2f5f35] } },
+  darkwood:  { zenith: 0x2f5f9a, label: 'Darkwood', desc: 'A belt of dense forest with four lanes cut through it, clearings, marsh and a stream.', rocks: [2, 3], forests: [3, 4], hills: 0.7, ruins: 6,
+               palette: { grass: 0x3f6f32, grass2: 0x5a8a40, dry: 0x6a7a3a, sky: 0x8ab0cc, water: 0x2f6a90, road: 0x7a6a4a, marsh: 0x3a4a22, leaves: [0x1f4a25, 0x2a5a30, 0x1a3f20, 0x2f6b2f] } },
+  badlands:  { zenith: 0x6a9ad0, label: 'Badlands', desc: 'Dry ground cut by radial canyons of rock, crags, an oasis and old ruins.', rocks: [3, 5], forests: [0, 0], hills: 1.2, ruins: 16, decor: 'dead',
+               palette: { grass: 0x9a8a4a, grass2: 0xb8a060, dry: 0xc0a870, sky: 0xd8c4a0, water: 0x3a8ab0, road: 0xb09060, marsh: 0x6a6a3a, leaves: [0x6a6a3a, 0x7a7a4a, 0x5a5a30, 0x8a8a50] } },
+  frozen:    { zenith: 0x6a8ab8, label: 'Frozen Marsh', desc: 'Snowfields, frozen lakes and bog that slows everyone who wades through it.', rocks: [4, 6], forests: [1, 2], hills: 1.3, ruins: 5, decor: 'snow',
+               palette: { grass: 0xb8c4cc, grass2: 0x98a8b4, dry: 0xc8d2da, sky: 0xb8c8d8, water: 0x7ab8e0, road: 0xa0a8a8, marsh: 0x7a8a7a, leaves: [0x3a5a4a, 0x2f4f42, 0x4a6a5a, 0x3a5a50] } },
+  volcanic:  { zenith: 0x4a2a2a, label: 'Ashlands', desc: 'Black ash, a river of lava and molten pools; rock spires are the only cover.', rocks: [5, 8], forests: [0, 0], hills: 1.6, ruins: 10, decor: 'dead',
+               palette: { grass: 0x3a3a3a, grass2: 0x5a5048, dry: 0x6a5a50, sky: 0x8a6a5a, water: 0xff6a10, waterGlow: 0xff3000, road: 0x4a4038, marsh: 0x3a3a30, leaves: [0x4a3a30, 0x5a4a3a, 0x3a2a20, 0x6a5a4a] } },
 };
+DATA.build = '2026-09-07 00:00';
 DATA.siteUrl = 'https://matthewjbarnett.github.io/crownhold/'; // the full game, outside any embedding sandbox
 DATA.startGold = 500;
 DATA.baseSoldierCap = 0; // keep + barracks + garrison supply the cap

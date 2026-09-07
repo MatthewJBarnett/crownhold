@@ -98,6 +98,7 @@ class Controls {
     if (k === 'Equal') { game.setTimeScale(game.timeScale >= 2 ? 1 : 2); return; }
     if (k === 'KeyN' || (k === 'Space' && this.mode === 'rts')) { e.preventDefault(); game.tryStartWave(); return; }
     if (k === 'F1' || k === 'Slash') { e.preventDefault(); game.ui.toggleHelp(); return; }
+    if (k === 'KeyO' && !e.repeat) { game.ui.toggleSettings(); return; }
 
     if (this.mode === 'fps') {
       const u = this.controlled;
@@ -461,6 +462,7 @@ class Controls {
   }
   aimPitch() { return this.fpsPitch; }
   applyLook(dx, dy) {
+    if (this.invertY) dy = -dy;
     const sens = 0.0022 * this.sensMul;
     if (Math.abs(dx) < 400 && Math.abs(dy) < 400) { this.fpsYaw -= dx * sens; this.fpsPitch = U.clamp(this.fpsPitch - dy * sens, -1.35, 1.35); }
   }
@@ -639,10 +641,10 @@ class Controls {
     for (const cell of res.cells) { const w = this.game.grid.cellToWorld(cell.i, cell.j); cx += w.x; cz += w.z; }
     this.ghost.position.set(cx / res.cells.length, 0, cz / res.cells.length);
     this.ghost.rotation.y = this.buildRot * Math.PI / 2;
-    this.ghostOk = res.ok && this.game.canAfford(this.game.buildingCost(this.buildDef)) && !(this.buildDef.unique && this.game.hasBuilding(this.buildDef.key));
+    this.ghostOk = res.ok && this.game.canAfford(this.game.buildingCost(this.buildDef)) && !(this.buildDef.unique && this.game.hasBuilding(this.buildDef.key, this.game.localPlayer));
     if (this.buildDef.tower) this.game.showRange(this.ghost.position.x, this.ghost.position.z, this.game.towerRangeFor(this.buildDef));
     Models.setGhostValid(this.ghost, this.ghostOk, this.game.waves && this.game.waves.active);
-    this.game.ui.showBuildHint(res.ok ? (this.ghostOk ? '' : (this.buildDef.unique && this.game.hasBuilding(this.buildDef.key) ? 'Already built' : 'Not enough gold')) : res.reason);
+    this.game.ui.showBuildHint(res.ok ? (this.ghostOk ? '' : (this.buildDef.unique && this.game.hasBuilding(this.buildDef.key, this.game.localPlayer) ? 'Already built' : 'Not enough gold')) : res.reason);
   }
   placeAtGhost() {
     if (!this.buildDef || !this.ghostAnchor) return;

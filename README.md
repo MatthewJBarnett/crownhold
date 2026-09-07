@@ -30,11 +30,13 @@ Three.js and the PeerJS networking library load from cdnjs, so an internet conne
 
 ## The world
 
-The map is 220 m across and generated from a seed in one of four styles, chosen on the menu (or by the host):
-River Valley (a river with three fords), Highlands (rock ridges and mountain lakes), Darkwood (dense forests
-and a stream) and Badlands (open, dry ground with ruins). Water, rock and forest cells cannot be built on or
-walked through, so enemies funnel through fords and gaps; every spawn point is guaranteed a route to the King.
-Hills rise toward the edges. Selecting a tower, or placing one, shows its range on the ground.
+The map is 220 m across and generated from a seed in one of six styles, chosen on the menu (or by the host):
+River Valley (a river, a tributary, fords and marsh), Highlands (two rings of rock ridges with passes, and lakes),
+Darkwood (a forest belt with lanes and clearings, a stream), Badlands (radial canyons, crags, ruins), Frozen Marsh
+(snow, frozen lakes and slow bog) and Ashlands (a lava river and molten pools). Water, lava, rock and forest
+cannot be built on or walked through; marsh is walkable but slow; dirt roads run from each spawn point to the
+gate and speed everyone up. Hidden caches of gold reward a unit that roams out to them. Every spawn point is
+guaranteed a route to the King. Selecting a tower, or placing one, shows its range draped over the ground.
 
 ## Heroes
 
@@ -49,8 +51,10 @@ temporary ice walls) and Wren the Beastmaster (summons a wolf pack, war horn). Y
 One player clicks Host a game and lands in a lobby with a six-letter room code (Copy code and Copy invite link
 buttons are right there; the invite link opens the game with the code filled in). Friends enter the code and Join
 with the hero they picked, appear in the lobby, and the host presses Start. Nobody can join once the siege has
-begun. Every defender has their own gold, hero, garrison and buildings, and only they can order, control, sell or
-repair those. The King and the starting castle are shared, and any free unit of yours (or the King) can be taken
+begun. Every defender has their own gold, hero, garrison, buildings and upgrades (your Weapon Smithing or Tower
+Engineering applies to your soldiers and towers; shared buildings take the best level anyone has), and only they can
+order, control, sell or repair their own things. Each defender can build their own blacksmith, market and tavern.
+The King and the starting castle are shared, waves start when every defender presses Next Wave, and any free unit of yours (or the King) can be taken
 over in first person. Waves scale with the number of defenders. The host runs the simulation, so the host should
 have the steadiest connection. After a defeat the host's Rise again returns everyone to the lobby. Play from the game files on your computer (`index.html`), not from
 a page that blocks direct connections. An embedded copy that blocks them says so on the menu and, where the host
@@ -90,7 +94,7 @@ Possessed unit (first person)
 - Q and E use the hero's abilities, aimed where you look
 - Right mouse or G sends your soldiers to attack where you aim, F makes them follow you, H holds, V sends them to the King
 - Tab or Esc returns to the overview
-- Mouse sensitivity (10% to 400%) and a Raw input toggle live on the menu and the help screen (?), and `[` / `]` adjust sensitivity in play; both are remembered. Raw input ignores system pointer speed and acceleration like Minecraft; turn it off if the view feels far faster or slower than your cursor
+- Settings (gear button, Settings on the menu, or O in play): mouse sensitivity (10% to 400%), raw input, invert vertical look, sound volume, shadows, and an FPS counter. All are remembered. `[` / `]` adjust sensitivity in play. Raw input ignores system pointer speed and acceleration like Minecraft; turn it off if the view feels far faster or slower than your cursor
 - If the browser refuses to capture the mouse (some embedded pages do), mouse look still works inside the game frame. Hold the right mouse button (or the left while attacking) to keep looking after the hidden cursor leaves the frame; a right-button tap still orders your soldiers. Fullscreen, where allowed, gives more room
 
 ## Layout

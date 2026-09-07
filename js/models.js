@@ -14,6 +14,52 @@ const Models = {
     return m;
   },
   freshMat(color) { return new THREE.MeshLambertMaterial({ color }); },
+  // soft procedural grain, shared by ground, stone and water
+  noiseTexture(size = 256, contrast = 0.18, seed = 1) {
+    const key = 'noise' + size + contrast + seed;
+    if (this._tex && this._tex[key]) return this._tex[key];
+    this._tex = this._tex || {};
+    const c = document.createElement('canvas'); c.width = c.height = size;
+    const ctx = c.getContext('2d'); const img = ctx.createImageData(size, size);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const n = U.smoothNoise(x * 0.11 + seed * 7, y * 0.11 + seed * 3) * 0.6 + U.smoothNoise(x * 0.31 + seed, y * 0.31) * 0.3 + U.noise2(x + seed, y) * 0.1;
+      const v = Math.round(255 * (1 - contrast / 2 + contrast * n));
+      const k = (y * size + x) * 4; img.data[k] = v; img.data[k + 1] = v; img.data[k + 2] = v; img.data[k + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;
+    this._tex[key] = t; return t;
+  },
+  skyDome() {
+    const geo = new THREE.SphereGeometry(1000, 24, 12);
+    const pos = geo.attributes.position; const colors = new Float32Array(pos.count * 3);
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+    m.renderOrder = -10; m.frustumCulled = false;
+    this.tintSky(m, 0x9cc4e4, 0x3f7fd0);
+    return m;
+  },
+  tintSky(mesh, horizonHex, zenithHex) {
+    const pos = mesh.geometry.attributes.position, col = mesh.geometry.attributes.color;
+    const hz = new THREE.Color(horizonHex), zn = new THREE.Color(zenithHex), c = new THREE.Color();
+    for (let k = 0; k < pos.count; k++) { const t = U.clamp(pos.getY(k) / 1000, -0.2, 1); const f = Math.pow(Math.max(0, t), 0.6); c.copy(hz).lerp(zn, f); col.setXYZ(k, c.r, c.g, c.b); }
+    col.needsUpdate = true;
+  },
+  clouds(n) {
+    const g = new THREE.Group();
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const ctx = c.getContext('2d');
+    for (let b = 0; b < 6; b++) { const grd = ctx.createRadialGradient(40 + b * 10, 60 + (b % 2) * 14, 2, 40 + b * 10, 60 + (b % 2) * 14, 30); grd.addColorStop(0, 'rgba(255,255,255,0.9)'); grd.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = grd; ctx.fillRect(0, 0, 128, 128); }
+    const tex = new THREE.CanvasTexture(c);
+    for (let k = 0; k < n; k++) {
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.55 + Math.random() * 0.3, depthWrite: false, fog: false }));
+      const sc = 40 + Math.random() * 50; s.scale.set(sc, sc * 0.45, 1);
+      s.position.set((Math.random() - 0.5) * 520, 95 + Math.random() * 40, (Math.random() - 0.5) * 520);
+      g.add(s);
+    }
+    g.renderOrder = -5;
+    return g;
+  },
   box(w, h, d, mat, x = 0, y = 0, z = 0, shadow = true) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
     m.position.set(x, y, z);
@@ -297,7 +343,8 @@ const Models = {
   // ------------------------------------------------------------- buildings
   stone: null, stoneDark: null, wood: null, roof: null,
   initMats() {
-    this.stone = this.mat(0x9a9a92); this.stoneDark = this.mat(0x6f6f68); this.wood = this.mat(0x7a5a38);
+    const stoneTex = this.noiseTexture(128, 0.28, 5); stoneTex.repeat.set(1, 1);
+    this.stone = new THREE.MeshLambertMaterial({ color: 0xa0a098, map: stoneTex }); this.stoneDark = new THREE.MeshLambertMaterial({ color: 0x74746c, map: stoneTex }); this.wood = this.mat(0x7a5a38);
     this.roof = this.mat(0x8a3a30); this.plaster = this.mat(0xd8cfb8); this.gold = this.mat(0xe0b040, { emissive: 0x604000, emissiveIntensity: 0.3 });
   },
   merlons(g, w, d, y, step = 1.0) {

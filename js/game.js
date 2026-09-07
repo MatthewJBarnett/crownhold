@@ -6,12 +6,11 @@ class Game {
     this.maxFrames = opts.maxFrames || 0; this.frameCount = 0;
     this.started = false; this.over = false; this.paused = false; this.timeScale = 1; this.time = 0;
     this.units = []; this.buildings = []; this.projectiles = []; this.zones = [];
-    this.players = { host: { id: 'host', name: 'You', hero: null, gold: 0, heroes: [], heroesBought: 0 } }; this.playerOrder = ['host'];
-    this.localPlayer = 'host'; this.actor = 'host';
-    this.upgrades = {}; this.stats = { kills: 0, goldEarned: 0, buildingsLost: 0, wavesCleared: 0 };
+    this.players = { host: { id: 'host', name: 'You', hero: null, gold: 0, heroes: [], heroesBought: 0, upgrades: {}, autoRepair: false } }; this.playerOrder = ['host'];
+    this.localPlayer = 'host'; this.actor = 'host'; this.stats = { kills: 0, goldEarned: 0, buildingsLost: 0, wavesCleared: 0 };
     this.difficulty = DATA.difficulties.normal;
     this.king = null; this.boss = null; this.heroesOwned = []; this.fallenHeroes = [];
-    this.autoRepair = false; this.warnedNoEngineer = false; this.heroesBought = 0;
+    this.warnedNoEngineer = false;
     this.flowTimer = 0; this.scratch = []; this.scratch2 = []; this.lastEnemyDeath = 0; this.lastStallHint = 0;
     this.setupRenderer();
     this.setupScene();
@@ -21,6 +20,7 @@ class Game {
     this.hash = new SpatialHash(4);
     this.controls = new Controls(this);
     this.ui = new UI(this);
+    this.loadPrefs();
     this.waves = null;
     this.lastT = performance.now();
     this.acc = 0;
@@ -34,22 +34,23 @@ class Game {
     const r = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: /[?&](autostart|test)/.test(location.search) });
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
     if (this.testMode) r.setSize(96, 64); else r.setSize(window.innerWidth, window.innerHeight);
-    r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFShadowMap;
+    r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+    r.toneMapping = THREE.NoToneMapping;
     document.getElementById('game').appendChild(r.domElement);
     this.renderer = r;
-    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.2, 800);
+    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.2, 1200);
   }
   setupScene() {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x9cc4e4);
-    scene.fog = new THREE.Fog(0xb8cfe4, DATA.MAP_HALF * 1.7, DATA.MAP_HALF * 4);
+    scene.fog = new THREE.Fog(0xb8cfe4, DATA.MAP_HALF * 3.2, DATA.MAP_HALF * 9);
     this.scene = scene;
     scene.add(this.camera);
-    const hemi = new THREE.HemisphereLight(0xcfe3ff, 0x4a6a35, 0.75); scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff1d6, 1.15);
+    const hemi = new THREE.HemisphereLight(0xdfeeff, 0x5a7a40, 0.85); scene.add(hemi); this.hemi = hemi;
+    const sun = new THREE.DirectionalLight(0xfff0d0, 1.45);
     sun.position.set(60, 90, 30); sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    const sc = sun.shadow.camera; sc.left = -75; sc.right = 75; sc.top = 75; sc.bottom = -75; sc.near = 10; sc.far = 400;
+    const sc = sun.shadow.camera; sc.left = -75; sc.right = 75; sc.top = 75; sc.bottom = -75; sc.near = 1; sc.far = 500;
     this.shadowExtent = 75;
     sun.shadow.bias = -0.0008;
     scene.add(sun); scene.add(sun.target);
@@ -60,7 +61,10 @@ class Game {
     this.sunRight = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), this.sunDir).normalize();
     this.sunUp = new THREE.Vector3().crossVectors(this.sunDir, this.sunRight).normalize();
     this.sunTexel = (sc.right - sc.left) / sun.shadow.mapSize.x;
-    const ambient = new THREE.AmbientLight(0xffffff, 0.12); scene.add(ambient);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.14); scene.add(ambient);
+    // sky dome with a zenith-to-horizon gradient, and a few drifting clouds
+    this.sky = Models.skyDome(); scene.add(this.sky);
+    this.clouds = Models.clouds(14); scene.add(this.clouds);
     this.decor = new THREE.Group(); scene.add(this.decor);
     this.buildDecor();
     const gh = new THREE.GridHelper(DATA.BUILD_RADIUS * 2 + 2, DATA.BUILD_RADIUS + 1, 0x335533, 0x335533);
@@ -72,10 +76,10 @@ class Game {
     scene.add(outline); this.buildOutline = outline;
     // command marker
     this.marker = Models.ring(0.9, 0x50ff80); this.marker.visible = false; scene.add(this.marker); this.markerT = 0;
-    // tower range indicator (selected tower, or a tower being placed)
-    this.rangeRing = new THREE.Group();
-    this.rangeRing.add(Models.disc(1, 0x80c0ff, 0.12)); this.rangeRing.add(Models.ring(1, 0x9ad0ff, 0.7));
-    this.rangeRing.visible = false; scene.add(this.rangeRing);
+    // tower range indicator (selected tower, or a tower being placed): rebuilt to follow the terrain
+    this.rangeRing = new THREE.Group(); this.rangeRing.visible = false; scene.add(this.rangeRing);
+    this.rangeRingMats = { fill: new THREE.MeshBasicMaterial({ color: 0x80c0ff, transparent: true, opacity: 0.14, depthWrite: false, side: THREE.DoubleSide }), edge: new THREE.MeshBasicMaterial({ color: 0x9ad0ff, transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide }) };
+    this.rangeKey = '';
   }
   buildDecor() {
     // forest border with instanced meshes
@@ -95,7 +99,7 @@ class Game {
       p.set(x, gy + 0.9 * sc, z); s.set(sc, sc, sc); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * 6);
       m.compose(p, q, s); trunks.setMatrixAt(k, m);
       p.set(x, gy + 0.9 * sc + 2.3 * sc, z); m.compose(p, q, s); leaves.setMatrixAt(k, m);
-      col.setHex(U.choice([0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x4a8a3a])); leaves.setColorAt(k, col);
+      col.setHex(U.choice((this.world && this.world.cfg.palette.leaves) || [0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x4a8a3a])); leaves.setColorAt(k, col);
     }
     trunks.instanceMatrix.needsUpdate = true; leaves.instanceMatrix.needsUpdate = true;
     if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
@@ -117,7 +121,23 @@ class Game {
   }
   showRange(x, z, r) {
     if (!r) { this.rangeRing.visible = false; return; }
-    this.rangeRing.visible = true; this.rangeRing.position.set(x, this.groundY(x, z) + 0.1, z); this.rangeRing.scale.set(r, 1, r);
+    const key = `${x.toFixed(1)},${z.toFixed(1)},${r.toFixed(1)},${this.worldSeed}`;
+    if (key !== this.rangeKey) {
+      this.rangeKey = key;
+      for (const c of [...this.rangeRing.children]) { this.rangeRing.remove(c); c.geometry.dispose(); }
+      // polar mesh draped over the ground: a translucent fill plus a bright rim
+      const seg = 96, rings = 8;
+      const build = (r0, r1, nr, mat, lift) => {
+        const pos = [], idx = [];
+        for (let k = 0; k <= nr; k++) { const rr = r0 + (r1 - r0) * k / nr; for (let s = 0; s <= seg; s++) { const a = s / seg * Math.PI * 2; const px = x + Math.cos(a) * rr, pz = z + Math.sin(a) * rr; pos.push(px, this.groundY(px, pz) + lift, pz); } }
+        for (let k = 0; k < nr; k++) for (let s = 0; s < seg; s++) { const a = k * (seg + 1) + s, b = a + seg + 1; idx.push(a, b, a + 1, a + 1, b, b + 1); }
+        const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
+        const m = new THREE.Mesh(g, mat); m.renderOrder = 4; return m;
+      };
+      this.rangeRing.add(build(0, r, rings, this.rangeRingMats.fill, 0.12));
+      this.rangeRing.add(build(r * 0.965, r, 1, this.rangeRingMats.edge, 0.16));
+    }
+    this.rangeRing.visible = true;
   }
   towerRangeFor(def, level = 1) { return def.range * (1 + 0.08 * (this.upgrades.towers || 0)) * Math.pow(DATA.towerUpgrade.range, level - 1); }
   groundY(x, z) { return this.world ? this.world.heightAt(x, z) : 0; }
@@ -128,11 +148,29 @@ class Game {
     this.world = new WorldMap(seed, type);
     const pal = DATA.mapTypes[type].palette;
     this.scene.background.setHex(pal.sky); this.scene.fog.color.setHex(pal.sky);
+    Models.tintSky(this.sky, pal.sky, DATA.mapTypes[type].zenith || 0x3f7fd0);
+    this.hemi.color.setHex(pal.sky); this.hemi.groundColor.setHex(pal.grass);
     this.worldType = type;
     this.world.applyToGrid(this.grid);
     this.world.buildScene(this.scene);
     this.scene.remove(this.decor); this.decor = new THREE.Group(); this.scene.add(this.decor); this.buildDecor();
     this.worldSeed = seed;
+  }
+  savePref(k, v) { try { localStorage.setItem('crownhold_' + k, v); } catch (e) {} }
+  loadPref(k) { try { return localStorage.getItem('crownhold_' + k); } catch (e) { return null; } }
+  setShadows(on) {
+    this.shadowsOn = !!on;
+    this.renderer.shadowMap.enabled = this.shadowsOn;
+    this.scene.traverse(o => { if (o.isMesh && o.material) { const ms = Array.isArray(o.material) ? o.material : [o.material]; for (const m of ms) m.needsUpdate = true; } });
+    this.savePref('shadows', on ? '1' : '0');
+  }
+  loadPrefs() {
+    this.shadowsOn = this.loadPref('shadows') !== '0';
+    if (!this.shadowsOn) this.renderer.shadowMap.enabled = false;
+    this.showFps = this.loadPref('showfps') === '1';
+    this.controls.invertY = this.loadPref('inverty') === '1';
+    const v = parseFloat(this.loadPref('volume')); if (!isNaN(v)) SFX.setVolume(v / 100);
+    this.ui.$('fpscounter').classList.toggle('hidden', !this.showFps);
   }
   onResize() {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -146,11 +184,10 @@ class Game {
     this.setWorld(opts.seed !== undefined ? opts.seed : (Math.random() * 0xffffffff) >>> 0, opts.mapType || this.ui.selectedMap || 'random');
     this.difficulty = DATA.difficulties[difficultyKey] || DATA.difficulties.normal;
     this.difficultyKey = difficultyKey;
-    for (const k of Object.keys(DATA.upgrades)) this.upgrades[k] = 0;
-    const roster = opts.players || [{ id: 'host', name: this.playerName('host') === 'a player' ? 'You' : (this.players.host ? this.players.host.name : 'You'), hero: heroKey }];
+    const roster = opts.players || [{ id: 'host', name: this.players.host ? this.players.host.name : 'You', hero: heroKey }];
     this.players = {}; this.playerOrder = [];
-    for (const p of roster) { this.players[p.id] = { id: p.id, name: p.name || 'Player', hero: p.hero || heroKey, gold: DATA.startGold, heroes: [], heroesBought: 0 }; this.playerOrder.push(p.id); }
-    if (!this.players.host) { this.players.host = { id: 'host', name: 'You', hero: heroKey, gold: DATA.startGold, heroes: [], heroesBought: 0 }; this.playerOrder.unshift('host'); }
+    for (const p of roster) { this.players[p.id] = this.newWallet(p.id, p.name || 'Player', p.hero || heroKey); this.playerOrder.push(p.id); }
+    if (!this.players.host) { this.players.host = this.newWallet('host', 'You', heroKey); this.playerOrder.unshift('host'); }
     this.localPlayer = 'host'; this.actor = 'host';
     const g = this.grid, h = g.half;
     // keep
@@ -199,10 +236,10 @@ class Game {
     this.setWorld(seed !== undefined ? seed : 1, type || 'valley');
     this.replica = true;
     this.players = {}; this.playerOrder = [];
-    for (const p of roster || [{ id: myId || 'host', name: 'You' }]) { this.players[p.id] = { id: p.id, name: p.name, hero: p.hero, gold: 0, heroes: [], heroesBought: 0 }; this.playerOrder.push(p.id); }
+    for (const p of roster || [{ id: myId || 'host', name: 'You' }]) { this.players[p.id] = this.newWallet(p.id, p.name, p.hero); this.players[p.id].gold = 0; this.playerOrder.push(p.id); }
     this.localPlayer = myId || this.playerOrder[0]; this.actor = this.localPlayer;
-    if (!this.players[this.localPlayer]) { this.players[this.localPlayer] = { id: this.localPlayer, name: 'You', gold: 0, heroes: [], heroesBought: 0 }; this.playerOrder.push(this.localPlayer); }
-    this.upgrades = {}; this.replicaCap = 0;
+    if (!this.players[this.localPlayer]) { this.players[this.localPlayer] = this.newWallet(this.localPlayer, 'You', null); this.playerOrder.push(this.localPlayer); }
+    this.replicaCap = 0;
     this.waves = { number: 0, active: false, pending: { length: 0 }, total: 0, preview: { n: 1, d: { units: [], from: [] } }, describe: (p) => p.d };
     this.started = true; this.over = false; this.paused = false; this.time = 0;
     this.controls.focus.set(0, 0, 10); this.controls.camYaw = 0; this.controls.camDist = 52;
@@ -214,7 +251,7 @@ class Game {
     const code = makeRoomCode();
     const open = (err) => {
       if (err) { cb(err); return; }
-      this.players = { host: { id: 'host', name, hero: heroKey, gold: 0, heroes: [], heroesBought: 0 } }; this.playerOrder = ['host'];
+      this.players = { host: this.newWallet('host', name, heroKey) }; this.playerOrder = ['host'];
       this.localPlayer = 'host'; this.actor = 'host';
       const nh = new NetHost(this, tr, code);
       nh.hostHero = heroKey; nh.difficulty = difficultyKey; nh.mapType = this.ui.selectedMap || 'random';
@@ -247,16 +284,16 @@ class Game {
 
   // ------------------------------------------------------------------ stats
   applyStats(u, initial) {
-    const def = u.def, up = this.upgrades, diff = this.difficulty;
+    const def = u.def, up = this.upgradesFor(u.owner), diff = this.difficulty, pid = u.owner || 'host';
     let hpMul = 1, dmgMul = 1, armorAdd = 0, regen = def.regen || 0;
     if (u.team === 'enemy') { hpMul = u.hpMul; dmgMul = diff.dmg; }
     else if (u.isKing) { hpMul = 1 + 0.25 * (up.royal || 0); regen += 2 * (up.royal || 0); }
     else if (u.isHero) { hpMul = 1 + 0.15 * (up.hero || 0); dmgMul = 1 + 0.15 * (up.hero || 0); }
-    else if (u.isSoldier) { dmgMul = (1 + 0.15 * (up.weapons || 0)) * (this.hasActive('blacksmith') ? 1 + DATA.buildings.blacksmith.soldierDmg : 1); armorAdd = 0.08 * (up.armor || 0); }
+    else if (u.isSoldier) { dmgMul = (1 + 0.15 * (up.weapons || 0)) * (this.hasActive('blacksmith', pid) ? 1 + DATA.buildings.blacksmith.soldierDmg : 1); armorAdd = 0.08 * (up.armor || 0); }
     const frac = initial ? 1 : u.hp / u.maxHp;
     let rangeMul = 1, speedMul = 1;
     if (u.isSoldier && def.attack === 'ranged') { rangeMul = 1 + 0.12 * (up.marksman || 0); dmgMul *= 1 + 0.1 * (up.marksman || 0); }
-    if (u.isSoldier && this.hasActive('tavern')) speedMul = 1 + DATA.buildings.tavern.soldierSpeed;
+    if (u.isSoldier && this.hasActive('tavern', pid)) speedMul = 1 + DATA.buildings.tavern.soldierSpeed;
     u.maxHp = def.hp * hpMul; u.hp = u.maxHp * frac;
     u.dmg = def.dmg * dmgMul; u.dmgMul = dmgMul;
     u.speed = def.speed * speedMul; u.range = def.range * rangeMul; u.cd = def.cd;
@@ -264,7 +301,7 @@ class Game {
     u.regen = regen;
   }
   applyBuildingStats(b, initial) {
-    const def = b.def, up = this.upgrades;
+    const def = b.def, up = this.upgradesFor(b.owner);
     let hpMul = 1;
     if (def.key === 'wall' || def.key === 'gate' || def.keep) hpMul *= 1 + 0.4 * (up.walls || 0);
     if (def.tower) hpMul *= Math.pow(DATA.towerUpgrade.hp, b.level - 1);
@@ -342,7 +379,23 @@ class Game {
   spend(c, pid) { const w = this.wallet(pid); if (w) w.gold -= c; this.ui.dirty = true; }
   addGold(n, pid) { const w = this.wallet(pid); if (w) w.gold += n; this.stats.goldEarned += n; this.ui.dirty = true; }
   addGoldAll(n) { for (const id of this.playerOrder) { const w = this.players[id]; if (w) w.gold += n; } this.stats.goldEarned += n; this.ui.dirty = true; }
-  rewardOwner(owner, n) { if (owner && this.players[owner]) this.addGold(n, owner); else this.addGoldAll(n); }
+  killMult(pid) { return this.difficulty.gold * (1 + (this.hasActive('market', pid) ? DATA.buildings.market.killBonus : 0)) * (1 + 0.1 * (this.upgradesFor(pid).fortune || 0)); }
+  rewardOwner(owner, base) {
+    const ids = owner && this.players[owner] ? [owner] : this.playerOrder;
+    for (const id of ids) this.addGold(Math.round(base * this.killMult(id)), id);
+  }
+  get upgrades() { return this.wallet(this.localPlayer).upgrades; }
+  set upgrades(v) { this.wallet(this.localPlayer).upgrades = v; }
+  // a player's own upgrades apply to their things; shared things (the King, the starting castle) take the best level any player has
+  upgradesFor(owner) {
+    if (owner && this.players[owner]) return this.players[owner].upgrades || {};
+    const out = {};
+    for (const id of this.playerOrder) { const up = (this.players[id] && this.players[id].upgrades) || {}; for (const k in up) out[k] = Math.max(out[k] || 0, up[k]); }
+    return out;
+  }
+  get autoRepair() { return !!this.wallet(this.localPlayer).autoRepair; }
+  set autoRepair(v) { this.wallet(this.localPlayer).autoRepair = !!v; }
+  newWallet(id, name, hero) { const upgrades = {}; for (const k of Object.keys(DATA.upgrades)) upgrades[k] = 0; return { id, name, hero, gold: DATA.startGold, heroes: [], heroesBought: 0, upgrades, autoRepair: false }; }
   get heroesOwned() { return this.wallet(this.localPlayer).heroes; }
   set heroesOwned(v) { this.wallet(this.localPlayer).heroes = v; }
   get heroesBought() { return this.wallet(this.localPlayer).heroesBought || 0; }
@@ -350,38 +403,38 @@ class Game {
   heroInPlay(key) { return this.units.some(u => u.isHero && u.heroKey === key && !u.dead); }
   playerName(id) { const p = this.players[id]; return p ? p.name : 'a player'; }
   ownsOrShared(o) { return !o.owner || o.owner === this.actor; }
-  hasBuilding(key) { return this.buildings.some(b => b.def.key === key && !b.dead); }
-  hasActive(key) { return this.buildings.some(b => b.def.key === key && b.active); }
+  hasBuilding(key, pid) { return this.buildings.some(b => b.def.key === key && !b.dead && (pid === undefined || !b.owner || b.owner === pid)); }
+  hasActive(key, pid) { return this.buildings.some(b => b.def.key === key && b.active && (pid === undefined || !b.owner || b.owner === pid)); }
   soldierCap(pid) {
     pid = pid || this.actor;
     if (this.replica) return this.replicaCap || 0;
-    let cap = DATA.baseSoldierCap + 3 * (this.upgrades.garrison || 0);
+    let cap = DATA.baseSoldierCap + 3 * (this.upgradesFor(pid).garrison || 0);
     for (const b of this.buildings) if (b.def.soldierCap && b.active && (!b.owner || b.owner === pid)) cap += b.def.soldierCap;
     return cap;
   }
   soldierCount(pid) { pid = pid || this.actor; return this.units.filter(u => u.isSoldier && !u.dead && !u.def.noCap && (u.owner || 'host') === pid).length; }
   engineerCount(pid) { pid = pid || this.actor; return this.units.filter(u => u.def.repair && !u.dead && (u.owner || 'host') === pid).length; }
-  upgradeCost(key) { const d = DATA.upgrades[key]; return Math.round(d.cost * Math.pow(DATA.upgradeCostGrowth, this.upgrades[key] || 0)); }
+  upgradeCost(key, pid) { const d = DATA.upgrades[key]; return Math.round(d.cost * Math.pow(DATA.upgradeCostGrowth, (this.upgradesFor(pid || this.localPlayer)[key] || 0))); }
   // buildings with costGrowth get pricier for every one you already own (destroyed ones do not count)
   buildingCost(def) {
-    if (!def.costGrowth) return def.cost;
-    const n = this.buildings.filter(b => b.def.key === def.key && !b.dead).length;
-    return Math.round(def.cost * Math.pow(def.costGrowth, n));
+    if (!def.costGrowth && !def.costLinear) return def.cost;
+    const n = this.buildings.filter(b => b.def.key === def.key && !b.dead && b.paid > 0).length;
+    return Math.round(def.cost * (def.costGrowth ? Math.pow(def.costGrowth, n) : 1) * (1 + (def.costLinear || 0) * n));
   }
   heroCost(pid) { return Math.round(DATA.heroBaseCost * Math.pow(DATA.heroCostGrowth, (this.wallet(pid).heroesBought || 0))); }
 
   placeBuilding(key, i, j, rot, quiet = false, free = false) {
     const def = DATA.buildings[key];
     if (!def) return null;
-    if (this.replica) { if (this.canAfford(this.buildingCost(def)) && this.grid.canPlace(def, i, j, rot, this).ok) this.net.send({ t: 'build', key, i, j, rot }); else if (!quiet) this.ui.toast('Cannot build there', 'error'); return null; }
-    if (def.unique && this.hasBuilding(key)) { if (!quiet) this.ui.toast('You can only build one ' + def.name, 'error'); return null; }
+    if (this.replica) { if (def.unique && this.hasBuilding(key, this.localPlayer)) { if (!quiet) this.ui.toast('You can only build one ' + def.name, 'error'); return null; } if (this.canAfford(this.buildingCost(def)) && this.grid.canPlace(def, i, j, rot, this).ok) this.net.send({ t: 'build', key, i, j, rot }); else if (!quiet) this.ui.toast('Cannot build there', 'error'); return null; }
+    if (def.unique && this.hasBuilding(key, this.actor)) { if (!quiet) this.ui.toast('You can only build one ' + def.name, 'error'); return null; }
     const res = this.grid.canPlace(def, i, j, rot, this);
     if (!res.ok) { if (!quiet) this.ui.toast(res.reason, 'error'); return null; }
     const cost = this.buildingCost(def);
     if (!free && !this.canAfford(cost)) { if (!quiet) { this.ui.toast('Not enough gold', 'error'); SFX.play('error'); } return null; }
     if (!free) this.spend(cost);
     const b = new Building(this, def, i, j, rot, res.cells);
-    b.paid = free ? def.cost : cost;
+    b.paid = free ? 0 : cost;
     b.owner = free ? null : this.actor;
     this.grid.place(b);
     this.buildings.push(b);
@@ -488,14 +541,14 @@ class Game {
   }
   buyUpgrade(key) {
     if (this.replica) { this.net.send({ t: 'upg', key }); return; }
-    const d = DATA.upgrades[key];
-    const lvl = this.upgrades[key] || 0;
+    const d = DATA.upgrades[key], w = this.wallet(this.actor);
+    const lvl = w.upgrades[key] || 0;
     if (lvl >= d.max) return;
-    if (d.requires && !this.hasBuilding(d.requires)) { this.ui.toast(`Requires a ${DATA.buildings[d.requires].name}`, 'error'); SFX.play('error'); return; }
-    const c = this.upgradeCost(key);
+    if (d.requires && !this.hasActive(d.requires, this.actor)) { this.ui.toast(`Requires your own ${DATA.buildings[d.requires].name}`, 'error'); SFX.play('error'); return; }
+    const c = this.upgradeCost(key, this.actor);
     if (!this.canAfford(c)) { this.ui.toast('Not enough gold', 'error'); SFX.play('error'); return; }
     this.spend(c);
-    this.upgrades[key] = lvl + 1;
+    w.upgrades[key] = lvl + 1;
     this.refreshStats();
     this.ui.toast(`${d.name} level ${lvl + 1}`);
     SFX.play('levelup');
@@ -583,9 +636,7 @@ class Game {
   // ------------------------------------------------------------------ events
   onUnitDied(u, source) {
     if (u.team === 'enemy') {
-      const mult = this.difficulty.gold * (1 + (this.hasActive('market') ? DATA.buildings.market.killBonus : 0)) * (1 + 0.1 * (this.upgrades.fortune || 0));
-      const reward = Math.round((u.def.reward || 0) * mult);
-      if (reward) this.rewardOwner(source && source.owner !== undefined ? source.owner : null, reward);
+      if (u.def.reward) this.rewardOwner(source && source.owner !== undefined ? source.owner : null, u.def.reward);
       this.stats.kills++;
       this.lastEnemyDeath = this.time;
       if (u.isBoss) { this.boss = null; this.ui.toast(`${u.name} is slain!`, 'boss'); }
@@ -615,12 +666,12 @@ class Game {
   onWaveCleared(n) {
     let income = 0;
     for (const b of this.buildings) if (b.underConstruction) b.finishConstruction();
-    for (const b of this.buildings) if (b.def.income && b.active) { income += b.def.income; this.rewardOwner(b.owner, b.def.income); }
-    const bonus = Math.round(DATA.waves.clearBonus(n) * this.difficulty.gold * (1 + 0.1 * (this.upgrades.fortune || 0)));
-    this.addGoldAll(bonus);
+    for (const b of this.buildings) if (b.def.income && b.active) { income += b.def.income; const ids = b.owner ? [b.owner] : this.playerOrder; for (const id of ids) this.addGold(Math.round(b.def.income * (1 + 0.1 * (this.upgradesFor(id).fortune || 0))), id); }
+    const bonus = Math.round(DATA.waves.clearBonus(n) * this.difficulty.gold);
+    for (const id of this.playerOrder) this.addGold(Math.round(bonus * (1 + 0.1 * (this.upgradesFor(id).fortune || 0))), id);
     this.stats.wavesCleared = n;
     for (const u of this.units) if (u.team === 'player' && !u.dead) { u.heal(u.maxHp); u.burn = null; u.slow = null; }
-    if (this.autoRepair) setTimeout(() => { if (this.started && !this.over) this.repairAll(true); }, 800);
+    setTimeout(() => { if (!this.started || this.over) return; for (const id of this.playerOrder) if (this.players[id].autoRepair) { const prev = this.actor; this.actor = id; try { this.repairAll(true); } finally { this.actor = prev; } } }, 800);
 
 
     this.ui.toast(`Wave ${n} cleared! +${bonus} gold${income ? `, +${income} from farms and mines` : ''}. Everyone healed.`, 'good', 6000);
@@ -631,11 +682,17 @@ class Game {
     if (!this.started || this.over) return;
     if (this.replica) { if (this.waves.active) this.ui.toast('Clear the current wave first', 'error'); else this.net.send({ t: 'wave' }); return; }
     if (this.waves.active) { this.ui.toast('Clear the current wave first', 'error'); return; }
+    if (this.netHost && this.netHost.playerCount > 1) { this.netHost.toggleReady('host'); return; }
+    this.startWaveNow();
+  }
+  startWaveNow() {
     if (this.paused) this.togglePause();
     this.waves.start();
     this.lastEnemyDeath = this.time;
     this.ui.dirty = true;
   }
+  readyCount() { return this.netHost ? this.netHost.ready.size : (this.readySet ? this.readySet.length : 0); }
+  isReady(pid) { return this.netHost ? this.netHost.ready.has(pid) : !!(this.readySet && this.readySet.includes(pid)); }
   gameOver() {
     if (this.over) return;
     this.over = true;
@@ -655,7 +712,7 @@ class Game {
     const realDt = Math.min(0.05, (t - this.lastT) / 1000);
     this.lastT = t;
     this.fpsCounter.frames++; this.fpsCounter.t += realDt;
-    if (this.fpsCounter.t >= 1) { this.fpsCounter.fps = this.fpsCounter.frames; this.fpsCounter.frames = 0; this.fpsCounter.t = 0; }
+    if (this.fpsCounter.t >= 1) { this.fpsCounter.fps = this.fpsCounter.frames; this.fpsCounter.frames = 0; this.fpsCounter.t = 0; if (this.showFps) this.ui.$('fpscounter').textContent = this.fpsCounter.fps + ' fps'; }
     if (!this.started && this.net && this.net.tr) this.net.tr.pump();
     if (this.started) {
       const active = !this.paused && !this.over;
@@ -676,17 +733,21 @@ class Game {
   updateVisualsOnly(realDt) {
     // things that should keep moving while paused: shadows follow camera, command marker fade
     const f = this.controls.mode === 'fps' ? this.controls.controlled.pos : this.controls.focus;
-    const wantExtent = this.controls.mode === 'fps' ? 60 : U.clamp(this.controls.camDist * 1.5, 70, DATA.MAP_HALF + 30);
+    const wantExtent = this.controls.mode === 'fps' ? 60 : U.clamp(this.controls.camDist * 1.6, 70, DATA.MAP_HALF + 24);
     if (Math.abs(wantExtent - this.shadowExtent) > 4) {
       this.shadowExtent = wantExtent;
       const sc = this.sun.shadow.camera; sc.left = -wantExtent; sc.right = wantExtent; sc.top = wantExtent; sc.bottom = -wantExtent; sc.updateProjectionMatrix();
       this.sunTexel = (wantExtent * 2) / this.sun.shadow.mapSize.x;
     }
-    const t = new THREE.Vector3(f.x, 0, f.z);
+    const ext = this.shadowExtent, MAPEXT = DATA.MAP_HALF + 21;
+    const lim = Math.max(0, MAPEXT - ext);
+    const t = new THREE.Vector3(U.clamp(f.x, -lim, lim), 0, U.clamp(f.z, -lim, lim));
     const tx = t.dot(this.sunRight), ty = t.dot(this.sunUp);
     const sx = Math.round(tx / this.sunTexel) * this.sunTexel - tx, sy = Math.round(ty / this.sunTexel) * this.sunTexel - ty;
     t.addScaledVector(this.sunRight, sx).addScaledVector(this.sunUp, sy);
     this.sun.target.position.copy(t); this.sun.position.copy(t).add(this.sunOffset);
+    if (this.clouds) { this.clouds.position.x = (this.clouds.position.x + realDt * 0.6) % 60; }
+    if (this.world && this.world.water && this.world.water.material.map) { const off = this.world.water.material.map.offset; off.x += realDt * 0.01; off.y += realDt * 0.006; }
     if (this.markerT > 0) { this.markerT -= realDt; this.marker.scale.setScalar(0.6 + (1 - this.markerT / 0.7) * 1.5); this.marker.material.opacity = Math.max(0, this.markerT); if (this.markerT <= 0) this.marker.visible = false; }
     this.effects.update(realDt * (this.paused ? 0 : this.timeScale));
   }
@@ -708,6 +769,21 @@ class Game {
     }
     t1 = performance.now(); prof.flow += t1 - t0; t0 = t1;
     this.waves.update(dt);
+    this.chestTimer = (this.chestTimer || 0) + dt;
+    if (this.chestTimer > 0.4 && this.world) {
+      this.chestTimer = 0;
+      for (const ch of this.world.chests) {
+        if (ch.taken) continue;
+        const finder = this.unitsNear(ch.x, ch.z, 1.8, 'player')[0];
+        if (!finder) continue;
+        ch.taken = true; if (ch.mesh) ch.mesh.visible = false;
+        const gold = 120 + 30 * this.waves.number;
+        this.rewardOwner(finder.owner, gold / this.difficulty.gold);
+        this.effects.spawn('ring', ch.x, 0.3, ch.z, { radius: 2.5, color: 0xffd040, dur: 0.8 });
+        this.ui.toast(`${finder.name} found a hidden cache: ${Math.round(gold)} gold`, 'good', 5000);
+        SFX.play('coin');
+      }
+    }
     if (this.waves.active && !this.waves.pending.length && this.time - this.lastEnemyDeath > 25 && this.time - this.lastStallHint > 30) {
       this.lastStallHint = this.time;
       const rem = this.units.filter(u => u.team === 'enemy' && !u.dead);
@@ -899,7 +975,12 @@ function runSelfTest(game, params) {
       say(`mp: client spent: host gold ${g0h}->${host.players.host.gold} (unchanged), client ${g0c}->${host.players.B.gold}; new wall owner=${wall && wall.owner}; client archers=${host.units.filter(u => u.def.key === 'archer' && u.owner === 'B').length}`);
       // host cannot sell the client's wall
       host.actor = 'host'; const nb = host.buildings.length; host.sellBuilding(wall); say(`mp: host selling client's wall: buildings ${nb}->${host.buildings.length} (expect unchanged)`);
-      client.tryStartWave(); step(900);
+      const upH0 = host.players.host.upgrades.towers, sharedTower = host.buildings.find(b => b.def.tower && !b.owner);
+      client.buyUpgrade('towers'); step(20);
+      say(`mp: client bought Tower Engineering: client level=${host.players.B.upgrades.towers} host level=${host.players.host.upgrades.towers} (was ${upH0}); shared tower dmg=${sharedTower.dmg.toFixed(1)} (base ${sharedTower.def.dmg}, expect +20% from the best level)`);
+      client.tryStartWave(); step(30);
+      say(`mp: client ready: wave active=${host.waves.active} ready=${hn.ready.size}/${hn.playerCount} (expect false, 1/2)`);
+      host.tryStartWave(); step(900);
       say(`mp: wave: host active=${host.waves.active} enemies host=${host.enemiesAlive()} client=${client.enemiesAlive()} kills=${host.stats.kills} gold host=${host.players.host.gold} client=${host.players.B.gold}`);
       hn.toLobby(); pump(); pump();
       say(`mp: back to lobby: host started=${host.started} client started=${client.started} lobby players=${cn.lobby ? cn.lobby.players.length : 'n/a'}`);
@@ -927,6 +1008,17 @@ function runSelfTest(game, params) {
       c.setRawInput(false); say(`settings: raw=${c.rawInput} stored=${localStorage.getItem('crownhold_raw')} box=${document.querySelector('.settings .raw').checked}`);
       c.setSensitivity(1, true); c.setRawInput(true);
       say(`settings: invite link=${game.ui.inviteLink('ABCDEF')} joincode field=${document.getElementById('joincode').value}`);
+    }
+    if (params.get('balance')) {
+      const tower = game.buildings.find(b => b.def.tower), wall = game.buildings.find(b => b.def.key === 'wall');
+      say(`balance: starting tower sell value=${tower.sellValue()} wall=${wall.sellValue()} (expect 0)`);
+      const raider = game.spawnEnemy('grunt', wall.pos.x, wall.pos.z + 3, { hpMul: 1 }); raider.target = wall; raider.attackTimer = 0;
+      const h0 = wall.hp; raider.attack(wall); say(`balance: raider hit on a wall: ${Math.round(h0 - wall.hp)} (raw ${raider.dmg}, expect x2)`);
+      const t0 = tower.hp; raider.attackTimer = 0; raider.attack(tower); say(`balance: raider hit on a tower: ${Math.round(t0 - tower.hp)} (expect x1)`);
+      const archer = game.units.find(u => u.def.key === 'archer'); archer.pos.set(0, 0, 0); game.update(1 / 60);
+      const foe = game.spawnEnemy('grunt', 0, -14, { hpMul: 1 }); game.update(1 / 60); archer.playerThink();
+      say(`balance: archer inside the keep, enemy 14m away outside: sheltered=${archer.sheltered} target=${archer.target ? archer.target.name : 'none'} (expect none)`);
+      raider.die(); foe.die();
     }
     if (params.get('herodeath')) {
       const hero = game.units.find(u => u.isHero);
@@ -1066,7 +1158,12 @@ function runSelfTest(game, params) {
       game.controls.camDist = 55; game.controls.focus.set(fc.x, 0, fc.z); game.controls.camPitch = 0.75; snap('valley_ford');
       const tw = game.buildings.find(b => b.def.tower); game.controls.clearSelection(); game.controls.selectedBuilding = tw; tw.selected = true; game.ui.onSelectionChanged();
       game.controls.camDist = 42; game.controls.focus.set(tw.pos.x, 0, tw.pos.z); game.controls.camPitch = 0.95; snap('tower_ring');
-      game.controls.clearSelection(); game.controls.camDist = 230; game.controls.focus.set(60, 0, 60); game.controls.camPitch = 0.8; snap('zoomed_out_corner');
+      game.controls.clearSelection(); game.controls.camDist = 230; game.controls.focus.set(100, 0, 100); game.controls.camPitch = 0.8; game.controls.camYaw = 0.6; snap('zoomed_out_corner');
+      game.controls.camDist = 230; game.controls.focus.set(-110, 0, -110); game.controls.camPitch = 0.6; game.controls.camYaw = -2.2; snap('zoomed_out_far');
+      { const hero = game.units.find(u => u.isHero); hero.pos.set(-3, 0, 14); game.controls.enterControl(hero); game.controls.fpsYaw = 2.6; game.controls.fpsPitch = 0.08; game.update(1 / 60); snap('fps_look');
+        game.controls.fpsYaw = 0.4; game.controls.fpsPitch = 0.3; game.update(1 / 60); snap('fps_sky');
+        game.controls.exitControl(); }
+      game.showRange(88, 88, 22); game.controls.camDist = 60; game.controls.focus.set(88, 0, 88); game.controls.camPitch = 0.7; game.controls.camYaw = 0.5; snap('range_on_hills'); game.showRange(null);
       say('probe5 done');
     }
     if (params.get('probe4')) {

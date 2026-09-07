@@ -72,6 +72,7 @@ class Unit {
   get alive() { return !this.dead; }
   get effSpeed() {
     let s = this.speed;
+    if (!this.flying && this.game.world) { const c = this.game.grid.worldToCell(this.pos.x, this.pos.z); const tk = this.game.grid.terrain[this.game.grid.idx(c.i, c.j)]; if (tk === 6) s *= 1.2; else if (tk === 7) s *= 0.55; }
     if (this.slow && this.slow.until > this.game.time) s *= (1 - this.slow.factor);
     for (const b of this.buffs) if (b.until > this.game.time && b.speedMul) s *= b.speedMul;
     if (this.stunUntil > this.game.time) s = 0;
@@ -259,6 +260,7 @@ class Unit {
     return false;
   }
   scaledDmg(dmg, target) {
+    if (target instanceof Building && this.team === 'enemy' && target.def.cat === 'defense') dmg *= 2;
     if (this.def.bonusVsLarge && target.large) dmg *= this.def.bonusVsLarge;
     if (this.def.backstab && target instanceof Unit) {
       // target facing away from us: its forward vector points away from the attacker
@@ -538,7 +540,7 @@ class Building {
   upgradeCost() { return Math.round(this.def.cost * DATA.towerUpgrade.costMul * this.level); }
   canUpgrade() { return this.def.tower && this.level < DATA.towerUpgrade.maxLevel; }
   repairCost() { return Math.round((1 - this.hp / this.maxHp) * this.def.cost * 0.5); }
-  sellValue() { return Math.round((this.paid || this.def.cost) * 0.6 * (this.hp / this.maxHp) * (1 + 0.5 * (this.level - 1))); }
+  sellValue() { const paid = this.paid !== undefined ? this.paid : this.def.cost; return Math.round(paid * 0.6 * (this.hp / this.maxHp) * (1 + 0.5 * (this.level - 1))); }
 
   takeDamage(amount, source) {
     if (this.dead) return 0;
@@ -735,7 +737,7 @@ class Projectile {
   applyHit(target, mult = 1) {
     let d = this.dmg * mult;
     if (target.large && this.bonusVsLarge > 1) d *= this.bonusVsLarge;
-    if (target instanceof Building) d = this.buildingDmg ? this.buildingDmg * mult : d;
+    if (target instanceof Building) d = this.buildingDmg ? this.buildingDmg * mult : d * (this.magic ? 1 : 0.5);
     const dealt = target.takeDamage(d, this.source, { magic: this.magic });
     if (target instanceof Unit) {
       if (this.slow) target.applySlow(this.slow.factor, this.slow.dur);

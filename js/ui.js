@@ -14,6 +14,7 @@ class UI {
 
   // ------------------------------------------------------------ menu
   buildMenu() {
+    if (this.$('buildstamp')) this.$('buildstamp').textContent = 'build ' + DATA.build;
     const cards = this.$('herocards');
     cards.innerHTML = '';
     for (const h of Object.values(DATA.heroes)) {
@@ -40,6 +41,9 @@ class UI {
     this.$('startbtn').addEventListener('click', () => { SFX.init(); SFX.resume(); this.hideMenu(); this.game.newGame(this.selectedHero, this.difficulty); });
     document.querySelectorAll('.settings').forEach(r => this.bindSettings(r));
     this.refreshSettings();
+    this.$('settingsbtn').addEventListener('click', () => this.toggleSettings());
+    this.$('menusettings').addEventListener('click', () => this.toggleSettings(true));
+    this.$('settingsclose').addEventListener('click', () => this.toggleSettings(false));
     this.$('copycode').addEventListener('click', () => { const g = this.game; const code = g.netHost ? g.netHost.code : (g.netClient ? g.netClient.code : ''); if (code) this.copyText(code, this.$('copycode')); });
     this.$('copylink').addEventListener('click', () => { const g = this.game; const code = g.netHost ? g.netHost.code : (g.netClient ? g.netClient.code : ''); if (code) this.copyText(this.inviteLink(code), this.$('copylink')); });
     { const jc = new URLSearchParams(location.search).get('join'); if (jc) { this.$('joincode').value = jc.toUpperCase().slice(0, 6); this.mpStatus(`Room code ${jc.toUpperCase()} filled in. Pick your hero, enter a name, and press Join.`); } }
@@ -84,7 +88,7 @@ class UI {
     const me = isHost ? 'host' : (g.netClient ? g.netClient.myId : null);
     this.$('lobbyplayers').innerHTML = state.players.map((p, k) => { const h = DATA.heroes[p.hero]; return `<div class="p"><span class="sw" style="background:#${(h ? h.color : 0x888888).toString(16).padStart(6, '0')}"></span><span class="nm">${p.name}</span><span class="hero">${h ? h.name + ', ' + h.title : ''}</span>${p.id === 'host' ? '<span class="tag">host</span>' : ''}${p.id === me ? '<span class="tag">you</span>' : ''}</div>`; }).join('');
     const mt = state.mapType && DATA.mapTypes[state.mapType] ? DATA.mapTypes[state.mapType].label : 'Random map';
-    this.$('lobbyinfo').textContent = `${mt} · ${DATA.difficulties[state.difficulty] ? DATA.difficulties[state.difficulty].label : 'Normal'} difficulty · ${state.players.length} defender${state.players.length === 1 ? '' : 's'}. Everyone shares the King and the starting castle; each defender has their own gold, hero, soldiers and buildings.`;
+    this.$('lobbyinfo').textContent = `${mt} · ${DATA.difficulties[state.difficulty] ? DATA.difficulties[state.difficulty].label : 'Normal'} difficulty · ${state.players.length} defender${state.players.length === 1 ? '' : 's'}. Shared: the King and the starting castle. Yours alone: gold, hero, soldiers, buildings and upgrades. Waves start when every defender is ready.`;
     this.$('lobbystart').classList.toggle('hidden', !isHost);
     this.$('lobbywait').classList.toggle('hidden', isHost);
   }
@@ -108,20 +112,36 @@ class UI {
   inviteLink(code) { return DATA.siteUrl + '?join=' + code; }
   // sensitivity slider + raw-input toggle, present on the menu and in the help screen
   bindSettings(root) {
-    const c = this.game.controls;
-    const sl = root.querySelector('.sens'), ri = root.querySelector('.raw');
-    if (sl) { sl.addEventListener('input', () => c.setSensitivity(parseInt(sl.value, 10) / 100, true)); }
-    if (ri) ri.addEventListener('change', () => c.setRawInput(ri.checked));
+    const c = this.game.controls, g = this.game;
+    const q = (s) => root.querySelector(s);
+    if (q('.sens')) q('.sens').addEventListener('input', () => c.setSensitivity(parseInt(q('.sens').value, 10) / 100, true));
+    if (q('.raw')) q('.raw').addEventListener('change', () => c.setRawInput(q('.raw').checked));
+    if (q('.inverty')) q('.inverty').addEventListener('change', () => { c.invertY = q('.inverty').checked; g.savePref('inverty', c.invertY ? '1' : '0'); });
+    if (q('.vol')) q('.vol').addEventListener('input', () => { SFX.setVolume(parseInt(q('.vol').value, 10) / 100); g.savePref('volume', q('.vol').value); this.refreshSettings(); });
+    if (q('.shadows')) q('.shadows').addEventListener('change', () => g.setShadows(q('.shadows').checked));
+    if (q('.showfps')) q('.showfps').addEventListener('change', () => { g.showFps = q('.showfps').checked; g.savePref('showfps', g.showFps ? '1' : '0'); this.$('fpscounter').classList.toggle('hidden', !g.showFps); });
     root.querySelectorAll('input').forEach(i => i.addEventListener('keydown', (e) => e.stopPropagation()));
   }
   refreshSettings() {
-    const c = this.game.controls;
+    const c = this.game.controls, g = this.game;
     document.querySelectorAll('.settings').forEach(root => {
-      const sl = root.querySelector('.sens'), lab = root.querySelector('.sensval'), ri = root.querySelector('.raw');
-      if (sl && document.activeElement !== sl) sl.value = Math.round(c.sensMul * 100);
-      if (lab) lab.textContent = Math.round(c.sensMul * 100) + '%';
-      if (ri) ri.checked = !!c.rawInput;
+      const q = (s) => root.querySelector(s);
+      if (q('.sens') && document.activeElement !== q('.sens')) q('.sens').value = Math.round(c.sensMul * 100);
+      if (q('.sensval')) q('.sensval').textContent = Math.round(c.sensMul * 100) + '%';
+      if (q('.raw')) q('.raw').checked = !!c.rawInput;
+      if (q('.inverty')) q('.inverty').checked = !!c.invertY;
+      if (q('.vol') && document.activeElement !== q('.vol')) q('.vol').value = Math.round(SFX.volume * 100);
+      if (q('.volval')) q('.volval').textContent = Math.round(SFX.volume * 100) + '%';
+      if (q('.shadows')) q('.shadows').checked = !!g.shadowsOn;
+      if (q('.showfps')) q('.showfps').checked = !!g.showFps;
     });
+  }
+  toggleSettings(force) {
+    const el = this.$('settings');
+    const show = force !== undefined ? force : el.classList.contains('hidden');
+    el.classList.toggle('hidden', !show);
+    if (show) this.refreshSettings();
+    if (this.game.started && !this.game.over && !this.game.replica) { if (show && !this.game.paused) { this.game.togglePause(); this.settingsPaused = true; } else if (!show && this.settingsPaused) { this.settingsPaused = false; if (this.game.paused) this.game.togglePause(); } }
   }
   urlBox() {
     return `<span class="url"><input type="text" readonly value="${DATA.siteUrl}" onclick="this.select()"><button data-a="copy">Copy</button></span>`;
@@ -182,6 +202,7 @@ class UI {
     el.classList.toggle('hidden', !show);
     if (this.game.started && !this.game.over && !this.game.replica) { if (show && !this.game.paused) { this.game.togglePause(); this.helpPaused = true; } else if (!show && this.helpPaused) { this.helpPaused = false; if (this.game.paused) this.game.togglePause(); } }
   }
+  closePanels() { this.toggleSettings(false); }
 
   // ------------------------------------------------------------ panels
   buildPanels() {
@@ -237,16 +258,16 @@ class UI {
     this.activeTab = name;
   }
   togglePanel(name) { this.showTab(name); }
-  closePanels() {}
   refreshPanels() {
     const g = this.game;
     document.querySelectorAll('[data-build]').forEach(b => {
       const d = DATA.buildings[b.dataset.build];
       const cost = g.buildingCost(d);
-      const cannot = !g.canAfford(cost) || !!(d.unique && g.hasBuilding(d.key));
+      const built = !!(d.unique && g.hasBuilding(d.key, g.localPlayer));
+      const cannot = !g.canAfford(cost) || built;
       b.classList.toggle('disabled', cannot);
       b.classList.toggle('on', !!(g.controls.buildDef && g.controls.buildDef.key === d.key));
-      if (d.unique && g.hasBuilding(d.key)) b.querySelector('.cost').textContent = 'built'; else b.querySelector('.cost').textContent = cost;
+      b.querySelector('.cost').textContent = built ? 'built' : cost;
     });
     const capFull = g.soldierCount() >= g.soldierCap();
     document.querySelectorAll('[data-unit]').forEach(b => { const d = DATA.units[b.dataset.unit]; const full = d.noCap ? g.engineerCount() >= d.maxCount : capFull; b.classList.toggle('disabled', !!(!g.canAfford(d.cost) || full)); });
@@ -261,8 +282,8 @@ class UI {
     document.querySelectorAll('[data-upgrade]').forEach(b => {
       const d = DATA.upgrades[b.dataset.upgrade]; const lvl = g.upgrades[d.key] || 0;
       const maxed = lvl >= d.max; const cost = g.upgradeCost(d.key);
-      const locked = !!(d.requires && !g.hasBuilding(d.requires));
-      b.querySelector('.lvl').textContent = maxed ? `Level ${lvl} (max)` : `Level ${lvl}/${d.max}` + (locked ? ` · needs ${DATA.buildings[d.requires].name}` : '');
+      const locked = !!(d.requires && !g.hasActive(d.requires, g.localPlayer));
+      b.querySelector('.lvl').textContent = maxed ? `Level ${lvl} (max)` : `Level ${lvl}/${d.max}` + (locked ? ` · needs your own ${DATA.buildings[d.requires].name}` : '');
       b.querySelector('.cost').textContent = maxed ? '—' : cost;
       b.classList.toggle('disabled', !!(maxed || locked || !g.canAfford(cost)));
     });
@@ -486,7 +507,7 @@ class UI {
     this.tick += dt; this.mapTick += dt;
     if (this.tick < 0.12 && !this.dirty) return;
     this.tick = 0;
-    this.$('gold').textContent = U.fmt(g.gold) + (g.playerOrder.length > 1 ? ' (yours)' : '');
+    this.$('gold').textContent = U.fmt(g.gold);
     this.$('wave').textContent = g.waves.active ? g.waves.number : `${g.waves.number} done`;
     this.$('enemies').textContent = g.waves.active ? `${g.enemiesAlive()} (+${g.waves.pending.length} coming)` : '0';
     this.$('soldiers').textContent = `${g.soldierCount()}/${g.soldierCap()}`;
@@ -496,7 +517,9 @@ class UI {
     if (boss) { this.$('bossname').textContent = boss.name; this.$('bosshp').style.width = Math.max(0, boss.hp / boss.maxHp * 100) + '%'; }
     const nw = this.$('nextwave');
     nw.classList.toggle('disabled', g.waves.active || g.over);
-    nw.innerHTML = g.waves.active ? `Wave ${g.waves.number} in progress` : `Start Wave ${g.waves.preview.n} <kbd>N</kbd>`;
+    const coop = g.playerOrder.length > 1;
+    nw.innerHTML = g.waves.active ? `Wave ${g.waves.number} in progress` : (coop ? `${g.isReady(g.localPlayer) ? 'Ready' : 'Ready up'} for wave ${g.waves.preview.n} (${g.readyCount()}/${g.playerOrder.length}) <kbd>N</kbd>` : `Start Wave ${g.waves.preview.n} <kbd>N</kbd>`);
+    nw.classList.toggle('on', coop && !g.waves.active && g.isReady(g.localPlayer));
     if (this.dirty || this.tick === 0) {
       const d = g.waves.describe(g.waves.preview);
       this.$('wavepreview').innerHTML = g.waves.active ? `<b>Wave ${g.waves.number}</b>: ${g.waves.total} enemies` : `<b>Next: wave ${g.waves.preview.n}</b> from the ${d.from.join(', ')}<br>${d.units.map(u => u.startsWith('BOSS') ? `<span class="boss">${u}</span>` : u).join(', ')}`;
@@ -509,8 +532,9 @@ class UI {
       ra.classList.toggle('disabled', !damaged || locked); }
     this.$('autorepairbox').checked = !!g.autoRepair;
     { const rs = this.$('roomstat'), rt = this.$('roomtext');
-      if (g.netHost) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netHost.code}</b> · ${g.netHost.playerCount} player${g.netHost.playerCount === 1 ? '' : 's'}`; }
-      else if (g.netClient) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netClient.code || ''}</b> · ${g.playerOrder.length} players${g.netClient.lost ? ' · <span class="bad">disconnected</span>' : ''}`; }
+      const roster = g.playerOrder.map(id => { const p = g.players[id]; return `${p.name}${id === g.localPlayer ? ' (you)' : ''} ${U.fmt(p.gold)}g`; }).join(' · ');
+      if (g.netHost) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netHost.code}</b> · ${roster}`; }
+      else if (g.netClient) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netClient.code || ''}</b> · ${roster}${g.netClient.lost ? ' · <span class="bad">disconnected</span>' : ''}`; }
       else rs.classList.add('hidden'); }
     if (this.dirty) { this.refreshPanels(); this.dirty = false; }
     this.updateSelPanel();
@@ -538,7 +562,7 @@ class UI {
       const cs = DATA.CELL * s;
       for (let j = 0; j < g.world.n; j++) for (let i = 0; i < g.world.n; i++) {
         const k = g.world.kind[g.world.idx(i, j)]; if (!k) continue;
-        ctx.fillStyle = k === CELL_WATER ? '#3a7fc0' : (k === CELL_ROCK ? '#6a6a64' : '#1f4a25');
+        ctx.fillStyle = k === CELL_WATER ? '#3a7fc0' : (k === CELL_ROCK ? '#6a6a64' : (k === 6 ? '#8a7048' : (k === 7 ? '#3a4a24' : (k === 8 ? '#ff6a10' : '#1f4a25'))));
         const c = g.world.cellCenter(i, j); ctx.fillRect(px(c.x - 1), pz(c.z - 1), cs + 0.5, cs + 0.5);
       }
     }

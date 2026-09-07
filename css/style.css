@@ -13,6 +13,7 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0c10; color: var(--text); font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px; }
 #game { position: fixed; inset: 0; }
 #game canvas { display: block; }
+#vignette { position: fixed; inset: 0; pointer-events: none; z-index: 5; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.28) 100%); }
 #game canvas.fps { cursor: none; }
 #right.passive, #topbar.passive { pointer-events: none; }
 #lockhint { display: inline-block; margin-bottom: 8px; padding: 6px 12px; background: rgba(60,40,10,0.85); border: 1px solid #e0a040; border-radius: 6px; color: #ffd890; font-size: 13px; max-width: 520px; }
@@ -34,6 +35,7 @@ button.icon { width: 34px; height: 30px; padding: 0; font-size: 13px; }
 .title { font-family: 'Cinzel', serif; font-weight: 800; font-size: 56px; margin: 0; color: var(--gold); letter-spacing: 0.08em; text-shadow: 0 4px 24px rgba(232,192,96,0.35); }
 .title.small { font-size: 34px; }
 .subtitle { margin: 4px 0 18px; color: var(--muted); font-size: 16px; }
+.stamp { display: block; font-size: 11px; color: var(--muted); opacity: 0.7; margin-top: 4px; }
 .section { font-family: 'Cinzel', serif; font-size: 18px; color: var(--gold); margin: 18px 0 10px; font-weight: 600; }
 .menu-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
 .menu-row label { color: var(--muted); }
@@ -66,7 +68,9 @@ button.icon { width: 34px; height: 30px; padding: 0; font-size: 13px; }
 .players .p .tag { font-size: 11px; color: var(--gold); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; }
 #lobby .menu-row { gap: 14px; margin-top: 10px; }
 button.mini { padding: 3px 8px; font-size: 11px; }
-.settings { margin: 6px 0 4px; flex-wrap: wrap; }
+.settings .setrow { display: grid; grid-template-columns: 180px 1fr auto; gap: 12px; align-items: center; text-align: left; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.settings .setrow > label:first-child { color: var(--gold); font-weight: 600; }
+#fpscounter { position: fixed; right: 12px; bottom: 10px; z-index: 20; font: 12px monospace; color: var(--gold); background: rgba(0,0,0,0.45); padding: 3px 7px; border-radius: 4px; pointer-events: none; }
 .settings input[type=range] { width: 200px; accent-color: #e8c060; }
 .settings .sensval { min-width: 44px; color: var(--gold); font-weight: 600; font-variant-numeric: tabular-nums; }
 .settings .chk { display: inline-flex; align-items: center; gap: 6px; color: var(--text); cursor: pointer; }
