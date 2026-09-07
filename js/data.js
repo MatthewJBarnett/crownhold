@@ -38,7 +38,7 @@ DATA.abilities = {
   call_pack:   { name: 'Call the Pack', key: 'Q', cd: 24, desc: 'Summon three wolves at your side for 20s. They follow you and savage anything nearby.', aim: 'self' },
   war_horn:    { name: 'War Horn', key: 'E', cd: 20, desc: 'Soldiers and wolves within 20m gain +30% speed and 20% damage reduction for 10s.', aim: 'self' },
   royal_decree:{ name: 'Royal Decree', key: 'Q', cd: 30, desc: 'All soldiers gain +30% damage and +25% speed for 12s.', aim: 'self' },
-  rally:       { name: 'To Me!', key: 'E', cd: 20, desc: 'Every soldier rushes to defend the King.', aim: 'self' },
+  rally:       { name: 'To Me!', key: 'E', cd: 0.5, desc: 'Every soldier rushes to defend the King. No cooldown.', aim: 'self' },
 };
 
 // ---------------------------------------------------------------------------

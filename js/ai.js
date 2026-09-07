@@ -461,9 +461,11 @@ Unit.prototype.autoAbilities = function () {
       case 'war_horn':
         if (enemiesNear(20).length >= 3 && game.unitsNear(this.pos.x, this.pos.z, 20, 'player').filter(u => u.isSoldier).length >= 3) aim = { x: this.pos.x, z: this.pos.z };
         break;
-      case 'rally':
-        if (this.hp < this.maxHp * 0.45 && enemiesNear(10).length >= 1) aim = { x: this.pos.x, z: this.pos.z };
+      case 'rally': {
+        const notFollowing = game.units.some(u => u.isSoldier && !u.dead && !u.def.repair && !(u.command && u.command.type === 'follow' && u.command.leader === this));
+        if (this.hp < this.maxHp * 0.45 && enemiesNear(10).length >= 1 && notFollowing) aim = { x: this.pos.x, z: this.pos.z };
         break;
+      }
     }
     if (aim) { this.useAbility(i, aim); return; }
   }
