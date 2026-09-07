@@ -155,6 +155,14 @@ class Game {
     }
     this.renderer.render(this.scene, this.camera);
   }
+  jumpToWave(n) {
+    if (!this.started || this.over) { this.ui.toast('Start a game first', 'error'); return; }
+    if (this.replica) { this.ui.toast('Only the host can jump waves', 'error'); return; }
+    if (this.waves.active) { this.ui.toast('Finish the current wave first', 'error'); return; }
+    n = Math.max(1, Math.min(999, n | 0));
+    this.waves.number = n - 1; this.waves.planNext();
+    this.ui.toast(`Experiments: the next wave is wave ${n}`, 'good'); this.ui.dirty = true;
+  }
   cheatGold(n) {
     if (!this.started || this.over) { this.ui.toast('Start a game first', 'error'); return; }
     if (this.replica) { this.ui.toast('Only the host can add gold', 'error'); return; }
@@ -381,7 +389,7 @@ class Game {
   applyStats(u, initial) {
     const def = u.def, up = this.upgradesFor(u.owner), diff = this.difficulty, pid = u.owner || 'host';
     let hpMul = 1, dmgMul = 1, armorAdd = 0, regen = def.regen || 0;
-    if (u.team === 'enemy') { hpMul = u.hpMul * (u.affix && u.affix.hp ? u.affix.hp : 1) * (this.realm ? this.realm.enemyHp || 1 : 1); dmgMul = diff.dmg * (u.affix && u.affix.dmg ? u.affix.dmg : 1); armorAdd = (u.affix && u.affix.armor ? u.affix.armor : 0) + (u.modArmor || 0); }
+    if (u.team === 'enemy') { hpMul = u.hpMul * (u.affix && u.affix.hp ? u.affix.hp : 1) * (this.realm ? this.realm.enemyHp || 1 : 1); dmgMul = diff.dmg * DATA.waves.dmgScale(this.waves ? this.waves.number : 1) * (u.affix && u.affix.dmg ? u.affix.dmg : 1); armorAdd = (u.affix && u.affix.armor ? u.affix.armor : 0) + (u.modArmor || 0); }
     else if (u.isKing) { hpMul = 1 + 0.25 * (up.royal || 0); regen += 2 * (up.royal || 0); if (this.realm) { hpMul += (this.realm.kingHp || 0) / def.hp; regen += this.realm.kingRegen || 0; dmgMul *= 1 + (this.realm.kingDmg || 0); } if (this.hasActive('throne_of_ages')) { hpMul += DATA.buildings.throne_of_ages.throne.kingHp / def.hp; regen += DATA.buildings.throne_of_ages.throne.kingRegen; } }
     else if (u.isHero) { const lv = (u.level || 1) - 1; hpMul = (1 + 0.15 * (up.hero || 0)) * (1 + 0.07 * lv); dmgMul = (1 + 0.15 * (up.hero || 0)) * (1 + 0.06 * lv); }
     else if (u.isSoldier) { dmgMul = (1 + 0.15 * (up.weapons || 0)) * (this.hasActive('blacksmith', pid) ? 1 + DATA.buildings.blacksmith.soldierDmg : 1) * (this.hasActive('throne_of_ages', pid) ? DATA.buildings.throne_of_ages.throne.soldierDmg : 1); armorAdd = 0.08 * (up.armor || 0); }
@@ -1098,6 +1106,7 @@ function runSelfTest(game, params) {
     game.ui.hideMenu();
     game.newGame(params.get('hero') || 'knight', 'normal', { mapType: params.get('mapType') || undefined, seed: params.get('seed') ? parseInt(params.get('seed'), 10) : undefined });
     say('world: type=' + game.worldType + ' seed=' + game.worldSeed + ' lanes=' + JSON.stringify(game.world && game.world.laneSpawns) + ' plateaus=' + (game.world && game.world.plateaus ? game.world.plateaus.length : 0) + ' connected=' + (game.world ? game.world.connected() : 'n/a'));
+    if (params.get('startwave')) game.jumpToWave(parseInt(params.get('startwave'), 10));
     say('after newGame: buildings=' + game.buildings.length + ' damaged=' + game.buildings.filter(b => b.hp < b.maxHp - 0.5).length + ' sample=' + game.buildings.slice(0, 3).map(b => b.def.key + ':' + b.hp + '/' + b.maxHp).join(' '));
     game.update(1 / 60);
     say('after 1 step: damaged=' + game.buildings.filter(b => b.hp < b.maxHp - 0.5).length + ' barsVisible=' + game.buildings.filter(b => b.hpBar.group.visible).length);

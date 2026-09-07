@@ -26,7 +26,10 @@ Three.js and the PeerJS networking library load from cdnjs, so an internet conne
   Repair everything with R (most important buildings first), or tick auto-repair to do it after every wave.
 - Every unit is fully healed when a wave ends. The Healing Shrine only works during a wave.
 - Farms and Gold Mines get pricier with every one you own (30% and 60% per building). Extra heroes start at
-  1450 gold and each purchase raises the next price by 50%. Selling refunds 60% of what you actually paid.
+  1700 gold and each purchase raises the next price by 50%. Selling refunds 60% of what you actually paid.
+- Waves never stop growing: the enemy budget grows faster than the square of the wave number, enemy health scales
+  from wave 8 and enemy damage from wave 12, elites become more common, bosses repeat stronger, and a wave can bring
+  up to 280 enemies. Wave 35 fields several hundred.
 - Enemies land on the shore in groups, anywhere around the island (the next wave's landing points are red on the
   minimap), two groups per wave at first and up to six later. From the shore each group walks to the nearest of the
   eight corridor mouths (ringed on the minimap); neighbouring mouths share a corridor through the outer belt. The two belts around the
@@ -51,16 +54,16 @@ gate and speed everyone up. Rivers are crossed on wooden bridges that stand on p
 of gold reward a unit that roams out to them. Every lane is guaranteed a route to the King. Selecting a tower, or
 placing one, shows its range draped over the ground.
 
-Wonders (one of each per defender, ever more expensive, ever stronger): Royal Treasury 2400 (interest, +50% bounties),
-Sun Altar 2900 (a beam on the toughest enemy), Dragon Roost 3100 (a tame dragon), Arcane Spire 3600 (meteor storms),
-Titan Forge 4100 (an iron titan), Crown of Storms 6000 (ten-target chain lightning), Phoenix Pyre 7800 (your fallen
-rise again, once per wave), World Tree 9600 (2%/s regeneration and +25% tower damage within 32 m, 150 gold a wave),
-Time Anchor 12000 (enemies within 34 m are 45% slower; a 4 s freeze every 30 s), Celestial Gate 17000 (six flying
-warriors every 40 s), Doomsday Engine 24000 (450 damage to every enemy on the map every 60 s, a 20/s burn field) and
-the Throne of Ages 36000 (+3000 King HP and 60/s regeneration, towers and soldiers +35%, farms and mines pay half again),
-the Solar Forge 54000 (towers fire half again as fast and reach 25% further), the Comet Shrine 78000 (a 2400-damage
-comet on the thickest crowd every 50 s, a meteor every 6 s), the Heart of Winter 108000 (enemies within 70 m 35% slower,
-every enemy 15% more fragile, a 4 s freeze every 45 s) and The Apotheosis 300000 (enemies within 60 m burn 4% of
+Wonders (one of each per defender, ever more expensive, ever stronger): Royal Treasury 2800 (interest, +50% bounties),
+Sun Altar 3300 (a beam on the toughest enemy), Dragon Roost 3600 (a tame dragon), Arcane Spire 4100 (meteor storms),
+Titan Forge 4700 (an iron titan), Crown of Storms 6900 (ten-target chain lightning), Phoenix Pyre 9000 (your fallen
+rise again, once per wave), World Tree 11000 (2%/s regeneration and +25% tower damage within 32 m, 150 gold a wave),
+Time Anchor 14000 (enemies within 34 m are 45% slower; a 4 s freeze every 30 s), Celestial Gate 20000 (six flying
+warriors every 40 s), Doomsday Engine 28000 (450 damage to every enemy on the map every 60 s, a 20/s burn field) and
+the Throne of Ages 41000 (+3000 King HP and 60/s regeneration, towers and soldiers +35%, farms and mines pay half again),
+the Solar Forge 62000 (towers fire half again as fast and reach 25% further), the Comet Shrine 90000 (a 2400-damage
+comet on the thickest crowd every 50 s, a meteor every 6 s), the Heart of Winter 124000 (enemies within 70 m 35% slower,
+every enemy 15% more fragile, a 4 s freeze every 45 s) and The Apotheosis 520000 (enemies within 60 m burn 4% of
 their life a second, your units and the Keep take 40% less damage, bounties pay threefold, towers fire two thirds
 faster, and every 45 s the sky opens: everything hostile loses 40% of its remaining life and stands stunned).
 

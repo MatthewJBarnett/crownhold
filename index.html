@@ -6,7 +6,7 @@
 <title>Crownhold</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=106b9fd1">
+<link rel="stylesheet" href="css/style.css?v=ed6d054f">
 </head>
 <body>
 <div id="game"></div>
@@ -86,6 +86,7 @@
     <button id="repairall" title="Repair every damaged building, most important first (R). Hover to see what is damaged.">Repair all</button>
     <label id="autorepair" title="After each wave, spend gold repairing damaged buildings, most important first"><input type="checkbox" id="autorepairbox"> Auto-repair after each wave</label>
     <div class="quick">
+      <button data-act="selectArmy" title="Select every soldier and hero (Ctrl+Shift+A)">Whole army</button>
       <button data-act="selectAll" title="Select all soldiers (Ctrl+A)">All soldiers</button>
       <button data-act="selectKing" title="Select the King (K)">King</button>
       <button data-act="selectHeroes" title="Select heroes (J)">Heroes</button>
@@ -125,10 +126,11 @@
         <ul>
           <li><kbd>WASD</kbd> / arrows pan, <kbd>Q</kbd><kbd>E</kbd> rotate, wheel zoom, right-drag orbit, middle-drag pan</li>
           <li>Left click / drag: select your units. <kbd>Shift</kbd> adds to the selection</li>
-          <li>Right click: move &amp; attack there, attack an enemy, or follow a friendly unit</li>
+          <li>Right click: move &amp; attack there, attack an enemy, or follow a friendly unit. With nothing selected, the order goes to every soldier and hero</li>
           <li><kbd>C</kbd> or <kbd>Tab</kbd>: take control of the selected unit (any unit, even the King)</li>
           <li><kbd>H</kbd> hold position, <kbd>F</kbd> follow the nearest hero (or the hovered unit)</li>
-          <li><kbd>Ctrl</kbd>+<kbd>1-9</kbd> save a control group, <kbd>1-9</kbd> recall it. <kbd>Ctrl</kbd>+<kbd>A</kbd> all soldiers, <kbd>K</kbd> King, <kbd>J</kbd> heroes</li>
+          <li><kbd>Ctrl</kbd>+<kbd>1-9</kbd> save a control group, <kbd>1-9</kbd> recall it. <kbd>Ctrl</kbd>+<kbd>A</kbd> all soldiers, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> the whole army (soldiers and heroes), <kbd>K</kbd> King, <kbd>J</kbd> heroes</li>
+          <li>An ordered unit marches: on the way it only fights what is right on top of it. <kbd>H</kbd> to hold, or leave it idle, and it guards its ground again</li>
           <li><kbd>B</kbd> build panel. Pick a building, <kbd>R</kbd> rotates, click places. Drag to lay walls. Right click / <kbd>Esc</kbd> cancels</li>
           <li>Click a building to repair, upgrade or sell it (<kbd>Del</kbd>). <kbd>R</kbd> repairs everything, or tick auto-repair. Engineers repair for free</li>
           <li><kbd>N</kbd> / <kbd>Space</kbd> next wave, <kbd>P</kbd> pause, <kbd>=</kbd> fast forward, <kbd>M</kbd> mute</li>
@@ -185,7 +187,7 @@
     <div class="setrow"><label>Sound volume</label><input type="range" class="vol" min="0" max="100" step="5" value="50"><span class="volval">50%</span></div>
     <div class="setrow"><label>Shadows</label><label class="chk"><input type="checkbox" class="shadows" checked> On (turn off on slow machines)</label></div>
     <div class="setrow"><label>Glow &amp; colour</label><label class="chk"><input type="checkbox" class="bloom" checked> On (bloom and colour grading; turn off on slow machines)</label></div>
-    <div class="setrow experiments"><label>Experiments</label><div><button class="spawncheat">Spawn a test champion</button> <input type="number" class="goldamt" value="10000" min="1" max="10000000" step="1000" style="width:110px"> <button class="goldcheat">Add gold</button><div class="hint">For testing only: an immortal hero with absurd stats, and gold on demand, so you can reach the late waves without effort. Only the host can do this in co-op.</div></div></div>
+    <div class="setrow experiments"><label>Experiments</label><div><button class="spawncheat">Spawn a test champion</button> <input type="number" class="goldamt" value="10000" min="1" max="10000000" step="1000" style="width:110px"> <button class="goldcheat">Add gold</button> <input type="number" class="waveamt" value="20" min="1" max="999" style="width:70px"> <button class="wavejump">Jump to wave</button><div class="hint">For testing only: an immortal hero with absurd stats, and gold on demand, so you can reach the late waves without effort. Only the host can do this in co-op.</div></div></div>
     <div class="setrow"><label>Frame rate</label><label class="chk"><input type="checkbox" class="showfps"> Show a frames-per-second counter</label></div>
     <p class="hint">In play: <kbd>[</kbd> <kbd>]</kbd> also change sensitivity, <kbd>M</kbd> mutes, <kbd>O</kbd> opens this screen.</p>
     <button id="settingsclose" class="big">Done</button>
@@ -215,21 +217,21 @@ window.addEventListener('error', function (e) {
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script src="js/data.js?v=106b9fd1"></script>
-<script src="js/util.js?v=106b9fd1"></script>
-<script src="js/audio.js?v=106b9fd1"></script>
-<script src="js/grid.js?v=106b9fd1"></script>
-<script src="js/map.js?v=106b9fd1"></script>
-<script src="js/models.js?v=106b9fd1"></script>
-<script src="js/entities.js?v=106b9fd1"></script>
-<script src="js/ai.js?v=106b9fd1"></script>
-<script src="js/abilities.js?v=106b9fd1"></script>
-<script src="js/waves.js?v=106b9fd1"></script>
-<script src="js/controls.js?v=106b9fd1"></script>
-<script src="js/post.js?v=106b9fd1"></script>
-<script src="js/missions.js?v=106b9fd1"></script>
-<script src="js/net.js?v=106b9fd1"></script>
-<script src="js/ui.js?v=106b9fd1"></script>
-<script src="js/game.js?v=106b9fd1"></script>
+<script src="js/data.js?v=ed6d054f"></script>
+<script src="js/util.js?v=ed6d054f"></script>
+<script src="js/audio.js?v=ed6d054f"></script>
+<script src="js/grid.js?v=ed6d054f"></script>
+<script src="js/map.js?v=ed6d054f"></script>
+<script src="js/models.js?v=ed6d054f"></script>
+<script src="js/entities.js?v=ed6d054f"></script>
+<script src="js/ai.js?v=ed6d054f"></script>
+<script src="js/abilities.js?v=ed6d054f"></script>
+<script src="js/waves.js?v=ed6d054f"></script>
+<script src="js/controls.js?v=ed6d054f"></script>
+<script src="js/post.js?v=ed6d054f"></script>
+<script src="js/missions.js?v=ed6d054f"></script>
+<script src="js/net.js?v=ed6d054f"></script>
+<script src="js/ui.js?v=ed6d054f"></script>
+<script src="js/game.js?v=ed6d054f"></script>
 </body>
 </html>

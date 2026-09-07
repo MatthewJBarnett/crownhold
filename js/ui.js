@@ -123,6 +123,7 @@ class UI {
     if (q('.bloom')) q('.bloom').addEventListener('change', () => g.setBloom(q('.bloom').checked));
     if (q('.spawncheat')) q('.spawncheat').addEventListener('click', () => g.spawnTestChampion());
     if (q('.goldcheat')) q('.goldcheat').addEventListener('click', () => g.cheatGold(parseInt(q('.goldamt').value, 10)));
+    if (q('.wavejump')) q('.wavejump').addEventListener('click', () => g.jumpToWave(parseInt(q('.waveamt').value, 10)));
     if (q('.showfps')) q('.showfps').addEventListener('change', () => { g.showFps = q('.showfps').checked; g.savePref('showfps', g.showFps ? '1' : '0'); this.$('fpscounter').classList.toggle('hidden', !g.showFps); });
     root.querySelectorAll('input').forEach(i => i.addEventListener('keydown', (e) => e.stopPropagation()));
   }
@@ -353,6 +354,7 @@ class UI {
     document.querySelectorAll('.quick button').forEach(b => b.addEventListener('click', () => {
       const a = b.dataset.act;
       if (a === 'selectAll') g.controls.selectAllSoldiers();
+      else if (a === 'selectArmy') g.controls.selectArmy();
       else if (a === 'selectKing') g.controls.selectKing();
       else if (a === 'selectHeroes') g.controls.selectHeroes();
       else if (a === 'selectEngineers') { const es = g.units.filter(u => u.def.repair && !u.dead); if (es.length) { g.controls.setSelection(es); g.controls.focusOnSelection(); } else this.toast('No engineers. Recruit them in the Recruit tab.'); }

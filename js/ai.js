@@ -274,7 +274,7 @@ Unit.prototype.playerThink = function () {
   else { aggro = 22; leash = 32; }
   if (c && c.type === 'hold') { aggro = this.range + this.radius + 1.5; leash = 0; }
   if (c && c.type === 'follow') { anchor = c.leader.pos; leash = 15; aggro = Math.min(aggro, 14); }
-  if (c && c.type === 'attackmove') { anchor = { x: c.x, z: c.z }; leash = Math.max(leash, U.dist(this.pos.x, this.pos.z, c.x, c.z) + 6); }
+  if (c && c.type === 'attackmove') { anchor = { x: c.x, z: c.z }; leash = Math.max(leash, U.dist(this.pos.x, this.pos.z, c.x, c.z) + 6); aggro = Math.min(aggro, Math.max(this.range + this.radius + 2.5, 6)); }
   if (c && c.type === 'move') { aggro = 0; }
 
   let best = null, bestS = Infinity;
@@ -293,7 +293,7 @@ Unit.prototype.playerThink = function () {
   }
   if (c && c.type === 'hold' && best && !this.inRange(best, 0.6)) best = null;
   // come to the aid of a wall or tower being hit nearby (the King stays put)
-  if (!best && !this.isKing && !(c && (c.type === 'hold' || c.type === 'move' || c.type === 'follow'))) {
+  if (!best && !this.isKing && !(c && (c.type === 'hold' || c.type === 'move' || c.type === 'follow' || c.type === 'attackmove'))) {
     const reach = this.isHero ? 48 : 34;
     let bd = Infinity;
     for (const b of game.buildings) {
@@ -307,7 +307,7 @@ Unit.prototype.playerThink = function () {
     }
   }
   // sally out against artillery shelling the fortress from beyond tower range
-  if (!best && !this.isKing && !(c && (c.type === 'hold' || c.type === 'move' || c.type === 'follow'))) {
+  if (!best && !this.isKing && !(c && (c.type === 'hold' || c.type === 'move' || c.type === 'follow' || c.type === 'attackmove'))) {
     let art = null, ad = Infinity;
     for (const u of game.unitsNear(this.pos.x, this.pos.z, this.isHero ? 80 : 55, 'enemy')) {
       if (u.dead || !u.def.prefersBuildings) continue;
