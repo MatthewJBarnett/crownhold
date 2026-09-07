@@ -256,6 +256,11 @@ class UI {
       pu.appendChild(b);
     }
     document.querySelectorAll('.tabs button').forEach(t => t.addEventListener('click', () => this.showTab(t.dataset.tab)));
+    // holding Shift shows the price of five
+    const shift = (on) => { if (this.shiftHeld !== on) { this.shiftHeld = on; this.refreshPanels(); } };
+    window.addEventListener('keydown', (e) => { if (e.key === 'Shift') shift(true); });
+    window.addEventListener('keyup', (e) => { if (e.key === 'Shift') shift(false); });
+    window.addEventListener('blur', () => shift(false));
   }
   showTab(name) {
     document.querySelectorAll('.tabs button').forEach(t => t.classList.toggle('on', t.dataset.tab === name));
@@ -275,7 +280,8 @@ class UI {
       b.querySelector('.cost').textContent = built ? 'built' : (cost === 0 && g.freeTokens && g.freeTokens[d.key] > 0 ? 'free' : cost);
     });
     const capFull = g.soldierCount() >= g.soldierCap();
-    document.querySelectorAll('[data-unit]').forEach(b => { const d = DATA.units[b.dataset.unit]; const full = d.noCap ? g.engineerCount() >= d.maxCount : capFull; b.classList.toggle('disabled', !!(!g.canAfford(d.cost) || full)); });
+    const mult = this.shiftHeld ? 5 : 1;
+    document.querySelectorAll('[data-unit]').forEach(b => { const d = DATA.units[b.dataset.unit]; const full = d.noCap ? g.engineerCount() >= d.maxCount : capFull; b.classList.toggle('disabled', !!(!g.canAfford(d.cost * mult) || full)); const c = b.querySelector('.cost'); if (c) c.textContent = mult > 1 ? `${d.cost * mult} (x5)` : d.cost; });
     document.querySelectorAll('[data-hero]').forEach(b => {
       if (!b.classList.contains('item')) return;
       const owned = g.heroInPlay(b.dataset.hero);
