@@ -347,6 +347,7 @@ class Game {
   set heroesOwned(v) { this.wallet(this.localPlayer).heroes = v; }
   get heroesBought() { return this.wallet(this.localPlayer).heroesBought || 0; }
   set heroesBought(v) { this.wallet(this.localPlayer).heroesBought = v; }
+  heroInPlay(key) { return this.units.some(u => u.isHero && u.heroKey === key && !u.dead); }
   playerName(id) { const p = this.players[id]; return p ? p.name : 'a player'; }
   ownsOrShared(o) { return !o.owner || o.owner === this.actor; }
   hasBuilding(key) { return this.buildings.some(b => b.def.key === key && !b.dead); }
@@ -473,6 +474,7 @@ class Game {
   }
   buyHero(key) {
     if (this.replica) { this.net.send({ t: 'hero', key }); return; }
+    if (this.heroInPlay(key)) { this.ui.toast(`${DATA.heroes[key].name} is already in play`, 'error'); SFX.play('error'); return; }
     if (this.wallet(this.actor).heroes.includes(key)) { this.ui.toast('You already have this hero', 'error'); return; }
     const cost = this.heroCost(this.actor);
     if (!this.canAfford(cost)) { this.ui.toast(`Not enough gold: ${DATA.heroes[key].name} costs ${cost}`, 'error'); SFX.play('error'); return; }
@@ -589,7 +591,7 @@ class Game {
       if (u.isBoss) { this.boss = null; this.ui.toast(`${u.name} is slain!`, 'boss'); }
     } else {
       if (u.isKing) { this.gameOver(); }
-      else if (u.isHero) { this.fallenHeroes.push({ key: u.heroKey, owner: u.owner }); this.ui.toast(`${u.name} has fallen. They will return after the wave.`, 'error', 5000); }
+      else if (u.isHero) { const w = this.wallet(u.owner || 'host'); w.heroes = w.heroes.filter(k => k !== u.heroKey); this.ui.toast(`${u.name} has fallen. Buy them back from the Recruit tab if you want them again.`, 'error', 6000); }
     }
     if (this.controls.controlled === u) this.controls.exitControl();
     if (u.selected) { u.selected = false; this.controls.selected.delete(u); this.ui.onSelectionChanged(); }
@@ -620,13 +622,7 @@ class Game {
     for (const u of this.units) if (u.team === 'player' && !u.dead) { u.heal(u.maxHp); u.burn = null; u.slow = null; }
     if (this.autoRepair) setTimeout(() => { if (this.started && !this.over) this.repairAll(true); }, 800);
 
-    for (const f of this.fallenHeroes) {
-      const u = this.addHero(f.key, 0, 6, f.owner || 'host');
-      const w = this.wallet(f.owner || 'host'); w.heroes = [...new Set(w.heroes)];
-      u.hp = u.maxHp * 0.5;
-      this.effects.spawn('heal', u.pos.x, 1, u.pos.z, { radius: 2 });
-    }
-    this.fallenHeroes = [];
+
     this.ui.toast(`Wave ${n} cleared! +${bonus} gold${income ? `, +${income} from farms and mines` : ''}. Everyone healed.`, 'good', 6000);
     SFX.play('wavecleared');
     this.ui.dirty = true;
@@ -869,11 +865,11 @@ function runSelfTest(game, params) {
       host.startHost('knight', 'normal', 'Hosty', (err, code) => { hostCode = code; }, A);
       const hn = host.netHost;
       hn.onJoin('B');
-      client.startJoin(hostCode, 'ranger', 'Tester', () => {}, B);
+      client.startJoin(hostCode, 'knight', 'Tester', () => {}, B);
       const cn = client.netClient;
       const pump = () => { A.pump(); B.pump(); };
       pump(); pump();
-      say(`mp: lobby: host sees players=${hn.roster().map(p => p.name + ':' + p.hero).join(',')} started=${hn.started}; client lobby players=${cn.lobby ? cn.lobby.players.length : 'none'}`);
+      say(`mp: lobby: host sees players=${hn.roster().map(p => p.name + ':' + p.hero).join(',')} started=${hn.started}; client lobby players=${cn.lobby ? cn.lobby.players.length : 'none'} (client asked for knight: expect a different hero)`);
       // a third player knocking after the start must be refused
       host.hostBegin(); pump();
       hn.onJoin('C'); hn.onMessage('C', { t: 'hello', name: 'Late', hero: 'cleric' });
@@ -931,6 +927,19 @@ function runSelfTest(game, params) {
       c.setRawInput(false); say(`settings: raw=${c.rawInput} stored=${localStorage.getItem('crownhold_raw')} box=${document.querySelector('.settings .raw').checked}`);
       c.setSensitivity(1, true); c.setRawInput(true);
       say(`settings: invite link=${game.ui.inviteLink('ABCDEF')} joincode field=${document.getElementById('joincode').value}`);
+    }
+    if (params.get('herodeath')) {
+      const hero = game.units.find(u => u.isHero);
+      const key = hero.heroKey;
+      say(`herodeath: before: heroes=${game.heroesOwned.join(',')} inPlay=${game.heroInPlay(key)}`);
+      hero.die(null); game.update(1 / 60);
+      say(`herodeath: after death: heroes=${game.heroesOwned.join(',') || 'none'} inPlay=${game.heroInPlay(key)} alive heroes=${game.units.filter(u => u.isHero && !u.dead).length}`);
+      game.tryStartWave(); for (let i = 0; i < 60 * 30; i++) game.update(1 / 60); for (const u of game.units) if (u.team === 'enemy' && !u.dead) u.die(null); for (let i = 0; i < 60 * 5; i++) game.update(1 / 60);
+      say(`herodeath: after a wave: wave active=${game.waves.active} alive heroes=${game.units.filter(u => u.isHero && !u.dead).length} (expect 0: no free respawn)`);
+      game.gold = 5000; const g0 = game.gold; game.buyHero(key);
+      say(`herodeath: bought back: alive=${game.units.filter(u => u.isHero && !u.dead && u.heroKey === key).length} gold ${g0}->${game.gold} heroes=${game.heroesOwned.join(',')}`);
+      const n0 = game.units.filter(u => u.isHero && !u.dead).length; game.buyHero(key);
+      say(`herodeath: buying a duplicate: alive heroes ${n0}->${game.units.filter(u => u.isHero && !u.dead).length} (expect unchanged)`);
     }
     if (params.get('repairtest')) {
       const h = game.grid.half;

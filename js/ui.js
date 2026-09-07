@@ -252,10 +252,10 @@ class UI {
     document.querySelectorAll('[data-unit]').forEach(b => { const d = DATA.units[b.dataset.unit]; const full = d.noCap ? g.engineerCount() >= d.maxCount : capFull; b.classList.toggle('disabled', !!(!g.canAfford(d.cost) || full)); });
     document.querySelectorAll('[data-hero]').forEach(b => {
       if (!b.classList.contains('item')) return;
-      const owned = g.heroesOwned.includes(b.dataset.hero) || g.fallenHeroes.includes(b.dataset.hero);
+      const owned = g.heroInPlay(b.dataset.hero);
       b.classList.toggle('disabled', owned || !g.canAfford(g.heroCost()));
       b.classList.toggle('owned', owned);
-      b.querySelector('.cost').textContent = owned ? 'owned' : g.heroCost();
+      b.querySelector('.cost').textContent = owned ? 'in play' : g.heroCost();
     });
     { const hc = this.$('herocat'); if (hc) hc.textContent = `Heroes (${g.heroCost()} gold, each one bought raises the price)`; }
     document.querySelectorAll('[data-upgrade]').forEach(b => {
@@ -278,7 +278,7 @@ class UI {
   unitTip(d, hero) {
     let s = `<b>${d.name}</b>${hero ? ` · ${d.title}` : ''}<br>${d.desc || d.passive || ''}<br><span class="st">HP ${d.hp} · Damage ${d.dmg} · Range ${d.range}m · Speed ${d.speed} · Armor ${Math.round((d.armor || 0) * 100)}%</span>`;
     if (d.abilities) s += '<br>' + d.abilities.map(k => `<b>${DATA.abilities[k].key}</b> ${DATA.abilities[k].name}`).join(' · ');
-    if (hero) s += `<br><span class="st">Costs ${this.game.heroCost()} gold now; every hero you buy raises the next price by 50%.</span>`;
+    if (hero) s += `<br><span class="st">Costs ${this.game.heroCost()} gold now; every hero you buy raises the next price by 50%. A fallen hero stays dead until bought back. Only one of each hero can exist.</span>`;
     return s;
   }
   tip(el, fn) {

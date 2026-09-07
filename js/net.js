@@ -131,9 +131,17 @@ class NetHost {
     if (!c) return;
     const g = this.game;
     if (m.t === 'hello') {
-      c.name = String(m.name || 'Player').slice(0, 16); c.hero = DATA.heroes[m.hero] ? m.hero : 'knight';
+      c.name = String(m.name || 'Player').slice(0, 16);
       if (this.started) { this.sendTo(id, { t: 'toast', msg: 'This game has already started', type: 'error' }); return; }
-      g.ui.toast(`${c.name} joined the lobby`, 'good');
+      let hero = DATA.heroes[m.hero] ? m.hero : 'knight';
+      const taken = new Set([this.hostHero].concat([...this.clients].filter(([cid, cc]) => cid !== id && cc.hero).map(([cid, cc]) => cc.hero)));
+      if (taken.has(hero)) {
+        const free = Object.keys(DATA.heroes).find(k => !taken.has(k));
+        this.sendTo(id, { t: 'toast', msg: `${DATA.heroes[hero].name} is already taken, so you will play ${DATA.heroes[free].name}. Leave and rejoin to pick another free hero.`, type: 'warn' });
+        hero = free;
+      }
+      c.hero = hero;
+      g.ui.toast(`${c.name} joined the lobby as ${DATA.heroes[hero].name}`, 'good');
       this.broadcastLobby();
       return;
     }

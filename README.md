@@ -26,7 +26,7 @@ Three.js and the PeerJS networking library load from cdnjs, so an internet conne
 - Farms and Gold Mines get pricier with every one you own (30% and 60% per building). Extra heroes start at
   1200 gold and each purchase raises the next price by 50%. Selling refunds 60% of what you actually paid.
 - Enemies path to the King and break through the cheapest walls in their way. The Keep shelters units inside
-  from ranged fire. Fallen heroes return after the wave. If the King falls, the game is over.
+  from ranged fire. If the King falls, the game is over.
 
 ## The world
 
@@ -38,7 +38,8 @@ Hills rise toward the edges. Selecting a tower, or placing one, shows its range 
 
 ## Heroes
 
-Eight heroes, each with two abilities (Q and E) and a passive: Sir Aldric the Knight (tank), Lyra the Ranger (bow),
+Eight heroes, each with two abilities (Q and E) and a passive, and only one of each can exist. A fallen hero
+stays dead until you buy them back. Sir Aldric the Knight (tank), Lyra the Ranger (bow),
 Magnus the Pyromancer (area fire), Seraphine the Battle Cleric (healing), Thorne the Berserker (cleaving axe, faster
 when hurt), Nyx the Shadow (blinks, double damage from behind), Ivor the Frost Warden (slows, freezes, raises
 temporary ice walls) and Wren the Beastmaster (summons a wolf pack, war horn). You start with one; more can be bought.
