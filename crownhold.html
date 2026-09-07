@@ -51,6 +51,10 @@ button.icon { width: 34px; height: 30px; padding: 0; font-size: 13px; }
 .seg button + button { border-left: none; }
 .seg.small button { padding: 4px 9px; font-size: 12px; }
 .hint { color: var(--muted); font-size: 13px; margin-top: 16px; }
+.banner { margin: 0 auto 14px; max-width: 640px; padding: 10px 14px; background: rgba(120,80,30,0.35); border: 1px solid #e0a040; border-radius: 8px; color: #ffd890; font-size: 13px; line-height: 1.5; }
+.banner .url { display: inline-flex; gap: 6px; align-items: center; margin-top: 6px; }
+.banner input { font-family: inherit; font-size: 13px; padding: 5px 8px; width: 300px; background: rgba(0,0,0,0.35); border: 1px solid var(--line); border-radius: 6px; color: var(--text); }
+.banner button { padding: 4px 9px; font-size: 12px; }
 .mp { margin-top: 22px; padding-top: 6px; border-top: 1px solid var(--line); }
 .mp .section { margin-top: 10px; }
 .mp-row { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
@@ -204,6 +208,7 @@ button.icon { width: 34px; height: 30px; padding: 0; font-size: 13px; }
   <div class="menu-box">
     <h1 class="title">Crownhold</h1>
     <p class="subtitle">Hold the fortress. Keep the King alive.</p>
+    <div id="embedded" class="banner hidden"></div>
     <div class="menu-row">
       <label>Difficulty</label>
       <div class="seg" id="difficulty">
@@ -646,6 +651,7 @@ DATA.spawnPoints = [
   { name: 'West', x: -70, z: 0 },       { name: 'North-West', x: -63, z: -63 },
 ];
 
+DATA.siteUrl = 'https://matthewjbarnett.github.io/crownhold/'; // the full game, outside any embedding sandbox
 DATA.startGold = 500;
 DATA.baseSoldierCap = 0; // keep + barracks + garrison supply the cap
 
@@ -4524,12 +4530,30 @@ class UI {
     }
     this.refreshEmbeddedHints();
   }
+  urlBox() {
+    return `<span class="url"><input type="text" readonly value="${DATA.siteUrl}" onclick="this.select()"><button data-a="copy">Copy</button></span>`;
+  }
+  wireCopy(root) {
+    const b = root.querySelector('[data-a=copy]'); if (!b) return;
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const done = () => { b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy'; }, 1500); };
+      const inp = root.querySelector('input'); inp.select();
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(DATA.siteUrl).then(done).catch(() => { try { document.execCommand('copy'); done(); } catch (err) {} });
+      else { try { document.execCommand('copy'); done(); } catch (err) {} }
+    });
+  }
   refreshEmbeddedHints() {
+    const framed = window.self !== window.top || /[?&]forceframed/.test(location.search);
+    const em = this.$('embedded');
+    em.classList.toggle('hidden', !framed);
+    if (framed) { em.innerHTML = `This embedded view blocks mouse capture and multiplayer. The full game is at ${this.urlBox()}<br>Paste it into a new tab, or bookmark it.`; this.wireCopy(em); }
     const blocked = !this.webrtcSupported();
     this.$('mprow').classList.toggle('hidden', blocked);
     const mb = this.$('mpblocked');
     mb.classList.toggle('hidden', !blocked);
-    if (blocked) mb.innerHTML = `Playing together needs a direct connection between browsers, and this page blocks those. ${this.downloads ? 'Save the game as a file and open it on your computer: it plays the same, and there hosting and joining work.' : 'Open <b>index.html</b> from the crownhold folder on your computer instead: there hosting and joining work.'}${this.downloads ? ' <button id="dlbtn">Download crownhold.html</button>' : ''}`;
+    if (blocked) mb.innerHTML = `Playing together needs a direct connection between browsers, and this page blocks those. Host and join from the full game at ${this.urlBox()}`;
+    if (blocked) this.wireCopy(mb);
     const dl = this.$('dlbtn'); if (dl) dl.addEventListener('click', () => this.downloadGame());
     this.onLockChanged();
   }
@@ -4803,9 +4827,10 @@ class UI {
     if (c.lookLocked) { el.classList.add('hidden'); return; }
     const fsOk = !!document.fullscreenEnabled;
     const extra = `${fsOk ? ' <button data-a="fs">Fullscreen</button>' : ''}<button data-a="pop">Open in its own window</button>${this.downloads ? '<button data-a="dl">Download the game for full mouse capture</button>' : ''}`;
-    if (c.lockUnavailable) el.innerHTML = `This page will not let the game capture the mouse${c.lockError ? ` (${c.lockError})` : ''}. Mouse look still works inside the game frame. <b>Hold the right mouse button</b> (or the left while attacking) to keep looking beyond it; a right-button tap still orders your soldiers.${fsOk ? ' Fullscreen gives more room.' : ''}${extra}`;
+    if (c.lockUnavailable) el.innerHTML = `This page will not let the game capture the mouse${c.lockError ? ` (${c.lockError})` : ''}. For full mouse look open the game at ${this.urlBox()}<br>Here, mouse look works inside the frame, and <b>holding the right mouse button</b> (or the left while attacking) keeps it working beyond it; a right-button tap still orders your soldiers.${extra}`;
     else el.innerHTML = `<b>Click</b> the game to capture the mouse.${extra}`;
     const fsb = el.querySelector('[data-a=fs]'); if (fsb) fsb.addEventListener('click', (e) => { e.stopPropagation(); c.toggleFullscreen(); });
+    this.wireCopy(el);
     el.querySelector('[data-a=pop]').addEventListener('click', (e) => { e.stopPropagation(); c.popOut(); });
     const dlb = el.querySelector('[data-a=dl]'); if (dlb) dlb.addEventListener('click', (e) => { e.stopPropagation(); this.downloadGame(); });
   }

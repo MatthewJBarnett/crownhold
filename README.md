@@ -7,7 +7,9 @@ Friends can join your fortress over the internet and defend it with you.
 
 ## Play
 
-Open `index.html` in a modern browser (Chrome, Edge, Firefox, Safari). No build step or server is required.
+Play online at https://matthewjbarnett.github.io/crownhold/ (mouse capture, fullscreen and multiplayer all work there).
+
+Or open `index.html` in a modern browser (Chrome, Edge, Firefox, Safari). No build step or server is required.
 Three.js and the PeerJS networking library load from cdnjs, so an internet connection is needed on first load.
 
 `crownhold.html` is a single-file bundle of the same game (run `python3 build_single.py` to regenerate it).

@@ -281,5 +281,6 @@ DATA.spawnPoints = [
   { name: 'West', x: -70, z: 0 },       { name: 'North-West', x: -63, z: -63 },
 ];
 
+DATA.siteUrl = 'https://matthewjbarnett.github.io/crownhold/'; // the full game, outside any embedding sandbox
 DATA.startGold = 500;
 DATA.baseSoldierCap = 0; // keep + barracks + garrison supply the cap

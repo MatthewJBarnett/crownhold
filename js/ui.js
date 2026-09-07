@@ -74,12 +74,30 @@ class UI {
     }
     this.refreshEmbeddedHints();
   }
+  urlBox() {
+    return `<span class="url"><input type="text" readonly value="${DATA.siteUrl}" onclick="this.select()"><button data-a="copy">Copy</button></span>`;
+  }
+  wireCopy(root) {
+    const b = root.querySelector('[data-a=copy]'); if (!b) return;
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const done = () => { b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy'; }, 1500); };
+      const inp = root.querySelector('input'); inp.select();
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(DATA.siteUrl).then(done).catch(() => { try { document.execCommand('copy'); done(); } catch (err) {} });
+      else { try { document.execCommand('copy'); done(); } catch (err) {} }
+    });
+  }
   refreshEmbeddedHints() {
+    const framed = window.self !== window.top || /[?&]forceframed/.test(location.search);
+    const em = this.$('embedded');
+    em.classList.toggle('hidden', !framed);
+    if (framed) { em.innerHTML = `This embedded view blocks mouse capture and multiplayer. The full game is at ${this.urlBox()}<br>Paste it into a new tab, or bookmark it.`; this.wireCopy(em); }
     const blocked = !this.webrtcSupported();
     this.$('mprow').classList.toggle('hidden', blocked);
     const mb = this.$('mpblocked');
     mb.classList.toggle('hidden', !blocked);
-    if (blocked) mb.innerHTML = `Playing together needs a direct connection between browsers, and this page blocks those. ${this.downloads ? 'Save the game as a file and open it on your computer: it plays the same, and there hosting and joining work.' : 'Open <b>index.html</b> from the crownhold folder on your computer instead: there hosting and joining work.'}${this.downloads ? ' <button id="dlbtn">Download crownhold.html</button>' : ''}`;
+    if (blocked) mb.innerHTML = `Playing together needs a direct connection between browsers, and this page blocks those. Host and join from the full game at ${this.urlBox()}`;
+    if (blocked) this.wireCopy(mb);
     const dl = this.$('dlbtn'); if (dl) dl.addEventListener('click', () => this.downloadGame());
     this.onLockChanged();
   }
@@ -353,9 +371,10 @@ class UI {
     if (c.lookLocked) { el.classList.add('hidden'); return; }
     const fsOk = !!document.fullscreenEnabled;
     const extra = `${fsOk ? ' <button data-a="fs">Fullscreen</button>' : ''}<button data-a="pop">Open in its own window</button>${this.downloads ? '<button data-a="dl">Download the game for full mouse capture</button>' : ''}`;
-    if (c.lockUnavailable) el.innerHTML = `This page will not let the game capture the mouse${c.lockError ? ` (${c.lockError})` : ''}. Mouse look still works inside the game frame. <b>Hold the right mouse button</b> (or the left while attacking) to keep looking beyond it; a right-button tap still orders your soldiers.${fsOk ? ' Fullscreen gives more room.' : ''}${extra}`;
+    if (c.lockUnavailable) el.innerHTML = `This page will not let the game capture the mouse${c.lockError ? ` (${c.lockError})` : ''}. For full mouse look open the game at ${this.urlBox()}<br>Here, mouse look works inside the frame, and <b>holding the right mouse button</b> (or the left while attacking) keeps it working beyond it; a right-button tap still orders your soldiers.${extra}`;
     else el.innerHTML = `<b>Click</b> the game to capture the mouse.${extra}`;
     const fsb = el.querySelector('[data-a=fs]'); if (fsb) fsb.addEventListener('click', (e) => { e.stopPropagation(); c.toggleFullscreen(); });
+    this.wireCopy(el);
     el.querySelector('[data-a=pop]').addEventListener('click', (e) => { e.stopPropagation(); c.popOut(); });
     const dlb = el.querySelector('[data-a=dl]'); if (dlb) dlb.addEventListener('click', (e) => { e.stopPropagation(); this.downloadGame(); });
   }

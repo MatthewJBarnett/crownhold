@@ -42,6 +42,10 @@ button.icon { width: 34px; height: 30px; padding: 0; font-size: 13px; }
 .seg button + button { border-left: none; }
 .seg.small button { padding: 4px 9px; font-size: 12px; }
 .hint { color: var(--muted); font-size: 13px; margin-top: 16px; }
+.banner { margin: 0 auto 14px; max-width: 640px; padding: 10px 14px; background: rgba(120,80,30,0.35); border: 1px solid #e0a040; border-radius: 8px; color: #ffd890; font-size: 13px; line-height: 1.5; }
+.banner .url { display: inline-flex; gap: 6px; align-items: center; margin-top: 6px; }
+.banner input { font-family: inherit; font-size: 13px; padding: 5px 8px; width: 300px; background: rgba(0,0,0,0.35); border: 1px solid var(--line); border-radius: 6px; color: var(--text); }
+.banner button { padding: 4px 9px; font-size: 12px; }
 .mp { margin-top: 22px; padding-top: 6px; border-top: 1px solid var(--line); }
 .mp .section { margin-top: 10px; }
 .mp-row { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
