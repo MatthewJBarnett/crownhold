@@ -304,7 +304,7 @@ class Unit {
     a = Math.max(0.5, a);
     const fl = this.game.flags;
     if (fl && this.team === 'enemy' && fl.brittle > 1) a *= fl.brittle;
-    if (fl && fl.apo && this.team === 'player') { this.hp = Math.max(1, this.hp - a); this.flashT = 0.12; if (source && source instanceof Unit) this.lastAttacker = source; return a; }
+    if (fl && fl.apo && this.team === 'player') a *= DATA.buildings.apotheosis.apotheosis.guard;
     this.hp -= a;
     this.flashT = 0.12;
     if (source && source instanceof Unit) this.lastAttacker = source;
@@ -640,7 +640,7 @@ class Building {
 
   takeDamage(amount, source) {
     if (this.dead) return 0;
-    if (this.def.keep && this.game.flags && this.game.flags.apo) { this.flashT = 0.1; return 0; }
+    if (this.def.keep && this.game.flags && this.game.flags.apo) amount *= DATA.buildings.apotheosis.apotheosis.guard;
     if (this.def.spikes && source instanceof Unit && source.attackKind === 'melee' && !source.dead) source.takeDamage(this.def.spikes, null, { magic: true });
     this.hp -= amount;
     this.flashT = 0.1;
@@ -843,7 +843,7 @@ class Building {
     }
     if (def.apotheosis) {
       const a = def.apotheosis;
-      for (const u of game.units) if (u.team === 'enemy' && !u.dead) { u.takeDamage(u.maxHp * (u.isBoss ? a.bossBurn : a.burn) * dt, this, { magic: true }); if (Math.random() < dt * 0.4) game.effects.spawn('flame', u.pos.x, u.centerY, u.pos.z); }
+      for (const u of game.unitsNear(this.pos.x, this.pos.z, a.radius, 'enemy')) if (!u.dead) { u.takeDamage(u.maxHp * (u.isBoss ? a.bossBurn : a.burn) * dt, this, { magic: true }); if (Math.random() < dt * 0.4) game.effects.spawn('flame', u.pos.x, u.centerY, u.pos.z); }
       const halo = this.group.userData.orb; if (halo) halo.rotation.y += dt * 0.5;
     }
     if (this.wTimer > 0) return;
@@ -873,9 +873,9 @@ class Building {
       this.wTimer = def.apotheosis.skyEvery;
       if (game.waves.active) {
         let n = 0;
-        for (const u of game.units) if (u.team === 'enemy' && !u.dead) { if (u.isBoss) u.takeDamage(u.maxHp * def.apotheosis.bossSky, this, { magic: true }); else { u.takeDamage(u.hp + 1, this, { magic: true }); n++; } }
+        for (const u of game.units) if (u.team === 'enemy' && !u.dead) { u.takeDamage(u.hp * (u.isBoss ? def.apotheosis.bossSky : def.apotheosis.sky), this, { magic: true }); u.stunUntil = game.time + 3; n++; }
         game.effects.spawn('ring', this.pos.x, 0.3, this.pos.z, { radius: 300, color: 0xffffff, dur: 2.0 }); game.effects.spawn('explosion', 0, 20, 0, { radius: 40, color: 0xfffff0 });
-        game.ui.toast(`The sky opens. ${n} enemies cease to exist.`, 'boss'); SFX.play('explode');
+        game.ui.toast(`The sky opens over ${n} enemies.`, 'boss'); SFX.play('explode');
       } else this.wTimer = 2;
     } else if (def.doom) {
       this.wTimer = def.doom.every;

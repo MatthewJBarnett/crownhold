@@ -9,7 +9,7 @@ DATA.CELL = 2;                                  // metres per grid cell
 DATA.GRID = 140;                                // cells per side (280m map)
 DATA.MAP_HALF = DATA.GRID * DATA.CELL / 2 - 1;  // hard clamp for unit positions
 DATA.BUILD_RADIUS = 92;                         // hills and decoration begin past this (metres)
-DATA.BUILD_RANGE = 104;                         // buildings may stand anywhere within this radius of the Keep
+DATA.BUILD_RANGE = 120;                         // buildings may stand anywhere within this radius of the Keep (a large circle)
 DATA.SPAWN_RADIUS = DATA.MAP_HALF - 3;          // enemy spawn ring: the shore of the island
 DATA.MAP_RADIUS = DATA.MAP_HALF - 1;            // the island is a disc; beyond this is sea
 
@@ -123,7 +123,7 @@ DATA.heroes.beastmaster = {
   color: 0x6a5a3a, cloth: 0x3f5a2a, weapon: 'pike', hood: true, skin: 0xe0b890,
   aura: { radius: 8, dmgMul: 1.15 },
 };
-DATA.heroBaseCost = 1200;   // first extra hero
+DATA.heroBaseCost = 1450;   // first extra hero
 DATA.heroCostGrowth = 1.5;  // each hero bought makes the next one pricier
 
 // ---------------------------------------------------------------------------
@@ -137,38 +137,38 @@ DATA.units = {
     color: 0xc9a227, cloth: 0x7a1030, weapon: 'sword', crown: true,
   },
   swordsman: {
-    key: 'swordsman', name: 'Swordsman', cost: 50, hp: 140, dmg: 15, range: 2.3, cd: 1.0, armor: 0.15, speed: 5.6, radius: 0.42,
+    key: 'swordsman', name: 'Swordsman', cost: 60, hp: 140, dmg: 15, range: 2.3, cd: 1.0, armor: 0.15, speed: 5.6, radius: 0.42,
     attack: 'melee', desc: 'Reliable front-line fighter.',
     color: 0x8a97a5, cloth: 0x355d9a, weapon: 'sword', helmet: true, shield: true,
   },
   archer: {
-    key: 'archer', name: 'Archer', cost: 60, hp: 85, dmg: 13, range: 17, cd: 1.3, armor: 0.05, speed: 5.6, radius: 0.4,
+    key: 'archer', name: 'Archer', cost: 70, hp: 85, dmg: 13, range: 17, cd: 1.3, armor: 0.05, speed: 5.6, radius: 0.4,
     attack: 'ranged', projectile: 'arrow', desc: 'Ranged support. Keep them behind the walls.',
     color: 0x7d8a5a, cloth: 0x4a6a3a, weapon: 'bow', hood: true,
   },
   engineer: {
-    key: 'engineer', name: 'Engineer', cost: 70, hp: 100, dmg: 6, range: 2.0, cd: 1.2, armor: 0.05, speed: 5.8, radius: 0.4,
+    key: 'engineer', name: 'Engineer', cost: 85, hp: 100, dmg: 6, range: 2.0, cd: 1.2, armor: 0.05, speed: 5.8, radius: 0.4,
     attack: 'melee', repair: { hps: 35, range: 4.6 }, noCap: true, maxCount: 4,
     desc: 'Repairs damaged buildings for free, 35 HP per second. Runs from enemies and does not count against the soldier cap (max 4).',
     color: 0x7a5a3a, cloth: 0x6a5a3a, weapon: 'hammer', skin: 0xe8c39e,
   },
   crossbowman: {
-    key: 'crossbowman', name: 'Crossbowman', cost: 80, hp: 95, dmg: 23, range: 15, cd: 1.7, armor: 0.1, speed: 5.4, radius: 0.4,
+    key: 'crossbowman', name: 'Crossbowman', cost: 95, hp: 95, dmg: 23, range: 15, cd: 1.7, armor: 0.1, speed: 5.4, radius: 0.4,
     attack: 'ranged', projectile: 'bolt', magic: true, desc: 'Armour-piercing bolts. Slow to reload but ignores armour.',
     color: 0x6a6a7a, cloth: 0x4a3a5a, weapon: 'bow', helmet: true,
   },
   cavalry: {
-    key: 'cavalry', name: 'Knight', cost: 130, hp: 230, dmg: 28, range: 2.6, cd: 1.0, armor: 0.3, speed: 8.4, radius: 0.55,
+    key: 'cavalry', name: 'Knight', cost: 160, hp: 230, dmg: 28, range: 2.6, cd: 1.0, armor: 0.3, speed: 8.4, radius: 0.55,
     attack: 'melee', large: true, model: 'rider', desc: 'Mounted lancer. Fast enough to run down catapults and casters.',
     color: 0xb0b8c0, cloth: 0x8a2a2a, weapon: 'pike', helmet: true,
   },
   priest: {
-    key: 'priest', name: 'Priest', cost: 90, hp: 85, dmg: 5, range: 2.0, cd: 1.5, armor: 0, speed: 5.6, radius: 0.4,
+    key: 'priest', name: 'Priest', cost: 110, hp: 85, dmg: 5, range: 2.0, cd: 1.5, armor: 0, speed: 5.6, radius: 0.4,
     attack: 'melee', medic: { hps: 9, radius: 6 }, noCap: false, desc: 'Heals allies within 6m for 9 HP/s and follows the fighting. Does not fight.',
     color: 0xf0e6d0, cloth: 0xe8dcc0, weapon: 'staff', robe: true, hood: true,
   },
   apprentice: {
-    key: 'apprentice', name: 'Apprentice', cost: 95, hp: 80, dmg: 22, range: 16, cd: 1.8, armor: 0, speed: 5.4, radius: 0.4,
+    key: 'apprentice', name: 'Apprentice', cost: 110, hp: 80, dmg: 22, range: 16, cd: 1.8, armor: 0, speed: 5.4, radius: 0.4,
     attack: 'ranged', projectile: 'fireball', splash: 2.0, magic: true, desc: 'Fireballs that splash in 2m. Fragile.',
     color: 0xb04a2a, cloth: 0x5a2a1a, weapon: 'staff', robe: true, hat: true,
   },
@@ -177,7 +177,7 @@ DATA.units = {
     attack: 'melee', noCap: true, summoned: true, model: 'wolf', color: 0x6a6a6a,
   },
   pikeman: {
-    key: 'pikeman', name: 'Pikeman', cost: 85, hp: 180, dmg: 28, range: 3.3, cd: 1.5, armor: 0.2, speed: 5.0, radius: 0.45,
+    key: 'pikeman', name: 'Pikeman', cost: 100, hp: 180, dmg: 28, range: 3.3, cd: 1.5, armor: 0.2, speed: 5.0, radius: 0.45,
     attack: 'melee', bonusVsLarge: 1.6, desc: 'Long reach. +60% damage against large enemies and bosses.',
     color: 0x9a9a9a, cloth: 0x6b3a2a, weapon: 'pike', helmet: true,
   },
@@ -364,43 +364,43 @@ DATA.projectiles = {
 // footprint: w x d cells. interior: list of [dx,dz] cells that are walkable (relative to top-left)
 // ---------------------------------------------------------------------------
 DATA.buildings = {
-  wall:     { key: 'wall', name: 'Stone Wall', cost: 40, hp: 520, w: 1, d: 1, cat: 'defense', drag: true,
+  wall:     { key: 'wall', name: 'Stone Wall', cost: 50, hp: 520, w: 1, d: 1, cat: 'defense', drag: true,
               desc: 'Sturdy stone. Drag to build long stretches. Enemies hack at walls twice as hard as at anything else.' },
-  gate:     { key: 'gate', name: 'Gate', cost: 80, hp: 500, w: 1, d: 1, cat: 'defense', gate: true,
+  gate:     { key: 'gate', name: 'Gate', cost: 95, hp: 500, w: 1, d: 1, cat: 'defense', gate: true,
               desc: 'Your units pass through; enemies must break it.' },
-  arrow_tower:   { key: 'arrow_tower', name: 'Arrow Tower', cost: 130, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
+  arrow_tower:   { key: 'arrow_tower', name: 'Arrow Tower', cost: 160, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 20, dmg: 18, cd: 1.1, projectile: 'arrow', desc: 'Fast-firing tower. Good all-rounder.' },
-  ballista_tower:{ key: 'ballista_tower', name: 'Ballista Tower', cost: 240, hp: 1000, w: 2, d: 2, cat: 'tower', tower: true,
+  ballista_tower:{ key: 'ballista_tower', name: 'Ballista Tower', cost: 290, hp: 1000, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 28, dmg: 86, cd: 2.8, projectile: 'ballista', bonusVsLarge: 1.7, desc: 'Slow, huge single hits. +70% damage to large enemies.' },
-  mage_tower:    { key: 'mage_tower', name: 'Mage Tower', cost: 320, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
+  mage_tower:    { key: 'mage_tower', name: 'Mage Tower', cost: 380, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 22, dmg: 45, cd: 2.2, projectile: 'magic', desc: 'Lobs exploding fire that splashes in 3.5m and burns.' },
-  frost_tower:   { key: 'frost_tower', name: 'Frost Tower', cost: 260, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
+  frost_tower:   { key: 'frost_tower', name: 'Frost Tower', cost: 310, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 18, dmg: 14, cd: 0.9, projectile: 'frost', desc: 'Weak damage but slows targets by 50%.' },
-  cannon_tower:  { key: 'cannon_tower', name: 'Cannon Tower', cost: 380, hp: 1100, w: 2, d: 2, cat: 'tower', tower: true,
+  cannon_tower:  { key: 'cannon_tower', name: 'Cannon Tower', cost: 460, hp: 1100, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 24, dmg: 120, cd: 4.0, projectile: 'cannon', minRange: 6, desc: 'Lobs iron shot that splashes in 3m. Cannot hit anything closer than 6m.' },
-  lightning_tower:{ key: 'lightning_tower', name: 'Lightning Tower', cost: 340, hp: 850, w: 2, d: 2, cat: 'tower', tower: true,
+  lightning_tower:{ key: 'lightning_tower', name: 'Lightning Tower', cost: 410, hp: 850, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 18, dmg: 28, cd: 1.7, chain: { count: 4, radius: 6 }, desc: 'Chain lightning that arcs to four enemies and ignores armour.' },
-  poison_tower:  { key: 'poison_tower', name: 'Poison Tower', cost: 240, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
+  poison_tower:  { key: 'poison_tower', name: 'Poison Tower', cost: 290, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 18, dmg: 8, cd: 1.1, projectile: 'poison', desc: 'Darts that poison for 12 damage/s over 4s. Stacks nothing, but never misses.' },
-  watchtower:    { key: 'watchtower', name: 'Watchtower', cost: 320, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
+  watchtower:    { key: 'watchtower', name: 'Watchtower', cost: 380, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 32, dmg: 62, cd: 3.6, projectile: 'sniper', prefersCasters: true, desc: 'Marksmen with a 32m reach who pick off casters and catapults first. Trebuchets still outrange them.' },
-  barricade: { key: 'barricade', name: 'Spiked Barricade', cost: 24, hp: 240, w: 1, d: 1, cat: 'defense', drag: true, spikes: 3,
+  barricade: { key: 'barricade', name: 'Spiked Barricade', cost: 30, hp: 240, w: 1, d: 1, cat: 'defense', drag: true, spikes: 3,
               desc: 'Cheap and weak, but every melee blow against it wounds the attacker for 3.' },
-  trap:     { key: 'trap', name: 'Spike Trap', cost: 45, hp: 200, w: 1, d: 1, cat: 'defense', interior: [[0, 0]], trap: { dmg: 70, radius: 1.6, slow: 0.5, rearm: 20 },
+  trap:     { key: 'trap', name: 'Spike Trap', cost: 55, hp: 200, w: 1, d: 1, cat: 'defense', interior: [[0, 0]], trap: { dmg: 70, radius: 1.6, slow: 0.5, rearm: 20 },
               desc: 'Hidden in the ground. Enemies stepping on it take 70 damage and are slowed. Rearms after 20s.' },
-  barracks: { key: 'barracks', name: 'Barracks', cost: 160, hp: 1200, w: 3, d: 3, cat: 'economy', soldierCap: 6,
+  barracks: { key: 'barracks', name: 'Barracks', cost: 190, hp: 1200, w: 3, d: 3, cat: 'economy', soldierCap: 6,
               desc: '+6 soldier capacity. Recruits muster here.' },
-  farm:     { key: 'farm', name: 'Farm', cost: 150, hp: 500, w: 3, d: 3, cat: 'economy', income: 45, costGrowth: 1.3,
+  farm:     { key: 'farm', name: 'Farm', cost: 180, hp: 500, w: 3, d: 3, cat: 'economy', income: 45, costGrowth: 1.3,
               desc: '+45 gold at the end of each wave. Each farm you own makes the next one 30% pricier.' },
-  mine:     { key: 'mine', name: 'Gold Mine', cost: 260, hp: 700, w: 2, d: 2, cat: 'economy', income: 90, costGrowth: 1.6,
+  mine:     { key: 'mine', name: 'Gold Mine', cost: 310, hp: 700, w: 2, d: 2, cat: 'economy', income: 90, costGrowth: 1.6,
               desc: '+90 gold at the end of each wave. Each mine you own makes the next one 60% pricier.' },
-  blacksmith: { key: 'blacksmith', name: 'Blacksmith', cost: 300, hp: 900, w: 3, d: 3, cat: 'economy', unique: true, soldierDmg: 0.15,
+  blacksmith: { key: 'blacksmith', name: 'Blacksmith', cost: 360, hp: 900, w: 3, d: 3, cat: 'economy', unique: true, soldierDmg: 0.15,
               desc: 'Soldiers deal +15% damage. Unlocks the Weapon and Armor upgrades.' },
-  shrine:   { key: 'shrine', name: 'Healing Shrine', cost: 220, hp: 600, w: 2, d: 2, cat: 'economy', heal: { radius: 12, hps: 10 },
+  shrine:   { key: 'shrine', name: 'Healing Shrine', cost: 260, hp: 600, w: 2, d: 2, cat: 'economy', heal: { radius: 12, hps: 10 },
               desc: 'During a wave, heals friendly units within 12m for 10 HP/s. Everyone is healed fully between waves anyway.' },
-  market:   { key: 'market', name: 'Market', cost: 350, hp: 700, w: 3, d: 3, cat: 'economy', unique: true, killBonus: 0.25,
+  market:   { key: 'market', name: 'Market', cost: 420, hp: 700, w: 3, d: 3, cat: 'economy', unique: true, killBonus: 0.25,
               desc: '+25% gold from kills. One per fortress.' },
-  tavern:   { key: 'tavern', name: 'Tavern', cost: 260, hp: 800, w: 3, d: 3, cat: 'economy', unique: true, soldierCap: 3, soldierSpeed: 0.12,
+  tavern:   { key: 'tavern', name: 'Tavern', cost: 310, hp: 800, w: 3, d: 3, cat: 'economy', unique: true, soldierCap: 3, soldierSpeed: 0.12,
               desc: '+3 soldier capacity and soldiers move 12% faster. One per fortress.' },
   icewall:  { key: 'icewall', name: 'Ice Wall', cost: 0, hp: 450, w: 1, d: 1, cat: 'special', temporary: true, hidden: true,
               desc: 'Conjured ice. Melts on its own.' },
@@ -409,38 +409,38 @@ DATA.buildings = {
 };
 
 // Wonders: ruinously expensive, absurdly strong. One of each per defender.
-DATA.buildings.dragon_roost = { key: 'dragon_roost', name: 'Dragon Roost', cost: 2600, hp: 1800, w: 3, d: 3, cat: 'wonder', unique: true, guardian: { unit: 'tamedragon', rebuild: 2 },
+DATA.buildings.dragon_roost = { key: 'dragon_roost', name: 'Dragon Roost', cost: 3100, hp: 1800, w: 3, d: 3, cat: 'wonder', unique: true, guardian: { unit: 'tamedragon', rebuild: 2 },
   desc: 'A tamed dragon nests here: 3200 HP, flies, and breathes fire that splashes 3.5m for 70 (ignores armour). If it dies the roost hatches another two waves later.' };
-DATA.buildings.titan_forge = { key: 'titan_forge', name: 'Titan Forge', cost: 3400, hp: 2400, w: 3, d: 3, cat: 'wonder', unique: true, guardian: { unit: 'irongolem', rebuild: 2 },
+DATA.buildings.titan_forge = { key: 'titan_forge', name: 'Titan Forge', cost: 4100, hp: 2400, w: 3, d: 3, cat: 'wonder', unique: true, guardian: { unit: 'irongolem', rebuild: 2 },
   desc: 'Forges an Iron Titan: 5500 HP, 50% armour, 110-damage cleaving blows. Slow, unstoppable. Reforged two waves after it falls.' };
-DATA.buildings.arcane_spire = { key: 'arcane_spire', name: 'Arcane Spire', cost: 3000, hp: 1300, w: 2, d: 2, cat: 'wonder', unique: true, tower: true, range: 44, dmg: 220, cd: 14, storm: { count: 6, scatter: 7, splash: 5, delay: 1.0 },
+DATA.buildings.arcane_spire = { key: 'arcane_spire', name: 'Arcane Spire', cost: 3600, hp: 1300, w: 2, d: 2, cat: 'wonder', unique: true, tower: true, range: 44, dmg: 220, cd: 14, storm: { count: 6, scatter: 7, splash: 5, delay: 1.0 },
   desc: 'Every 14s calls a meteor storm on the thickest crowd within 44m: six meteors of 220 damage, each splashing 5m and burning.' };
-DATA.buildings.sun_altar = { key: 'sun_altar', name: 'Sun Altar', cost: 2400, hp: 1300, w: 2, d: 2, cat: 'wonder', unique: true, tower: true, range: 38, dmg: 160, cd: 1, beam: { dps: 160 },
+DATA.buildings.sun_altar = { key: 'sun_altar', name: 'Sun Altar', cost: 2900, hp: 1300, w: 2, d: 2, cat: 'wonder', unique: true, tower: true, range: 38, dmg: 160, cd: 1, beam: { dps: 160 },
   desc: 'Focuses sunlight into a beam that burns the strongest enemy within 38m for 160 damage per second, ignoring armour. Never misses, never stops.' };
-DATA.buildings.royal_treasury = { key: 'royal_treasury', name: 'Royal Treasury', cost: 2000, hp: 1600, w: 3, d: 3, cat: 'wonder', unique: true, interest: 0.06, interestCap: 600, bounty: 0.5,
+DATA.buildings.royal_treasury = { key: 'royal_treasury', name: 'Royal Treasury', cost: 2400, hp: 1600, w: 3, d: 3, cat: 'wonder', unique: true, interest: 0.06, interestCap: 600, bounty: 0.5,
   desc: 'Pays 6% interest on your gold after every wave (up to 600) and raises every bounty your forces collect by 50%.' };
-DATA.buildings.storm_crown = { key: 'storm_crown', name: 'Crown of Storms', cost: 5000, hp: 1500, w: 2, d: 2, cat: 'wonder', unique: true, tower: true, range: 40, dmg: 150, cd: 3, chain: { count: 10, radius: 9 },
+DATA.buildings.storm_crown = { key: 'storm_crown', name: 'Crown of Storms', cost: 6000, hp: 1500, w: 2, d: 2, cat: 'wonder', unique: true, tower: true, range: 40, dmg: 150, cd: 3, chain: { count: 10, radius: 9 },
   desc: 'Chain lightning every 3s that leaps through ten enemies within 40m for 150 each, ignoring armour.' };
-DATA.buildings.phoenix_pyre = { key: 'phoenix_pyre', name: 'Phoenix Pyre', cost: 6500, hp: 1800, w: 2, d: 2, cat: 'wonder', unique: true, phoenix: true,
+DATA.buildings.phoenix_pyre = { key: 'phoenix_pyre', name: 'Phoenix Pyre', cost: 7800, hp: 1800, w: 2, d: 2, cat: 'wonder', unique: true, phoenix: true,
   desc: 'Every soldier and hero of yours that falls rises again from the pyre three seconds later, once per wave.' };
-DATA.buildings.world_tree = { key: 'world_tree', name: 'World Tree', cost: 8000, hp: 3000, w: 3, d: 3, cat: 'wonder', unique: true, income: 150, treeAura: { radius: 32, regen: 0.02, towerDmg: 1.25 },
+DATA.buildings.world_tree = { key: 'world_tree', name: 'World Tree', cost: 9600, hp: 3000, w: 3, d: 3, cat: 'wonder', unique: true, income: 150, treeAura: { radius: 32, regen: 0.02, towerDmg: 1.25 },
   desc: 'Your units within 32m regenerate 2% of their health every second, your towers there hit 25% harder, and it yields 150 gold a wave.' };
-DATA.buildings.time_anchor = { key: 'time_anchor', name: 'Time Anchor', cost: 10000, hp: 1800, w: 2, d: 2, cat: 'wonder', unique: true, slowField: { radius: 34, factor: 0.45 }, freeze: { every: 30, radius: 20, dur: 4 },
+DATA.buildings.time_anchor = { key: 'time_anchor', name: 'Time Anchor', cost: 12000, hp: 1800, w: 2, d: 2, cat: 'wonder', unique: true, slowField: { radius: 34, factor: 0.45 }, freeze: { every: 30, radius: 20, dur: 4 },
   desc: 'Enemies within 34m move and fight 45% slower. Every 30s it freezes everything within 20m for 4s.' };
-DATA.buildings.celestial_gate = { key: 'celestial_gate', name: 'Celestial Gate', cost: 14000, hp: 2400, w: 3, d: 3, cat: 'wonder', unique: true, summonHost: { unit: 'angel', count: 6, every: 40, dur: 40 },
+DATA.buildings.celestial_gate = { key: 'celestial_gate', name: 'Celestial Gate', cost: 17000, hp: 2400, w: 3, d: 3, cat: 'wonder', unique: true, summonHost: { unit: 'angel', count: 6, every: 40, dur: 40 },
   desc: 'Every 40s six celestial warriors step through: 650 HP, 70-damage cleaving blades, they fly over walls, and they fight for 40s.' };
-DATA.buildings.doomsday_engine = { key: 'doomsday_engine', name: 'Doomsday Engine', cost: 20000, hp: 3000, w: 3, d: 3, cat: 'wonder', unique: true, doom: { every: 60, dmg: 600, bossDmg: 300 }, burnField: { radius: 40, dps: 25 },
-  desc: 'Every 60s it detonates: every enemy on the map takes 600 damage (bosses 300). Enemies within 40m burn for 25 damage a second all the time.' };
-DATA.buildings.throne_of_ages = { key: 'throne_of_ages', name: 'Throne of Ages', cost: 30000, hp: 5000, w: 3, d: 3, cat: 'wonder', unique: true, throne: { kingHp: 5000, kingRegen: 100, towerDmg: 1.5, soldierDmg: 1.5, income: 2 },
-  desc: 'The King gains 5000 HP and heals 100 a second, your towers and soldiers hit 50% harder, and your farms and mines pay double.' };
-DATA.buildings.sun_forge = { key: 'sun_forge', name: 'Solar Forge', cost: 45000, hp: 4000, w: 3, d: 3, cat: 'wonder', unique: true, towerBoost: { cd: 0.5, range: 1.4 }, globalStats: true,
-  desc: 'The sun itself is your smith: every tower of yours fires twice as fast and reaches 40% further.' };
-DATA.buildings.comet_shrine = { key: 'comet_shrine', name: 'Comet Shrine', cost: 65000, hp: 4000, w: 3, d: 3, cat: 'wonder', unique: true, comet: { every: 45, dmg: 3000, radius: 12 }, meteorRain: { every: 4, dmg: 320, splash: 4 },
-  desc: 'Every 45s a comet obliterates the thickest crowd anywhere on the island: 3000 damage across 12m. Between comets a meteor falls on a random enemy every 4s.' };
-DATA.buildings.heart_of_winter = { key: 'heart_of_winter', name: 'Heart of Winter', cost: 90000, hp: 5000, w: 3, d: 3, cat: 'wonder', unique: true, slowField: { radius: 400, factor: 0.6 }, brittle: 1.3, freeze: { every: 40, radius: 400, dur: 6 }, globalStats: true,
-  desc: 'The whole island freezes. Every enemy anywhere moves and fights 60% slower and takes 30% more damage, and every 40s everything hostile freezes solid for 6s.' };
-DATA.buildings.apotheosis = { key: 'apotheosis', name: 'The Apotheosis', cost: 250000, hp: 20000, w: 3, d: 3, cat: 'wonder', unique: true, apotheosis: { burn: 0.10, bossBurn: 0.05, skyEvery: 20, bossSky: 0.5, bounty: 10, towerCd: 0.33 }, globalStats: true,
-  desc: 'The King ascends. Every enemy that sets foot on the island burns for a tenth of its entire life every second (bosses a twentieth): nothing survives ten seconds. Your soldiers, your heroes and the Keep cannot die. Every bounty pays tenfold. Every tower fires three times as fast. And every 20s the sky opens and everything hostile on the island that is not a boss simply ceases to exist, while bosses lose half their life. There is nothing above this.' };
+DATA.buildings.doomsday_engine = { key: 'doomsday_engine', name: 'Doomsday Engine', cost: 24000, hp: 3000, w: 3, d: 3, cat: 'wonder', unique: true, doom: { every: 60, dmg: 450, bossDmg: 220 }, burnField: { radius: 36, dps: 20 },
+  desc: 'Every 60s it detonates: every enemy on the map takes 450 damage (bosses 220). Enemies within 36m burn for 20 damage a second all the time.' };
+DATA.buildings.throne_of_ages = { key: 'throne_of_ages', name: 'Throne of Ages', cost: 36000, hp: 5000, w: 3, d: 3, cat: 'wonder', unique: true, throne: { kingHp: 3000, kingRegen: 60, towerDmg: 1.35, soldierDmg: 1.35, income: 1.5 },
+  desc: 'The King gains 3000 HP and heals 60 a second, your towers and soldiers hit 35% harder, and your farms and mines pay half again as much.' };
+DATA.buildings.sun_forge = { key: 'sun_forge', name: 'Solar Forge', cost: 54000, hp: 4000, w: 3, d: 3, cat: 'wonder', unique: true, towerBoost: { cd: 0.67, range: 1.25 }, globalStats: true,
+  desc: 'The sun itself is your smith: every tower of yours fires half again as fast and reaches 25% further.' };
+DATA.buildings.comet_shrine = { key: 'comet_shrine', name: 'Comet Shrine', cost: 78000, hp: 4000, w: 3, d: 3, cat: 'wonder', unique: true, comet: { every: 50, dmg: 2400, radius: 11 }, meteorRain: { every: 6, dmg: 280, splash: 4 },
+  desc: 'Every 50s a comet obliterates the thickest crowd anywhere on the island: 2400 damage across 11m. Between comets a meteor falls on a random enemy every 6s.' };
+DATA.buildings.heart_of_winter = { key: 'heart_of_winter', name: 'Heart of Winter', cost: 108000, hp: 5000, w: 3, d: 3, cat: 'wonder', unique: true, slowField: { radius: 70, factor: 0.35 }, brittle: 1.15, freeze: { every: 45, radius: 60, dur: 4 }, globalStats: true,
+  desc: 'Winter settles on the realm. Enemies within 70m move and fight 35% slower, every enemy anywhere takes 15% more damage, and every 45s everything hostile within 60m freezes solid for 4s.' };
+DATA.buildings.apotheosis = { key: 'apotheosis', name: 'The Apotheosis', cost: 300000, hp: 20000, w: 3, d: 3, cat: 'wonder', unique: true, apotheosis: { burn: 0.04, bossBurn: 0.015, radius: 60, skyEvery: 45, sky: 0.4, bossSky: 0.15, bounty: 3, towerCd: 0.6, guard: 0.6 }, globalStats: true,
+  desc: 'The King ascends. Every enemy within 60m of the Apotheosis burns for 4% of its whole life every second (bosses 1.5%). Your units and the Keep take 40% less damage. Every bounty pays threefold. Every tower fires two thirds faster. And every 45s the sky opens: everything hostile on the island loses 40% of its remaining life (bosses 15%) and stands stunned for 3s. There is nothing above this.' };
 DATA.units.angel = { key: 'angel', name: 'Celestial Warrior', hp: 650, dmg: 70, range: 2.6, cd: 0.8, armor: 0.3, speed: 9, radius: 0.5, attack: 'melee', cleave: true, flying: true, altitude: 1.2, wings: true, noCap: true, summoned: true, color: 0xfff0c0, cloth: 0xffffff, weapon: 'sword', helmet: true, skin: 0xffe8d0 };
 DATA.units.tamedragon = { key: 'tamedragon', name: 'Tame Dragon', hp: 3200, dmg: 70, range: 7, cd: 1.2, armor: 0.3, speed: 7.5, radius: 1.6, attack: 'ranged', projectile: 'fireball', splash: 3.5, magic: true, flying: true, altitude: 6, large: true, model: 'dragon', scale: 0.9, noCap: true, guardian: true, color: 0x8a2a2a, cloth: 0x5a1a1a, breath: { range: 12, dps: 150, dur: 0.2, every: 0 }, noViewWeapon: true,
   desc: 'The roost\'s dragon. Flies over walls and breathes splashing fire.' };
@@ -454,15 +454,15 @@ DATA.towerUpgrade = { maxLevel: 3, dmg: 1.4, range: 1.1, hp: 1.3, costMul: 0.8 }
 // Fortress upgrades
 // ---------------------------------------------------------------------------
 DATA.upgrades = {
-  walls:    { key: 'walls', name: 'Reinforced Walls', cost: 150, max: 5, desc: 'Walls, gates and the Keep gain +40% HP per level.' },
-  towers:   { key: 'towers', name: 'Tower Engineering', cost: 200, max: 5, desc: 'Towers deal +20% damage and gain +8% range per level.' },
-  weapons:  { key: 'weapons', name: 'Weapon Smithing', cost: 180, max: 5, requires: 'blacksmith', desc: 'Soldiers deal +15% damage per level. Requires a Blacksmith.' },
-  armor:    { key: 'armor', name: 'Plate Armor', cost: 180, max: 5, requires: 'blacksmith', desc: 'Soldiers take 8% less damage per level. Requires a Blacksmith.' },
-  hero:     { key: 'hero', name: 'Hero Training', cost: 250, max: 5, desc: 'Heroes gain +15% damage and +15% HP per level.' },
-  royal:    { key: 'royal', name: 'Royal Guard', cost: 220, max: 5, desc: 'The King gains +25% HP and +2 HP/s regen per level.' },
-  garrison: { key: 'garrison', name: 'Garrison', cost: 120, max: 6, desc: '+3 soldier capacity per level.' },
-  marksman: { key: 'marksman', name: 'Marksmanship', cost: 160, max: 4, desc: 'Archers, crossbowmen and apprentices gain +12% range and +10% damage per level.' },
-  fortune:  { key: 'fortune', name: 'Fortune', cost: 300, max: 3, desc: '+10% gold from every source per level.' },
+  walls:    { key: 'walls', name: 'Reinforced Walls', cost: 180, max: 5, desc: 'Walls, gates and the Keep gain +40% HP per level.' },
+  towers:   { key: 'towers', name: 'Tower Engineering', cost: 240, max: 5, desc: 'Towers deal +20% damage and gain +8% range per level.' },
+  weapons:  { key: 'weapons', name: 'Weapon Smithing', cost: 220, max: 5, requires: 'blacksmith', desc: 'Soldiers deal +15% damage per level. Requires a Blacksmith.' },
+  armor:    { key: 'armor', name: 'Plate Armor', cost: 220, max: 5, requires: 'blacksmith', desc: 'Soldiers take 8% less damage per level. Requires a Blacksmith.' },
+  hero:     { key: 'hero', name: 'Hero Training', cost: 300, max: 5, desc: 'Heroes gain +15% damage and +15% HP per level.' },
+  royal:    { key: 'royal', name: 'Royal Guard', cost: 260, max: 5, desc: 'The King gains +25% HP and +2 HP/s regen per level.' },
+  garrison: { key: 'garrison', name: 'Garrison', cost: 140, max: 6, desc: '+3 soldier capacity per level.' },
+  marksman: { key: 'marksman', name: 'Marksmanship', cost: 190, max: 4, desc: 'Archers, crossbowmen and apprentices gain +12% range and +10% damage per level.' },
+  fortune:  { key: 'fortune', name: 'Fortune', cost: 360, max: 3, desc: '+10% gold from every source per level.' },
 };
 DATA.upgradeCostGrowth = 1.55;
 
