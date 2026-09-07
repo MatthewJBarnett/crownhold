@@ -93,10 +93,12 @@ class WaveManager {
     while (this.pending.length && this.pending[0].t <= this.timer) {
       if (++guard > 1000) throw new Error('wave spawn runaway');
       const p = this.pending.shift();
-      const jx = p.sp.x === 0 ? 9 : 4, jz = p.sp.z === 0 ? 9 : 4;
-      const x = U.clamp(p.sp.x + U.rand(-jx, jx), -DATA.MAP_HALF + 1, DATA.MAP_HALF - 1);
-      const z = U.clamp(p.sp.z + U.rand(-jz, jz), -DATA.MAP_HALF + 1, DATA.MAP_HALF - 1);
+      // jitter only along the edge, never inward
+      const jx = p.sp.x === 0 ? 9 : (p.sp.z === 0 ? 0 : 4), jz = p.sp.z === 0 ? 9 : (p.sp.x === 0 ? 0 : 4);
+      const x = U.clamp(p.sp.x + U.rand(-jx, jx), -DATA.MAP_HALF + 0.6, DATA.MAP_HALF - 0.6);
+      const z = U.clamp(p.sp.z + U.rand(-jz, jz), -DATA.MAP_HALF + 0.6, DATA.MAP_HALF - 0.6);
       const u = this.game.spawnEnemy(p.type, x, z, { hpMul: p.hpMul });
+      { const lim = DATA.MAP_HALF - 0.4 - u.collisionRadius; u.pos.x = U.clamp(u.pos.x, -lim, lim); u.pos.z = U.clamp(u.pos.z, -lim, lim); }
       if (this.game.grid.flowDirty && this.game.king) { const kc = this.game.grid.worldToCell(this.game.king.pos.x, this.game.king.pos.z); this.game.grid.computeFlow(kc.i, kc.j); }
       this.game.snapToReachable(u);
       if (p.boss) { this.game.boss = u; this.game.ui.toast(`${u.name} has arrived!`, 'boss'); SFX.play('bossroar'); }

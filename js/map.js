@@ -105,44 +105,55 @@ class WorldMap {
   polar(rc, ang, side = 0) { const h = this.half; return { i: h + Math.cos(ang) * rc - Math.sin(ang) * side, j: h + Math.sin(ang) * rc + Math.cos(ang) * side }; }
   layLanes(rnd) {
     const h = this.half, n = this.n;
-    const fill = ['highlands', 'badlands', 'volcanic', 'frozen'].includes(this.type) ? CELL_ROCK : 5;
-    // belts (in cells): inner 24-27, outer 38-42
-    for (const [r0, r1] of [[24, 27], [38, 42]]) {
-      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-        const dx = i - h, dz = j - h, r = Math.hypot(dx, dz);
-        const wob = U.smoothNoise(i * 0.35 + this.seed % 11, j * 0.35 + this.seed % 5) * 1.6 - 0.8;
+    const rocky = ['highlands', 'badlands', 'volcanic', 'frozen'].includes(this.type);
+    // two solid belts: rock or forest by map, the inner one in the other material where it suits the map
+    const outerFill = rocky ? CELL_ROCK : 5;
+    const innerFill = this.type === 'valley' ? CELL_ROCK : (this.type === 'highlands' ? 5 : outerFill);
+    const belts = [[36, 44, outerFill], [22, 28, innerFill]];
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const dx = i - h, dz = j - h, r = Math.hypot(dx, dz);
+      const wob = U.smoothNoise(i * 0.3 + this.seed % 11, j * 0.3 + this.seed % 5) * 1.6 - 0.8;
+      for (const [r0, r1, fill] of belts) {
         if (r < r0 + wob || r > r1 + wob) continue;
-        const k = this.idx(i, j);
-        if (this.kind[k] === 0 || this.kind[k] === 6 || this.kind[k] === 7) this.kind[k] = fill;
+        const k = this.idx(i, j), kk = this.kind[k];
+        if (kk === CELL_WATER || kk === 8 || kk === 9 || kk === 12) continue;
+        this.kind[k] = fill;
       }
     }
     // lanes: 2 or 3 spawn points, well apart
     const count = 2 + (rnd() < 0.55 ? 1 : 0);
     const start = Math.floor(rnd() * 8), step = Math.floor(8 / count);
-    this.laneSpawns = []; this.lanes = []; this.plateaus = [];
+    this.laneSpawns = []; this.lanes = []; this.plateaus = []; this.laneCells = new Set();
     for (let k = 0; k < count; k++) this.laneSpawns.push((start + k * step + (k && rnd() < 0.5 ? 1 : 0)) % 8);
     this.laneSpawns = [...new Set(this.laneSpawns)];
     for (const si of this.laneSpawns) {
       const sp = DATA.spawnPoints[si];
       const ang = Math.atan2(sp.z, sp.x);
-      const d1 = (rnd() < 0.5 ? -1 : 1) * (5 + rnd() * 3), d2 = (rnd() < 0.5 ? -1 : 1) * (6 + rnd() * 4);
       const spc = { i: U.clamp(h + sp.x / this.cell, 1, n - 2), j: U.clamp(h + sp.z / this.cell, 1, n - 2) };   // the lane starts at the spawn itself, on the map edge
+      // switchbacks: a tangential leg inside each belt, doubling back before it exits
+      const d1 = rnd() < 0.5 ? -1 : 1, d2 = rnd() < 0.5 ? -1 : 1;
+      const arcA = d1 * (10 + rnd() * 4) / 40, arcB = d2 * (7 + rnd() * 3) / 25;
+      const a1 = ang + arcA, a2 = ang + arcA * 0.2;                 // outer belt: out along arcA, back a little
+      const b0 = a2 + d2 * 0.04, b1 = b0 + arcB, b2 = b0 + arcB * 0.35;
       const pts = [
-        spc, this.polar(48, ang), this.polar(44, ang),
-        this.polar(41, ang, d1 * 0.4), this.polar(39.5, ang, d1), this.polar(37, ang, d1), this.polar(35, ang, d1 * 0.3),
-        this.polar(30, ang, d2 * 0.5), this.polar(27.5, ang, d2), this.polar(25.5, ang, d2 * 0.2), this.polar(23.5, ang, -d2 * 0.7), this.polar(21, ang, -d2 * 0.5),
-        this.polar(15, ang),
+        spc, this.polar(49, ang), this.polar(45.5, ang),
+        this.polar(42.5, ang), this.polar(42.5, a1), this.polar(39.5, a1), this.polar(39.5, a2), this.polar(35.5, a2),
+        this.polar(31.5, (a2 + b0) / 2),
+        this.polar(28.5, b0), this.polar(26.5, b0), this.polar(26.5, b1), this.polar(23.8, b1), this.polar(23.8, b2), this.polar(21, b2), this.polar(15, b2),
       ];
-      // carve the corridor
       for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-        if (this.distToPolyline(i, j, pts) <= 1.3) { const c = this.cellCenter(i, j); if (Math.max(Math.abs(c.x), Math.abs(c.z)) > 21) this.kind[this.idx(i, j)] = 0; }
+        if (this.distToPolyline(i, j, pts) <= 1.4) {
+          const c = this.cellCenter(i, j);
+          if (Math.max(Math.abs(c.x), Math.abs(c.z)) > 21) { this.kind[this.idx(i, j)] = 0; this.laneCells.add(this.idx(i, j)); }
+        }
       }
       // a clearing at the spawn
       const sc = spc;
       for (let j = Math.floor(sc.j) - 6; j <= sc.j + 6; j++) for (let i = Math.floor(sc.i) - 6; i <= sc.i + 6; i++) if (this.inBounds(i, j) && Math.hypot(i - sc.i, j - sc.j) < 5.5 && this.blocked(this.kind[this.idx(i, j)]) && this.kind[this.idx(i, j)] !== CELL_WATER) this.kind[this.idx(i, j)] = 0;
-      this.lanes.push({ spawn: si, pts });
-      // high ground beside the lane: one between the belts, one inside the inner belt
-      for (const [rc, side] of [[33, -Math.sign(d1) * 6], [19.5, Math.sign(d2) * 6.5]]) this.placePlateau(this.polar(rc, ang, side));
+      this.lanes.push({ spawn: si, pts, exit: b2 });
+      // high ground: one between the belts beside the lane, one inside the inner belt near its exit
+      for (const off of [-0.16, -0.26, 0.16, 0.26]) if (this.placePlateau(this.polar(32, a2 + d2 * off))) break;
+      for (const off of [0.22, 0.34, -0.22, -0.34]) if (this.placePlateau(this.polar(18.5, b2 + d2 * off))) break;
     }
   }
   // a 2x2 buildable summit ringed by two cells of cliff: only towers go up there, only ranged enemies reach them
@@ -154,12 +165,14 @@ class WorldMap {
       if (Math.max(Math.abs(cc.x), Math.abs(cc.z)) < 22 || Math.max(Math.abs(cc.x), Math.abs(cc.z)) > DATA.BUILD_RADIUS - 1) return;
       const k = this.kind[this.idx(i, j)];
       if (k === CELL_WATER || k === 8 || k === 9 || k === 12) return;
+      if (this.laneCells && this.laneCells.has(this.idx(i, j))) return;   // never sit on the lane itself
     }
     for (let j = cj - 2; j < cj + 4; j++) for (let i = ci - 2; i < ci + 4; i++) {
       const top = i >= ci && i < ci + 2 && j >= cj && j < cj + 2;
       this.kind[this.idx(i, j)] = top ? 9 : 12;
     }
     this.plateaus.push({ i: ci, j: cj });
+    return true;
   }
   blocked(k) { return k === CELL_WATER || k === CELL_ROCK || k === 5 || k === 8 || k === 9 || k === 12; }
   // a thinner second stream from a random edge that joins the main river
@@ -453,7 +466,7 @@ class WorldMap {
     const group = new THREE.Group();
     // ground with heights and painted cells
     const size = this.n * this.cell, seg = this.n;
-    const geo = new THREE.PlaneGeometry(size + 40, size + 40, seg + 20, seg + 20);
+    const geo = new THREE.PlaneGeometry(size + 8, size + 8, seg + 4, seg + 4);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
     const colors = new Float32Array(pos.count * 3);
@@ -498,7 +511,7 @@ class WorldMap {
       const tint = new THREE.Color(pal.grass).lerp(new THREE.Color(this.type === 'frozen' ? 0xe0ecf0 : 0x1a2a10), this.type === 'frozen' ? 0.6 : 0.18);
       const tmat = new THREE.MeshLambertMaterial({ map: tuftTex, alphaTest: 0.45, side: THREE.DoubleSide, color: tint });
       const cells = []; for (let j = 0; j < this.n; j++) for (let i = 0; i < this.n; i++) { const k = this.kind[this.idx(i, j)]; if (k === 0 || k === 7) cells.push([i, j]); }
-      const rr = mulberry32(this.usedSeed + 13), want = Math.min(7000, cells.length * 2);
+      const rr = mulberry32(this.usedSeed + 13), want = Math.min(2600, Math.floor(cells.length * 0.7));
       const tufts = new THREE.InstancedMesh(tuftGeo, tmat, want); tufts.frustumCulled = false; tufts.receiveShadow = true;
       const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
       for (let k = 0; k < want; k++) {
@@ -511,7 +524,7 @@ class WorldMap {
       tufts.instanceMatrix.needsUpdate = true; group.add(tufts);
     }
     // water: one big plane just below the plain; it only shows inside the carved bed
-    const wgeo = new THREE.PlaneGeometry(size + 28, size + 28, seg + 14, seg + 14);
+    const wgeo = new THREE.PlaneGeometry(size + 4, size + 4, seg + 2, seg + 2);
     wgeo.rotateX(-Math.PI / 2);
     { const wp = wgeo.attributes.position; for (let k = 0; k < wp.count; k++) { const x = wp.getX(k), z = wp.getZ(k); wp.setY(k, this.heightAt(x, z, this.h0) - 0.5); } wgeo.computeVertexNormals(); }
     const lava = this.type === 'volcanic';
@@ -568,6 +581,28 @@ class WorldMap {
     const rockCells = [], forestCells = [];
     for (let j = 0; j < this.n; j++) for (let i = 0; i < this.n; i++) { const k = this.kind[this.idx(i, j)]; if (k === CELL_ROCK || k === 12) rockCells.push([i, j]); else if (k === 5) forestCells.push([i, j]); }
     const rnd = mulberry32(this.usedSeed || this.seed);
+    // crag blocks: one per rock cell, filling the cell exactly, so rock belts read as solid walls
+    this.cragHeights = new Map();
+    { const crag = rockCells.filter(([i, j]) => this.kind[this.idx(i, j)] === CELL_ROCK);
+      if (crag.length) {
+        const cg = new THREE.BoxGeometry(2.08, 1, 2.08, 2, 2, 2); cg.translate(0, 0.5, 0);
+        { const cp = cg.attributes.position; for (let k = 0; k < cp.count; k++) { const y = cp.getY(k); if (y > 0.9) { cp.setX(k, cp.getX(k) * (0.78 + U.smoothNoise(cp.getX(k) * 3 + 1, cp.getZ(k) * 3) * 0.2)); cp.setZ(k, cp.getZ(k) * (0.78 + U.smoothNoise(cp.getZ(k) * 3 + 5, cp.getX(k) * 3) * 0.2)); } } cg.computeVertexNormals(); }
+        const cm = new THREE.InstancedMesh(cg, new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), crag.length);
+        cm.castShadow = true; cm.receiveShadow = true; cm.frustumCulled = false;
+        const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
+        const cols = this.type === 'frozen' ? [0xb8c4cc, 0xa8b4bc, 0xc8d0d8] : (this.type === 'volcanic' ? [0x3a3436, 0x4a4042, 0x2e2a2a] : (this.type === 'badlands' ? [0x9a7a5a, 0x8a6a4a, 0xa88868] : [0x807c74, 0x8c8880, 0x746f68]));
+        let k = 0;
+        for (const [i, j] of crag) {
+          const cc = this.cellCenter(i, j);
+          const hgt = 2.3 + U.smoothNoise(i * 0.45 + 3, j * 0.45 + 9) * 1.9 + (rnd() - 0.5) * 0.3;
+          this.cragHeights.set(this.idx(i, j), hgt);
+          p.set(cc.x, this.heightAt(cc.x, cc.z) - 0.3, cc.z); q.identity(); s.set(1, hgt + 0.3, 1);
+          m.compose(p, q, s); cm.setMatrixAt(k, m);
+          col.setHex(cols[Math.floor(rnd() * cols.length)]).offsetHSL(0, 0, (rnd() - 0.5) * 0.06); cm.setColorAt(k, col); k++;
+        }
+        cm.instanceMatrix.needsUpdate = true; if (cm.instanceColor) cm.instanceColor.needsUpdate = true;
+        group.add(cm);
+      } }
     if (rockCells.length) {
       const rockGeo = new THREE.DodecahedronGeometry(1, 1);
       { const rp = rockGeo.attributes.position; for (let k = 0; k < rp.count; k++) { const n = 0.82 + U.smoothNoise(rp.getX(k) * 2.3 + 7, rp.getY(k) * 2.1 + rp.getZ(k) * 1.7) * 0.36; rp.setXYZ(k, rp.getX(k) * n, rp.getY(k) * n, rp.getZ(k) * n); } rockGeo.computeVertexNormals(); }
@@ -579,8 +614,10 @@ class WorldMap {
         const cc = this.cellCenter(i, j);
         const cliff = this.kind[this.idx(i, j)] === 12;
         for (let t = 0; t < 2; t++) {
-          const sx = 0.8 + rnd() * 0.9, sy = (cliff ? 0.5 : 0.9) + rnd() * (cliff ? 0.6 : 1.6), sz = 0.8 + rnd() * 0.9;
-          p.set(cc.x + (rnd() - 0.5) * 1.2, this.heightAt(cc.x, cc.z) + sy * 0.3, cc.z + (rnd() - 0.5) * 1.2);
+          // boulders stay inside their own cell so nothing walkable is covered by rock you can walk into
+          const sx = 0.45 + rnd() * 0.45, sy = (cliff ? 0.4 : 0.6) + rnd() * (cliff ? 0.5 : 0.9), sz = 0.45 + rnd() * 0.45;
+          const top = cliff ? this.heightAt(cc.x, cc.z) : this.heightAt(cc.x, cc.z) + (this.cragHeights ? this.cragHeights.get(this.idx(i, j)) || 0 : 0);
+          p.set(cc.x + (rnd() - 0.5) * 0.6, top + sy * 0.35, cc.z + (rnd() - 0.5) * 0.6);
           q.setFromEuler(new THREE.Euler(rnd() * 0.6, rnd() * 6, rnd() * 0.6)); s.set(sx, sy, sz);
           m.compose(p, q, s); inst.setMatrixAt(k, m);
           col.setHex((this.type === 'frozen' ? [0xc8d0d8, 0xb0b8c0, 0xd8e0e8, 0xa0a8b0] : (this.type === 'volcanic' ? [0x3a3a3a, 0x4a4040, 0x2a2a2a, 0x5a4a44] : [0x777770, 0x8a8a80, 0x6a6a64, 0x9a958a]))[Math.floor(rnd() * 4)]); inst.setColorAt(k, col); k++;
@@ -590,7 +627,7 @@ class WorldMap {
       group.add(inst);
     }
     if (forestCells.length) {
-      const trunkGeo = new THREE.CylinderGeometry(0.14, 0.3, 1.6, 9), leafGeo = Models.canopyGeometry(this.type === 'valley' || this.type === 'highlands' ? 'round' : 'pine');
+      const trunkGeo = new THREE.CylinderGeometry(0.14, 0.34, 2.6, 9), leafGeo = Models.canopyGeometry(this.type === 'valley' || this.type === 'highlands' ? 'round' : 'pine');
       const per = 3;
       const trunks = new THREE.InstancedMesh(trunkGeo, Models.mat(0x5a3a22), forestCells.length * per);
       const leaves = new THREE.InstancedMesh(leafGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), forestCells.length * per);
@@ -602,13 +639,29 @@ class WorldMap {
         for (let t = 0; t < per; t++) {
           const x = cc.x + (rnd() - 0.5) * 1.6, z = cc.z + (rnd() - 0.5) * 1.6, sc = 0.8 + rnd() * 0.7, y = this.heightAt(x, z);
           q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6); s.set(sc, sc, sc);
-          p.set(x, y + 0.8 * sc, z); m.compose(p, q, s); trunks.setMatrixAt(k, m);
-          p.set(x, y + 0.8 * sc + 2.1 * sc, z); m.compose(p, q, s); leaves.setMatrixAt(k, m);
+          p.set(x, y + 0.7 * sc, z); m.compose(p, q, s); trunks.setMatrixAt(k, m);          // trunk runs from 0.6 m below ground to 2 m above
+          p.set(x, y + 1.7 * sc, z); m.compose(p, q, s); leaves.setMatrixAt(k, m);         // crown starts inside the trunk top
           col.setHex((pal.leaves || [0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x1f4a25])[Math.floor(rnd() * 4)]); leaves.setColorAt(k, col); k++;
         }
       }
       trunks.instanceMatrix.needsUpdate = true; leaves.instanceMatrix.needsUpdate = true; if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
       group.add(trunks); group.add(leaves);
+      // undergrowth fills the gaps between trunks so a forest belt reads as a wall of green
+      const bushGeo = new THREE.SphereGeometry(1, 9, 6); bushGeo.scale(1, 0.62, 1);
+      const bushes = new THREE.InstancedMesh(bushGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), forestCells.length);
+      bushes.castShadow = true; bushes.receiveShadow = true; bushes.frustumCulled = false;
+      let kb = 0;
+      for (const [i, j] of forestCells) {
+        const cc = this.cellCenter(i, j);
+        for (let t = 0; t < 1; t++) {
+          const x = cc.x + (rnd() - 0.5) * 1.1, z = cc.z + (rnd() - 0.5) * 1.1, sc = 0.38 + rnd() * 0.3;
+          q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6); s.set(sc, sc, sc); p.set(x, this.heightAt(x, z) + 0.1, z);
+          m.compose(p, q, s); bushes.setMatrixAt(kb, m);
+          col.setHex((pal.leaves || [0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x1f4a25])[Math.floor(rnd() * 4)]).offsetHSL(0, 0, -0.06); bushes.setColorAt(kb, col); kb++;
+        }
+      }
+      bushes.instanceMatrix.needsUpdate = true; if (bushes.instanceColor) bushes.instanceColor.needsUpdate = true;
+      group.add(bushes);
     }
     // dead trees on the dry maps (walkable decoration)
     if (this.cfg.decor === 'dead') {

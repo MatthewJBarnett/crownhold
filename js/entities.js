@@ -336,6 +336,13 @@ class Unit {
       this.integrateMovement(dt);
       if (this.moving && !this.possessed) this.faceToward(this.pos.x + this.moveIntent.x, this.pos.z + this.moveIntent.z, dt, 14);
       if (this.moving) this.trackHeading(dt);
+      // an enemy that wants to move but has not managed to for a while is wedged: put it on the nearest free, reachable cell
+      if (this.team === 'enemy' && !this.flying) {
+        if (this.moving && !(this.target && this.target !== this && this.inRange(this.target, 0))) {
+          this.wedgeT = (this.wedgeT || 0) + dt;
+          if (this.wedgeT > 5) { const moved = U.dist(this.pos.x, this.pos.z, this.wedgeX === undefined ? 1e9 : this.wedgeX, this.wedgeZ || 0); if (moved < 0.6) game.snapToReachable(this, true); this.wedgeX = this.pos.x; this.wedgeZ = this.pos.z; this.wedgeT = 0; }
+        } else { this.wedgeT = 0; this.wedgeX = this.pos.x; this.wedgeZ = this.pos.z; }
+      }
       this.separate(dt);
       if (!this.flying && !game.grid.circleFree(this.pos.x, this.pos.z, this.collisionRadius, this.team)) this.unstuck(dt);
     }
@@ -561,7 +568,7 @@ class Building {
     this.group.rotation.y = this.rot * Math.PI / 2;
     this.group.userData.building = this;
     this.game.scene.add(this.group);
-    if (!this.def.keep) { const blob = Models.blob(this.radius * 1.25 + 0.6, 0.35); blob.position.y = 0.04; this.group.add(blob); }
+    if (!this.def.keep) { const blob = Models.blob(this.radius * 1.08 + 0.35, 0.14); blob.position.y = 0.04; this.group.add(blob); }
     if (!this.hpBar) {
       const hb = Models.healthBar(Math.max(2.2, this.radius * 1.5), 0.26);
       this.hpBar = hb; hb.group.visible = false;
@@ -596,7 +603,7 @@ class Building {
   }
   get baseCost() { return this.def.cost; }
   upgradeCost() { return Math.round(this.def.cost * DATA.towerUpgrade.costMul * this.level); }
-  canUpgrade() { return this.def.tower && this.level < DATA.towerUpgrade.maxLevel; }
+  canUpgrade() { return this.def.tower && this.def.cat !== 'wonder' && this.level < DATA.towerUpgrade.maxLevel; }
   repairCost() { return Math.round((1 - this.hp / this.maxHp) * this.def.cost * 0.5); }
   sellValue() { const paid = this.paid !== undefined ? this.paid : this.def.cost; return Math.round(paid * 0.6 * (this.hp / this.maxHp) * (1 + 0.5 * (this.level - 1))); }
 
@@ -611,7 +618,9 @@ class Building {
     return amount;
   }
   heal(amount) { if (!this.dead) this.hp = Math.min(this.maxHp, this.hp + amount); }
+  disposeExtras() { if (this.beamMesh) { this.game.scene.remove(this.beamMesh); this.beamMesh = null; } }
   destroy(source) {
+    this.disposeExtras();
     if (this.dead) return;
     this.dead = true; this.hp = 0;
     this.game.onBuildingDestroyed(this, source);
@@ -645,7 +654,10 @@ class Building {
     if (orb) { orb.rotation.y += dt; orb.position.y += Math.sin(game.time * 2 + this.id) * dt * 0.3; }
     if (this.def.trap) { const plate = this.group.userData.plate; if (plate) plate.position.y += ((this.trapArmed === false ? -0.75 : 0) - plate.position.y) * Math.min(1, dt * 4); }
     if (this.underConstruction || game.replica) return;
-    if (this.def.tower) this.updateTower(dt);
+    if (this.def.storm) this.updateStorm(dt);
+    else if (this.def.beam) this.updateBeam(dt);
+    else if (this.def.tower) this.updateTower(dt);
+    if (this.def.guardian) this.tickGuardian(dt);
     if (this.def.heal && game.waves && game.waves.active) {
       const list = game.unitsNear(this.pos.x, this.pos.z, this.def.heal.radius, 'player');
       for (const u of list) if (u.hp < u.maxHp) u.heal(this.def.heal.hps * dt);
@@ -719,6 +731,68 @@ class Building {
       });
       SFX.play(this.def.projectile === 'arrow' ? 'bow' : (this.def.projectile === 'ballista' ? 'ballista' : 'cast'), 0.5);
     }
+  }
+  // arcane spire: a meteor storm on the thickest crowd in range
+  updateStorm(dt) {
+    const game = this.game, st = this.def.storm;
+    this.timer -= dt;
+    const orbs = this.group.userData.orbiters; if (orbs) for (let k = 0; k < orbs.length; k++) { const a = game.time * 1.4 + k * 2.1; orbs[k].position.set(Math.sin(a) * 1.9, 9.5 + Math.sin(a * 1.7) * 0.6, Math.cos(a) * 1.9); orbs[k].rotation.y += dt * 2; }
+    if (this.timer > 0) return;
+    const list = game.unitsNear(this.pos.x, this.pos.z, this.range, 'enemy').filter(u => !u.dead);
+    if (!list.length) return;
+    let best = null, bs = -1;
+    for (const u of list) { let s = 0; for (const v of list) if (v.distTo(u) < 7) s += v.isBoss ? 4 : 1; if (s > bs) { bs = s; best = u; } }
+    this.timer = this.cd;
+    for (let k = 0; k < st.count; k++) {
+      const a = k / st.count * Math.PI * 2 + Math.random(), r = k === 0 ? 0 : Math.random() * st.scatter;
+      const p = { x: best.pos.x + Math.sin(a) * r, z: best.pos.z + Math.cos(a) * r };
+      const delay = st.delay + k * 0.22, dmg = this.dmg, owner = this;
+      game.effects.spawn('ring', p.x, 0.3, p.z, { radius: st.splash, color: 0xc060ff, dur: delay });
+      game.fireProjectile({ from: this, key: 'fireball', kind: 'drop', dest: p, delay, dmg, team: 'player', splash: st.splash, magic: true,
+        onLand: () => { game.areaDamage(p.x, p.z, st.splash, dmg, 'player', owner, { magic: true, burn: { dps: 12, dur: 3 } }); game.effects.spawn('explosion', p.x, 1, p.z, { radius: st.splash, color: 0xb050ff }); } });
+    }
+    SFX.play('cast', 0.8);
+  }
+  // sun altar: a continuous beam on the toughest enemy in range
+  updateBeam(dt) {
+    const game = this.game;
+    this.retargetT -= dt;
+    if (this.retargetT <= 0 || !this.target || this.target.dead || this.distTo(this.target) > this.range + 0.5) {
+      this.retargetT = 0.4;
+      let best = null, bh = -1;
+      for (const u of game.unitsNear(this.pos.x, this.pos.z, this.range, 'enemy')) { if (u.dead) continue; const s = u.hp + (u.isBoss ? 5000 : 0); if (s > bh) { bh = s; best = u; } }
+      this.target = best;
+    }
+    const t = this.target;
+    if (!this.beamMesh) {
+      this.beamMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.5, 1, 8, 1, true), new THREE.MeshBasicMaterial({ color: 0xfff0a0, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+      this.beamMesh.geometry.translate(0, 0.5, 0); this.beamMesh.geometry.rotateX(Math.PI / 2);   // now runs along +z from the origin
+      game.scene.add(this.beamMesh);
+    }
+    if (!t) { this.beamMesh.visible = false; return; }
+    const lens = this.group.userData.orb;
+    const from = new THREE.Vector3(this.pos.x, this.pos.y + (lens ? lens.position.y : this.height), this.pos.z), to = new THREE.Vector3(t.pos.x, t.centerY, t.pos.z);
+    const len = from.distanceTo(to);
+    this.beamMesh.visible = true; this.beamMesh.position.copy(from); this.beamMesh.lookAt(to); this.beamMesh.scale.set(1 + 0.2 * Math.sin(game.time * 30), 1 + 0.2 * Math.sin(game.time * 30), len);
+    t.takeDamage(this.def.beam.dps * dt, this, { magic: true });
+    if (Math.random() < dt * 14) game.effects.spawn('ember', t.pos.x + U.rand(-0.4, 0.4), t.centerY, t.pos.z + U.rand(-0.4, 0.4), { color: 0xffe080 });
+    if (t.dead) { game.effects.spawn('explosion', t.pos.x, t.centerY, t.pos.z, { radius: 1.5, color: 0xfff0a0 }); this.target = null; }
+  }
+  // roost / forge: keep one guardian alive; hatch or reforge it a few waves after it falls
+  tickGuardian(dt) {
+    const game = this.game, gd = this.def.guardian;
+    const g = this.guardian;
+    if (g && !g.dead) return;
+    if (g && g.dead && this.guardianLostWave === undefined) this.guardianLostWave = game.waves.number;
+    if (g && g.dead && game.waves.number - this.guardianLostWave < gd.rebuild) return;
+    if (g && g.dead && game.waves.active) return;   // returns between waves
+    const def = DATA.units[gd.unit];
+    const sp = game.findSpawnSpot(this.pos.x + this.radius + 1.5, this.pos.z);
+    const u = game.spawnUnit(def, 'player', sp.x, sp.z, { owner: this.owner });
+    u.post = { x: sp.x, z: sp.z }; u.guardianOf = this;
+    this.guardian = u; this.guardianLostWave = undefined;
+    game.effects.spawn('ring', sp.x, 0.3, sp.z, { radius: 4, color: gd.unit === 'tamedragon' ? 0xff6020 : 0xa0b0ff, dur: 1 });
+    game.ui.toast(`${u.name} ${g ? 'returns' : 'joins the defence'}!`, 'good');
   }
   distTo(t) { return Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z); }
   pickTarget() {
@@ -937,28 +1011,40 @@ class Effects {
   constructor(game) {
     this.game = game; this.list = [];
     this.geoBox = new THREE.BoxGeometry(0.16, 0.16, 0.16);
-    this.geoSphere = new THREE.SphereGeometry(1, 10, 8);
+    this.geoSphere = new THREE.SphereGeometry(1, 12, 8);
+    this.geoDome = new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2);   // explosions on the ground never sink into it
   }
   spawn(type, x, y, z, o = {}) {
     if (this.game.netHost) this.game.netHost.fx(type, x, y, z, o);
     if (this.list.length > 220) return;
     const scene = this.game.scene;
-    if (type === 'hit' || type === 'ember' || type === 'flame' || type === 'heal_p') {
+    if (type === 'ember' || type === 'flame') {
+      // fire is a soft additive sprite that rises, flickers and fades, not a box
+      const color = type === 'flame' ? U.choice([0xffa040, 0xffc860, 0xff7030]) : (o.color || 0xff9040);
+      const s = Models.flameSprite(type === 'flame' ? 0.9 + Math.random() * 0.5 : 0.45 + Math.random() * 0.3, color);
+      s.position.set(x, y, z);
+      const vel = o.vel ? o.vel.clone() : new THREE.Vector3(U.rand(-0.6, 0.6), U.rand(1.2, 2.4), U.rand(-0.6, 0.6));
+      scene.add(s);
+      this.list.push({ mesh: s, vel, life: 0, max: type === 'flame' ? 0.7 : 0.55, grav: 1.5, shrink: true, sprite: true, base: s.scale.y });
+    } else if (type === 'hit' || type === 'heal_p') {
       const n = type === 'hit' ? 6 : 1;
       for (let k = 0; k < n; k++) {
-        const color = type === 'heal_p' ? 0x60ff80 : (type === 'flame' ? U.choice([0xff8020, 0xffc040, 0xff4010]) : (o.color || (type === 'ember' ? 0xff8030 : 0xffd090)));
+        const color = type === 'heal_p' ? 0x60ff80 : (o.color || 0xffd090);
         const m = new THREE.Mesh(this.geoBox, new THREE.MeshBasicMaterial({ color, transparent: true }));
         m.position.set(x, y, z);
         const sp = type === 'hit' ? 4 : 1.5;
         const vel = o.vel ? o.vel.clone() : new THREE.Vector3(U.rand(-sp, sp), U.rand(1, sp + 1), U.rand(-sp, sp));
         scene.add(m);
-        this.list.push({ mesh: m, vel, life: 0, max: type === 'flame' ? 0.6 : 0.5, grav: type === 'ember' || type === 'flame' || type === 'heal_p' ? 1 : -12, shrink: true });
+        this.list.push({ mesh: m, vel, life: 0, max: 0.5, grav: type === 'heal_p' ? 1 : -12, shrink: true });
       }
     } else if (type === 'explosion') {
-      const m = new THREE.Mesh(this.geoSphere, new THREE.MeshBasicMaterial({ color: o.color || 0xff6020, transparent: true, opacity: 0.8 }));
-      m.position.set(x, y, z); m.scale.setScalar(0.3);
+      const gy = this.game.groundY(x, z);
+      const onGround = y - gy < 1.6;
+      const m = new THREE.Mesh(onGround ? this.geoDome : this.geoSphere, new THREE.MeshBasicMaterial({ color: o.color || 0xff6020, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending }));
+      m.position.set(x, onGround ? gy + 0.05 : y, z); m.scale.setScalar(0.3);
       scene.add(m);
       this.list.push({ mesh: m, life: 0, max: 0.45, grow: o.radius || 2.5, ring: false });
+      for (let k = 0; k < 5; k++) this.spawn('flame', x + U.rand(-1, 1) * (o.radius || 2.5) * 0.4, (onGround ? gy : y) + 0.4, z + U.rand(-1, 1) * (o.radius || 2.5) * 0.4);
       const r = Models.ring(o.radius || 2.5, o.color || 0xff8040, 0.9); r.position.set(x, 0.1, z); r.scale.setScalar(0.2); scene.add(r);
       this.list.push({ mesh: r, life: 0, max: 0.5, growRing: 1 });
       for (let k = 0; k < 8; k++) this.spawn('hit', x, y, z, { color: o.color || 0xffa040 });
@@ -989,7 +1075,8 @@ class Effects {
         e.mesh.position.addScaledVector(e.vel, dt);
         if (e.mesh.position.y < 0.05 && e.grav < 0) { e.mesh.position.y = 0.05; e.vel.set(0, 0, 0); }
         e.mesh.material.opacity = 1 - p;
-        if (e.shrink) e.mesh.scale.setScalar(1 - p * 0.7);
+        if (e.shrink && e.sprite) { const f = (1 - p * 0.6) * (0.9 + 0.2 * Math.sin(e.life * 40)); e.mesh.scale.set(0.5 * f * e.base, 1.0 * f * e.base, 1); }
+        else if (e.shrink) e.mesh.scale.setScalar(1 - p * 0.7);
       }
       if (e.grow) { e.mesh.scale.setScalar(0.3 + e.grow * p); e.mesh.material.opacity = 0.8 * (1 - p); }
       if (e.growRing) { e.mesh.scale.setScalar(0.2 + p * e.growRing); e.mesh.material.opacity = 0.9 * (1 - p); }

@@ -6,8 +6,10 @@
 class Post {
   constructor(renderer) {
     this.renderer = renderer;
-    const gl2 = renderer.capabilities.isWebGL2;
-    const opts = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat, depthBuffer: true, stencilBuffer: false };
+    const gl2 = renderer.capabilities.isWebGL2 && !/[?&]msaa=0/.test(location.search);   // msaa=0: plain target (software renderers crawl on multisampled targets)
+    // stencilBuffer: true makes three.js allocate a 24-bit depth buffer (DEPTH24_STENCIL8). The default, depth-only
+    // target is only 16-bit, which z-fights the water plane through the terrain when zoomed out.
+    const opts = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat, depthBuffer: true, stencilBuffer: true };
     this.rtScene = gl2 && THREE.WebGLMultisampleRenderTarget ? new THREE.WebGLMultisampleRenderTarget(4, 4, opts) : new THREE.WebGLRenderTarget(4, 4, opts);
     if (this.rtScene.samples !== undefined) this.rtScene.samples = 4;
     const q = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat, depthBuffer: false, stencilBuffer: false };

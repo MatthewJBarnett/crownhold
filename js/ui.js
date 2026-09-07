@@ -215,10 +215,10 @@ class UI {
     let lastCat = '';
     for (const key of DATA.buildOrder) {
       const d = DATA.buildings[key];
-      if (d.cat !== lastCat) { lastCat = d.cat; const c = document.createElement('div'); c.className = 'cat'; c.textContent = { defense: 'Walls', tower: 'Towers', economy: 'Buildings' }[d.cat]; pb.appendChild(c); }
+      if (d.cat !== lastCat) { lastCat = d.cat; const c = document.createElement('div'); c.className = 'cat'; c.textContent = { defense: 'Walls', tower: 'Towers', economy: 'Buildings', wonder: 'Wonders' }[d.cat]; pb.appendChild(c); }
       const b = document.createElement('button');
       b.className = 'item'; b.dataset.build = key;
-      b.innerHTML = `<span class="sw" style="background:${{ defense: '#9a9a92', tower: '#c0a060', economy: '#8ab060' }[d.cat]}"></span><span class="nm">${d.name}</span><span class="cost">${d.cost}</span>`;
+      b.innerHTML = `<span class="sw" style="background:${{ defense: '#9a9a92', tower: '#c0a060', economy: '#8ab060', wonder: '#e0b0ff' }[d.cat]}"></span><span class="nm">${d.name}</span><span class="cost">${d.cost}</span>`;
       b.addEventListener('click', () => { if (this.game.controls.buildDef && this.game.controls.buildDef.key === key) this.game.controls.cancelBuild(); else this.game.controls.setBuild(key); });
       this.tip(b, () => this.buildingTip(d));
       pb.appendChild(b);
@@ -599,7 +599,7 @@ class UI {
     }
     const coop = g.coop;
     for (const bl of g.buildings) {
-      ctx.fillStyle = coop && bl.owner ? g.cssColor(g.playerColor(bl.owner)) : (bl.def.tower ? '#e0c060' : (bl.def.keep ? '#ffd040' : (bl.def.gate ? '#b08040' : (bl.def.temporary ? '#a0e0ff' : (bl.def.cat === 'economy' ? '#80c0ff' : (coop ? '#ffd040' : '#bbb'))))));
+      ctx.fillStyle = coop && bl.owner ? g.cssColor(g.playerColor(bl.owner)) : (bl.def.tower ? '#e0c060' : (bl.def.keep ? '#ffd040' : (bl.def.gate ? '#b08040' : (bl.def.temporary ? '#a0e0ff' : (bl.def.cat === 'economy' ? '#80c0ff' : (bl.def.cat === 'wonder' ? '#e0a0ff' : (coop ? '#ffd040' : '#bbb')))))));
       for (const c of bl.cells) { const w = g.grid.cellToWorld(c.i, c.j); ctx.fillRect(px(w.x - 1), pz(w.z - 1), 2 * s + 0.5, 2 * s + 0.5); }
     }
     for (const u of g.units) {

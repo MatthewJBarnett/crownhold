@@ -260,7 +260,7 @@ Unit.prototype.playerThink = function () {
   let anchor = this.post, leash;
   let aggro;
   if (this.isKing) { aggro = Math.max(5, this.range + 3); leash = 6; }   // the King only steps up to what is nearly in reach
-  else if (this.isHero) { aggro = 30; leash = 36; }
+  else if (this.isHero || this.def.guardian) { aggro = 30; leash = 36; }
   else { aggro = 22; leash = 32; }
   if (c && c.type === 'hold') { aggro = this.range + this.radius + 1.5; leash = 0; }
   if (c && c.type === 'follow') { anchor = c.leader.pos; leash = 15; aggro = Math.min(aggro, 14); }

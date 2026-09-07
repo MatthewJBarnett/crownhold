@@ -365,6 +365,7 @@ button.mini { padding: 3px 8px; font-size: 11px; }
           <li>Between waves you build and repair instantly. During a wave a new building is only a construction site until an Engineer finishes it (or the wave ends), and only Engineers can repair</li>
           <li>Enemies arrive only along the map's lanes (ringed on the minimap), wind through two belts of terrain, then cross open ground to the castle. They walk a long way round walls before chewing through, so walls steer them into your towers</li>
           <li>High-ground summits beside the lanes take a tower each: +30% range, +15% damage, and melee cannot reach them (artillery, archers and harpies can)</li>
+          <li>Wonders at the bottom of the Build panel are ruinously expensive and absurdly strong: a treasury that pays interest, a sun beam, meteor storms, a tame dragon and an iron titan</li>
           <li>The Keep shelters units inside from ranged attacks, and units inside cannot shoot out either. The King fights back if enemies get in</li>
           <li>Catapults out-range your towers: send a hero or cavalry of swordsmen to kill them</li>
           <li>A fallen hero stays dead until you buy them back; there is only ever one of each hero. A fallen King ends the game</li>
@@ -438,7 +439,7 @@ DATA.CELL = 2;                                  // metres per grid cell
 DATA.GRID = 110;                                // cells per side (220m map)
 DATA.MAP_HALF = DATA.GRID * DATA.CELL / 2 - 1;  // hard clamp for unit positions
 DATA.BUILD_RADIUS = 72;                         // max |x|,|z| for building placement (metres)
-DATA.SPAWN_RADIUS = DATA.MAP_HALF - 4;          // enemy spawn ring radius: the very edge of the map
+DATA.SPAWN_RADIUS = DATA.MAP_HALF - 1;          // enemy spawn ring radius: the very edge of the map
 
 DATA.difficulties = {
   easy:   { label: 'Easy',   hp: 0.75, dmg: 0.75, budget: 0.75, gold: 1.25 },
@@ -738,7 +739,22 @@ DATA.buildings = {
               interior: [[1, 1], [1, 2]], desc: 'The throne room. Units inside cannot be shot at from outside.' },
 };
 
-DATA.buildOrder = ['wall', 'barricade', 'gate', 'trap', 'arrow_tower', 'ballista_tower', 'mage_tower', 'frost_tower', 'cannon_tower', 'lightning_tower', 'poison_tower', 'watchtower', 'barracks', 'farm', 'mine', 'blacksmith', 'shrine', 'market', 'tavern'];
+// Wonders: ruinously expensive, absurdly strong. One of each per defender.
+DATA.buildings.dragon_roost = { key: 'dragon_roost', name: 'Dragon Roost', cost: 2600, hp: 1800, w: 3, d: 3, cat: 'wonder', unique: true, guardian: { unit: 'tamedragon', rebuild: 2 },
+  desc: 'A tamed dragon nests here: 3200 HP, flies, and breathes fire that splashes 3.5m for 70 (ignores armour). If it dies the roost hatches another two waves later.' };
+DATA.buildings.titan_forge = { key: 'titan_forge', name: 'Titan Forge', cost: 3400, hp: 2400, w: 3, d: 3, cat: 'wonder', unique: true, guardian: { unit: 'irongolem', rebuild: 2 },
+  desc: 'Forges an Iron Titan: 5500 HP, 50% armour, 110-damage cleaving blows. Slow, unstoppable. Reforged two waves after it falls.' };
+DATA.buildings.arcane_spire = { key: 'arcane_spire', name: 'Arcane Spire', cost: 3000, hp: 1300, w: 2, d: 2, cat: 'wonder', unique: true, tower: true, range: 44, dmg: 220, cd: 14, storm: { count: 6, scatter: 7, splash: 5, delay: 1.0 },
+  desc: 'Every 14s calls a meteor storm on the thickest crowd within 44m: six meteors of 220 damage, each splashing 5m and burning.' };
+DATA.buildings.sun_altar = { key: 'sun_altar', name: 'Sun Altar', cost: 2400, hp: 1300, w: 2, d: 2, cat: 'wonder', unique: true, tower: true, range: 38, dmg: 160, cd: 1, beam: { dps: 160 },
+  desc: 'Focuses sunlight into a beam that burns the strongest enemy within 38m for 160 damage per second, ignoring armour. Never misses, never stops.' };
+DATA.buildings.royal_treasury = { key: 'royal_treasury', name: 'Royal Treasury', cost: 2000, hp: 1600, w: 3, d: 3, cat: 'wonder', unique: true, interest: 0.06, interestCap: 600, bounty: 0.5,
+  desc: 'Pays 6% interest on your gold after every wave (up to 600) and raises every bounty your forces collect by 50%.' };
+DATA.units.tamedragon = { key: 'tamedragon', name: 'Tame Dragon', hp: 3200, dmg: 70, range: 7, cd: 1.2, armor: 0.3, speed: 7.5, radius: 1.6, attack: 'ranged', projectile: 'fireball', splash: 3.5, magic: true, flying: true, altitude: 6, large: true, model: 'dragon', scale: 0.9, noCap: true, guardian: true, color: 0x8a2a2a, cloth: 0x5a1a1a,
+  desc: 'The roost\'s dragon. Flies over walls and breathes splashing fire.' };
+DATA.units.irongolem = { key: 'irongolem', name: 'Iron Titan', hp: 5500, dmg: 110, range: 3.2, cd: 2.0, armor: 0.5, speed: 3.4, radius: 1.1, attack: 'melee', cleave: true, large: true, scale: 2.2, noCap: true, guardian: true, color: 0x6a6e78, cloth: 0x4a4e58, weapon: 'club', helmet: true, skin: 0x8a8e98,
+  desc: 'The forge\'s titan. Slow, armoured, cleaves everything in reach.' };
+DATA.buildOrder = ['wall', 'barricade', 'gate', 'trap', 'arrow_tower', 'ballista_tower', 'mage_tower', 'frost_tower', 'cannon_tower', 'lightning_tower', 'poison_tower', 'watchtower', 'barracks', 'farm', 'mine', 'blacksmith', 'shrine', 'market', 'tavern', 'royal_treasury', 'sun_altar', 'arcane_spire', 'dragon_roost', 'titan_forge'];
 
 DATA.towerUpgrade = { maxLevel: 3, dmg: 1.4, range: 1.1, hp: 1.3, costMul: 0.8 };
 
@@ -771,7 +787,7 @@ DATA.waves = {
 };
 
 DATA.spawnPoints = (() => {
-  const R = DATA.SPAWN_RADIUS, D = Math.round(R * 0.9);
+  const R = DATA.SPAWN_RADIUS, D = R - 2;          // diagonals sit in the corners
   return [
     { name: 'North', x: 0, z: -R },      { name: 'North-East', x: D, z: -D },
     { name: 'East', x: R, z: 0 },        { name: 'South-East', x: D, z: D },
@@ -1418,44 +1434,55 @@ class WorldMap {
   polar(rc, ang, side = 0) { const h = this.half; return { i: h + Math.cos(ang) * rc - Math.sin(ang) * side, j: h + Math.sin(ang) * rc + Math.cos(ang) * side }; }
   layLanes(rnd) {
     const h = this.half, n = this.n;
-    const fill = ['highlands', 'badlands', 'volcanic', 'frozen'].includes(this.type) ? CELL_ROCK : 5;
-    // belts (in cells): inner 24-27, outer 38-42
-    for (const [r0, r1] of [[24, 27], [38, 42]]) {
-      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-        const dx = i - h, dz = j - h, r = Math.hypot(dx, dz);
-        const wob = U.smoothNoise(i * 0.35 + this.seed % 11, j * 0.35 + this.seed % 5) * 1.6 - 0.8;
+    const rocky = ['highlands', 'badlands', 'volcanic', 'frozen'].includes(this.type);
+    // two solid belts: rock or forest by map, the inner one in the other material where it suits the map
+    const outerFill = rocky ? CELL_ROCK : 5;
+    const innerFill = this.type === 'valley' ? CELL_ROCK : (this.type === 'highlands' ? 5 : outerFill);
+    const belts = [[36, 44, outerFill], [22, 28, innerFill]];
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const dx = i - h, dz = j - h, r = Math.hypot(dx, dz);
+      const wob = U.smoothNoise(i * 0.3 + this.seed % 11, j * 0.3 + this.seed % 5) * 1.6 - 0.8;
+      for (const [r0, r1, fill] of belts) {
         if (r < r0 + wob || r > r1 + wob) continue;
-        const k = this.idx(i, j);
-        if (this.kind[k] === 0 || this.kind[k] === 6 || this.kind[k] === 7) this.kind[k] = fill;
+        const k = this.idx(i, j), kk = this.kind[k];
+        if (kk === CELL_WATER || kk === 8 || kk === 9 || kk === 12) continue;
+        this.kind[k] = fill;
       }
     }
     // lanes: 2 or 3 spawn points, well apart
     const count = 2 + (rnd() < 0.55 ? 1 : 0);
     const start = Math.floor(rnd() * 8), step = Math.floor(8 / count);
-    this.laneSpawns = []; this.lanes = []; this.plateaus = [];
+    this.laneSpawns = []; this.lanes = []; this.plateaus = []; this.laneCells = new Set();
     for (let k = 0; k < count; k++) this.laneSpawns.push((start + k * step + (k && rnd() < 0.5 ? 1 : 0)) % 8);
     this.laneSpawns = [...new Set(this.laneSpawns)];
     for (const si of this.laneSpawns) {
       const sp = DATA.spawnPoints[si];
       const ang = Math.atan2(sp.z, sp.x);
-      const d1 = (rnd() < 0.5 ? -1 : 1) * (5 + rnd() * 3), d2 = (rnd() < 0.5 ? -1 : 1) * (6 + rnd() * 4);
       const spc = { i: U.clamp(h + sp.x / this.cell, 1, n - 2), j: U.clamp(h + sp.z / this.cell, 1, n - 2) };   // the lane starts at the spawn itself, on the map edge
+      // switchbacks: a tangential leg inside each belt, doubling back before it exits
+      const d1 = rnd() < 0.5 ? -1 : 1, d2 = rnd() < 0.5 ? -1 : 1;
+      const arcA = d1 * (10 + rnd() * 4) / 40, arcB = d2 * (7 + rnd() * 3) / 25;
+      const a1 = ang + arcA, a2 = ang + arcA * 0.2;                 // outer belt: out along arcA, back a little
+      const b0 = a2 + d2 * 0.04, b1 = b0 + arcB, b2 = b0 + arcB * 0.35;
       const pts = [
-        spc, this.polar(48, ang), this.polar(44, ang),
-        this.polar(41, ang, d1 * 0.4), this.polar(39.5, ang, d1), this.polar(37, ang, d1), this.polar(35, ang, d1 * 0.3),
-        this.polar(30, ang, d2 * 0.5), this.polar(27.5, ang, d2), this.polar(25.5, ang, d2 * 0.2), this.polar(23.5, ang, -d2 * 0.7), this.polar(21, ang, -d2 * 0.5),
-        this.polar(15, ang),
+        spc, this.polar(49, ang), this.polar(45.5, ang),
+        this.polar(42.5, ang), this.polar(42.5, a1), this.polar(39.5, a1), this.polar(39.5, a2), this.polar(35.5, a2),
+        this.polar(31.5, (a2 + b0) / 2),
+        this.polar(28.5, b0), this.polar(26.5, b0), this.polar(26.5, b1), this.polar(23.8, b1), this.polar(23.8, b2), this.polar(21, b2), this.polar(15, b2),
       ];
-      // carve the corridor
       for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-        if (this.distToPolyline(i, j, pts) <= 1.3) { const c = this.cellCenter(i, j); if (Math.max(Math.abs(c.x), Math.abs(c.z)) > 21) this.kind[this.idx(i, j)] = 0; }
+        if (this.distToPolyline(i, j, pts) <= 1.4) {
+          const c = this.cellCenter(i, j);
+          if (Math.max(Math.abs(c.x), Math.abs(c.z)) > 21) { this.kind[this.idx(i, j)] = 0; this.laneCells.add(this.idx(i, j)); }
+        }
       }
       // a clearing at the spawn
       const sc = spc;
       for (let j = Math.floor(sc.j) - 6; j <= sc.j + 6; j++) for (let i = Math.floor(sc.i) - 6; i <= sc.i + 6; i++) if (this.inBounds(i, j) && Math.hypot(i - sc.i, j - sc.j) < 5.5 && this.blocked(this.kind[this.idx(i, j)]) && this.kind[this.idx(i, j)] !== CELL_WATER) this.kind[this.idx(i, j)] = 0;
-      this.lanes.push({ spawn: si, pts });
-      // high ground beside the lane: one between the belts, one inside the inner belt
-      for (const [rc, side] of [[33, -Math.sign(d1) * 6], [19.5, Math.sign(d2) * 6.5]]) this.placePlateau(this.polar(rc, ang, side));
+      this.lanes.push({ spawn: si, pts, exit: b2 });
+      // high ground: one between the belts beside the lane, one inside the inner belt near its exit
+      for (const off of [-0.16, -0.26, 0.16, 0.26]) if (this.placePlateau(this.polar(32, a2 + d2 * off))) break;
+      for (const off of [0.22, 0.34, -0.22, -0.34]) if (this.placePlateau(this.polar(18.5, b2 + d2 * off))) break;
     }
   }
   // a 2x2 buildable summit ringed by two cells of cliff: only towers go up there, only ranged enemies reach them
@@ -1467,12 +1494,14 @@ class WorldMap {
       if (Math.max(Math.abs(cc.x), Math.abs(cc.z)) < 22 || Math.max(Math.abs(cc.x), Math.abs(cc.z)) > DATA.BUILD_RADIUS - 1) return;
       const k = this.kind[this.idx(i, j)];
       if (k === CELL_WATER || k === 8 || k === 9 || k === 12) return;
+      if (this.laneCells && this.laneCells.has(this.idx(i, j))) return;   // never sit on the lane itself
     }
     for (let j = cj - 2; j < cj + 4; j++) for (let i = ci - 2; i < ci + 4; i++) {
       const top = i >= ci && i < ci + 2 && j >= cj && j < cj + 2;
       this.kind[this.idx(i, j)] = top ? 9 : 12;
     }
     this.plateaus.push({ i: ci, j: cj });
+    return true;
   }
   blocked(k) { return k === CELL_WATER || k === CELL_ROCK || k === 5 || k === 8 || k === 9 || k === 12; }
   // a thinner second stream from a random edge that joins the main river
@@ -1766,7 +1795,7 @@ class WorldMap {
     const group = new THREE.Group();
     // ground with heights and painted cells
     const size = this.n * this.cell, seg = this.n;
-    const geo = new THREE.PlaneGeometry(size + 40, size + 40, seg + 20, seg + 20);
+    const geo = new THREE.PlaneGeometry(size + 8, size + 8, seg + 4, seg + 4);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
     const colors = new Float32Array(pos.count * 3);
@@ -1811,7 +1840,7 @@ class WorldMap {
       const tint = new THREE.Color(pal.grass).lerp(new THREE.Color(this.type === 'frozen' ? 0xe0ecf0 : 0x1a2a10), this.type === 'frozen' ? 0.6 : 0.18);
       const tmat = new THREE.MeshLambertMaterial({ map: tuftTex, alphaTest: 0.45, side: THREE.DoubleSide, color: tint });
       const cells = []; for (let j = 0; j < this.n; j++) for (let i = 0; i < this.n; i++) { const k = this.kind[this.idx(i, j)]; if (k === 0 || k === 7) cells.push([i, j]); }
-      const rr = mulberry32(this.usedSeed + 13), want = Math.min(7000, cells.length * 2);
+      const rr = mulberry32(this.usedSeed + 13), want = Math.min(2600, Math.floor(cells.length * 0.7));
       const tufts = new THREE.InstancedMesh(tuftGeo, tmat, want); tufts.frustumCulled = false; tufts.receiveShadow = true;
       const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
       for (let k = 0; k < want; k++) {
@@ -1824,7 +1853,7 @@ class WorldMap {
       tufts.instanceMatrix.needsUpdate = true; group.add(tufts);
     }
     // water: one big plane just below the plain; it only shows inside the carved bed
-    const wgeo = new THREE.PlaneGeometry(size + 28, size + 28, seg + 14, seg + 14);
+    const wgeo = new THREE.PlaneGeometry(size + 4, size + 4, seg + 2, seg + 2);
     wgeo.rotateX(-Math.PI / 2);
     { const wp = wgeo.attributes.position; for (let k = 0; k < wp.count; k++) { const x = wp.getX(k), z = wp.getZ(k); wp.setY(k, this.heightAt(x, z, this.h0) - 0.5); } wgeo.computeVertexNormals(); }
     const lava = this.type === 'volcanic';
@@ -1881,6 +1910,28 @@ class WorldMap {
     const rockCells = [], forestCells = [];
     for (let j = 0; j < this.n; j++) for (let i = 0; i < this.n; i++) { const k = this.kind[this.idx(i, j)]; if (k === CELL_ROCK || k === 12) rockCells.push([i, j]); else if (k === 5) forestCells.push([i, j]); }
     const rnd = mulberry32(this.usedSeed || this.seed);
+    // crag blocks: one per rock cell, filling the cell exactly, so rock belts read as solid walls
+    this.cragHeights = new Map();
+    { const crag = rockCells.filter(([i, j]) => this.kind[this.idx(i, j)] === CELL_ROCK);
+      if (crag.length) {
+        const cg = new THREE.BoxGeometry(2.08, 1, 2.08, 2, 2, 2); cg.translate(0, 0.5, 0);
+        { const cp = cg.attributes.position; for (let k = 0; k < cp.count; k++) { const y = cp.getY(k); if (y > 0.9) { cp.setX(k, cp.getX(k) * (0.78 + U.smoothNoise(cp.getX(k) * 3 + 1, cp.getZ(k) * 3) * 0.2)); cp.setZ(k, cp.getZ(k) * (0.78 + U.smoothNoise(cp.getZ(k) * 3 + 5, cp.getX(k) * 3) * 0.2)); } } cg.computeVertexNormals(); }
+        const cm = new THREE.InstancedMesh(cg, new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), crag.length);
+        cm.castShadow = true; cm.receiveShadow = true; cm.frustumCulled = false;
+        const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
+        const cols = this.type === 'frozen' ? [0xb8c4cc, 0xa8b4bc, 0xc8d0d8] : (this.type === 'volcanic' ? [0x3a3436, 0x4a4042, 0x2e2a2a] : (this.type === 'badlands' ? [0x9a7a5a, 0x8a6a4a, 0xa88868] : [0x807c74, 0x8c8880, 0x746f68]));
+        let k = 0;
+        for (const [i, j] of crag) {
+          const cc = this.cellCenter(i, j);
+          const hgt = 2.3 + U.smoothNoise(i * 0.45 + 3, j * 0.45 + 9) * 1.9 + (rnd() - 0.5) * 0.3;
+          this.cragHeights.set(this.idx(i, j), hgt);
+          p.set(cc.x, this.heightAt(cc.x, cc.z) - 0.3, cc.z); q.identity(); s.set(1, hgt + 0.3, 1);
+          m.compose(p, q, s); cm.setMatrixAt(k, m);
+          col.setHex(cols[Math.floor(rnd() * cols.length)]).offsetHSL(0, 0, (rnd() - 0.5) * 0.06); cm.setColorAt(k, col); k++;
+        }
+        cm.instanceMatrix.needsUpdate = true; if (cm.instanceColor) cm.instanceColor.needsUpdate = true;
+        group.add(cm);
+      } }
     if (rockCells.length) {
       const rockGeo = new THREE.DodecahedronGeometry(1, 1);
       { const rp = rockGeo.attributes.position; for (let k = 0; k < rp.count; k++) { const n = 0.82 + U.smoothNoise(rp.getX(k) * 2.3 + 7, rp.getY(k) * 2.1 + rp.getZ(k) * 1.7) * 0.36; rp.setXYZ(k, rp.getX(k) * n, rp.getY(k) * n, rp.getZ(k) * n); } rockGeo.computeVertexNormals(); }
@@ -1892,8 +1943,10 @@ class WorldMap {
         const cc = this.cellCenter(i, j);
         const cliff = this.kind[this.idx(i, j)] === 12;
         for (let t = 0; t < 2; t++) {
-          const sx = 0.8 + rnd() * 0.9, sy = (cliff ? 0.5 : 0.9) + rnd() * (cliff ? 0.6 : 1.6), sz = 0.8 + rnd() * 0.9;
-          p.set(cc.x + (rnd() - 0.5) * 1.2, this.heightAt(cc.x, cc.z) + sy * 0.3, cc.z + (rnd() - 0.5) * 1.2);
+          // boulders stay inside their own cell so nothing walkable is covered by rock you can walk into
+          const sx = 0.45 + rnd() * 0.45, sy = (cliff ? 0.4 : 0.6) + rnd() * (cliff ? 0.5 : 0.9), sz = 0.45 + rnd() * 0.45;
+          const top = cliff ? this.heightAt(cc.x, cc.z) : this.heightAt(cc.x, cc.z) + (this.cragHeights ? this.cragHeights.get(this.idx(i, j)) || 0 : 0);
+          p.set(cc.x + (rnd() - 0.5) * 0.6, top + sy * 0.35, cc.z + (rnd() - 0.5) * 0.6);
           q.setFromEuler(new THREE.Euler(rnd() * 0.6, rnd() * 6, rnd() * 0.6)); s.set(sx, sy, sz);
           m.compose(p, q, s); inst.setMatrixAt(k, m);
           col.setHex((this.type === 'frozen' ? [0xc8d0d8, 0xb0b8c0, 0xd8e0e8, 0xa0a8b0] : (this.type === 'volcanic' ? [0x3a3a3a, 0x4a4040, 0x2a2a2a, 0x5a4a44] : [0x777770, 0x8a8a80, 0x6a6a64, 0x9a958a]))[Math.floor(rnd() * 4)]); inst.setColorAt(k, col); k++;
@@ -1903,7 +1956,7 @@ class WorldMap {
       group.add(inst);
     }
     if (forestCells.length) {
-      const trunkGeo = new THREE.CylinderGeometry(0.14, 0.3, 1.6, 9), leafGeo = Models.canopyGeometry(this.type === 'valley' || this.type === 'highlands' ? 'round' : 'pine');
+      const trunkGeo = new THREE.CylinderGeometry(0.14, 0.34, 2.6, 9), leafGeo = Models.canopyGeometry(this.type === 'valley' || this.type === 'highlands' ? 'round' : 'pine');
       const per = 3;
       const trunks = new THREE.InstancedMesh(trunkGeo, Models.mat(0x5a3a22), forestCells.length * per);
       const leaves = new THREE.InstancedMesh(leafGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), forestCells.length * per);
@@ -1915,13 +1968,29 @@ class WorldMap {
         for (let t = 0; t < per; t++) {
           const x = cc.x + (rnd() - 0.5) * 1.6, z = cc.z + (rnd() - 0.5) * 1.6, sc = 0.8 + rnd() * 0.7, y = this.heightAt(x, z);
           q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6); s.set(sc, sc, sc);
-          p.set(x, y + 0.8 * sc, z); m.compose(p, q, s); trunks.setMatrixAt(k, m);
-          p.set(x, y + 0.8 * sc + 2.1 * sc, z); m.compose(p, q, s); leaves.setMatrixAt(k, m);
+          p.set(x, y + 0.7 * sc, z); m.compose(p, q, s); trunks.setMatrixAt(k, m);          // trunk runs from 0.6 m below ground to 2 m above
+          p.set(x, y + 1.7 * sc, z); m.compose(p, q, s); leaves.setMatrixAt(k, m);         // crown starts inside the trunk top
           col.setHex((pal.leaves || [0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x1f4a25])[Math.floor(rnd() * 4)]); leaves.setColorAt(k, col); k++;
         }
       }
       trunks.instanceMatrix.needsUpdate = true; leaves.instanceMatrix.needsUpdate = true; if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
       group.add(trunks); group.add(leaves);
+      // undergrowth fills the gaps between trunks so a forest belt reads as a wall of green
+      const bushGeo = new THREE.SphereGeometry(1, 9, 6); bushGeo.scale(1, 0.62, 1);
+      const bushes = new THREE.InstancedMesh(bushGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), forestCells.length);
+      bushes.castShadow = true; bushes.receiveShadow = true; bushes.frustumCulled = false;
+      let kb = 0;
+      for (const [i, j] of forestCells) {
+        const cc = this.cellCenter(i, j);
+        for (let t = 0; t < 1; t++) {
+          const x = cc.x + (rnd() - 0.5) * 1.1, z = cc.z + (rnd() - 0.5) * 1.1, sc = 0.38 + rnd() * 0.3;
+          q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6); s.set(sc, sc, sc); p.set(x, this.heightAt(x, z) + 0.1, z);
+          m.compose(p, q, s); bushes.setMatrixAt(kb, m);
+          col.setHex((pal.leaves || [0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x1f4a25])[Math.floor(rnd() * 4)]).offsetHSL(0, 0, -0.06); bushes.setColorAt(kb, col); kb++;
+        }
+      }
+      bushes.instanceMatrix.needsUpdate = true; if (bushes.instanceColor) bushes.instanceColor.needsUpdate = true;
+      group.add(bushes);
     }
     // dead trees on the dry maps (walkable decoration)
     if (this.cfg.decor === 'dead') {
@@ -1991,6 +2060,19 @@ const Models = {
     const g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.4, 'rgba(255,255,255,0.6)'); g.addColorStop(1, 'rgba(255,255,255,0)');
     x.fillStyle = g; x.fillRect(0, 0, 64, 64);
     const t = new THREE.CanvasTexture(c); this._dot = t; return t;
+  },
+  flameTexture() {
+    if (this._flame) return this._flame;
+    const c = document.createElement('canvas'); c.width = 64; c.height = 128; const x = c.getContext('2d');
+    const g = x.createRadialGradient(32, 84, 4, 32, 70, 60);
+    g.addColorStop(0, 'rgba(255,255,220,1)'); g.addColorStop(0.25, 'rgba(255,200,80,0.95)'); g.addColorStop(0.55, 'rgba(255,110,20,0.55)'); g.addColorStop(1, 'rgba(200,40,0,0)');
+    x.fillStyle = g; x.beginPath(); x.ellipse(32, 72, 30, 56, 0, 0, Math.PI * 2); x.fill();
+    const t = new THREE.CanvasTexture(c); this._flame = t; return t;
+  },
+  flameSprite(scale = 1, color = 0xffffff) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.flameTexture(), color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    s.scale.set(0.5 * scale, 1.0 * scale, 1);
+    return s;
   },
   sunDisc() {
     const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
@@ -2397,8 +2479,9 @@ const Models = {
   // a wall torch: bracket, flame and a flickering light
   torch(g, x, y, z) {
     g.add(this.cyl(0.05, 0.05, 0.5, this.mat(0x2a2a2a), x, y, z, 5, false));
-    const flame = this.cone(0.14, 0.42, this.mat(0xffb040, { emissive: 0xff7010, emissiveIntensity: 1.4 }), x, y + 0.45, z, 6); flame.castShadow = false; g.add(flame);
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.softDot(), color: 0xffa040, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending })); glow.scale.setScalar(1.6); glow.position.set(x, y + 0.5, z); g.add(glow);
+    g.add(this.cyl(0.09, 0.06, 0.16, this.mat(0x3a3a3a), x, y + 0.28, z, 8, false));
+    const flame = this.flameSprite(0.9); flame.position.set(x, y + 0.66, z); g.add(flame);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.softDot(), color: 0xffa040, transparent: true, opacity: 0.28, depthWrite: false, blending: THREE.AdditiveBlending })); glow.scale.setScalar(1.1); glow.position.set(x, y + 0.6, z); g.add(glow);
     const light = new THREE.PointLight(0xffa040, 0.9, 13, 1.6); light.position.set(x, y + 0.6, z); light.castShadow = false; g.add(light);
     light.userData.base = 0.9; light.userData.phase = x * 3 + z * 7; light.userData.flame = flame;
     return light;
@@ -2589,6 +2672,61 @@ const Models = {
         const ice = new THREE.MeshLambertMaterial({ color: 0xa8e0ff, emissive: 0x2060a0, emissiveIntensity: 0.35, transparent: true, opacity: 0.75 });
         g.add(this.box(2, 2.8, 1.6, ice, 0, 1.4, 0));
         for (let k = 0; k < 3; k++) { const s = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), ice); s.position.set(-0.6 + k * 0.6, 2.9 + (k % 2) * 0.25, 0); g.add(s); }
+        break;
+      }
+      case 'dragon_roost': {
+        const crag = this.mat(0x5a4a44);
+        for (const [x, z, r, hgt] of [[-1.6, -1.4, 1.6, 2.2], [1.7, -1.2, 1.4, 3.0], [0.2, 1.6, 1.5, 1.8], [-1.2, 1.2, 1.1, 2.6], [1.3, 1.4, 1.0, 1.4]]) { const rk = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 1), crag); rk.position.set(x, hgt * 0.35, z); rk.scale.set(1, hgt / r * 0.5, 1); rk.rotation.set(0.3, x * 1.3, 0.2); rk.castShadow = true; rk.receiveShadow = true; g.add(rk); }
+        const nest = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.35, 8, 18), this.mat(0x6a4a2a)); nest.rotation.x = Math.PI / 2; nest.position.y = 1.35; nest.castShadow = true; g.add(nest);
+        for (let k = 0; k < 3; k++) { const egg = this.sphere(0.32, this.mat(0xe8d8b0), Math.sin(k * 2.1) * 0.7, 1.55, Math.cos(k * 2.1) * 0.7, 12); egg.scale.y = 1.35; g.add(egg); }
+        for (let k = 0; k < 4; k++) g.add(this.cyl(0.05, 0.08, 1.2, this.mat(0xe8e0d0), Math.sin(k * 1.6) * 2.4, 0.5, Math.cos(k * 1.6) * 2.4, 5, false).rotateZ(0.6 + k * 0.4));
+        g.userData.torches = [this.torch(g, 2.4, 1.0, 2.4)];
+        break;
+      }
+      case 'titan_forge': {
+        const dark = this.mat(0x3a3a40), iron = this.mat(0x6a6e78);
+        g.add(this.box(5.4, 3.2, 4.6, dark, 0, 1.6, 0));
+        g.add(this.box(5.8, 0.4, 5.0, iron, 0, 3.4, 0));
+        g.add(this.cyl(0.5, 0.7, 3.0, dark, -1.6, 4.9, -1.2, 10));
+        { const smoke = this.flameSprite(1.6, 0xff8040); smoke.position.set(-1.6, 6.8, -1.2); g.add(smoke); }
+        g.add(this.box(2.0, 1.4, 0.3, this.mat(0xff7020, { emissive: 0xff4000, emissiveIntensity: 1.2 }), 0, 1.2, 2.32, false));   // furnace mouth
+        g.add(this.box(1.2, 0.5, 0.6, iron, 1.4, 3.85, 0.4)); g.add(this.box(0.5, 0.6, 0.5, dark, 1.4, 3.45, 0.4));                 // anvil
+        g.add(this.box(0.3, 0.25, 0.3, this.mat(0xffc040, { emissive: 0xff8000, emissiveIntensity: 0.9 }), 1.4, 4.2, 0.4, false));
+        for (const x of [-2.3, 2.3]) g.add(this.cyl(0.35, 0.4, 3.4, iron, x, 1.7, 2.3, 10));
+        g.userData.torches = [this.torch(g, -2.9, 2.2, 2.4), this.torch(g, 2.9, 2.2, 2.4)];
+        break;
+      }
+      case 'arcane_spire': {
+        const violet = this.mat(0x4a3a6a), pale = this.mat(0x9a80c0);
+        g.add(this.cyl(1.6, 1.9, 1.2, pale, 0, 0.6, 0, 8));
+        g.add(this.cyl(0.9, 1.3, 9.0, violet, 0, 5.7, 0, 10));
+        for (let k = 0; k < 4; k++) g.add(new THREE.Mesh(new THREE.TorusGeometry(1.15 - k * 0.08, 0.1, 6, 16), pale).rotateX(Math.PI / 2).translateZ(-(2 + k * 2.2)));
+        g.add(this.cone(1.5, 2.4, this.mat(0x2a1a4a), 0, 11.3, 0, 10));
+        const orb = this.sphere(0.8, this.mat(0xd0a0ff, { emissive: 0xa050ff, emissiveIntensity: 1.2 }), 0, 13.2, 0, 14); g.add(orb); g.userData.orb = orb;
+        g.userData.orbiters = [];
+        for (let k = 0; k < 3; k++) { const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.4, 0), this.mat(0xe0c0ff, { emissive: 0xb070ff, emissiveIntensity: 1 })); c.position.set(Math.sin(k * 2.1) * 1.9, 9.5, Math.cos(k * 2.1) * 1.9); g.add(c); g.userData.orbiters.push(c); }
+        for (let k = 0; k < 4; k++) g.add(this.box(0.4, 0.8, 0.2, this.mat(0xc090ff, { emissive: 0x8040ff, emissiveIntensity: 0.8 }), Math.sin(k * 1.57) * 1.1, 4 + k * 1.6, Math.cos(k * 1.57) * 1.1, false).rotateY(k * 1.57));
+        break;
+      }
+      case 'sun_altar': {
+        const gold = this.mat(0xe0b040, { emissive: 0x604000, emissiveIntensity: 0.25 }), pale = this.plaster;
+        g.add(this.cyl(2.0, 2.2, 0.5, pale, 0, 0.25, 0, 16)); g.add(this.cyl(1.6, 1.8, 0.5, pale, 0, 0.75, 0, 16)); g.add(this.cyl(1.2, 1.4, 0.5, gold, 0, 1.25, 0, 16));
+        for (let k = 0; k < 3; k++) { const a = k / 3 * Math.PI * 2; const leg = this.cyl(0.08, 0.1, 5.0, gold, Math.sin(a) * 1.0, 3.8, Math.cos(a) * 1.0, 6); leg.rotation.set(-Math.cos(a) * 0.2, 0, Math.sin(a) * 0.2); g.add(leg); }
+        g.add(new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.1, 6, 20), gold).rotateX(Math.PI / 2).translateZ(-6.1));
+        const lens = this.sphere(0.75, this.mat(0xfff0a0, { emissive: 0xffd040, emissiveIntensity: 1.3 }), 0, 6.3, 0, 16); g.add(lens); g.userData.orb = lens;
+        const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.softDot(), color: 0xffe080, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending })); halo.scale.setScalar(4); halo.position.y = 6.3; g.add(halo);
+        break;
+      }
+      case 'royal_treasury': {
+        const gold = this.mat(0xe0b040, { emissive: 0x503000, emissiveIntensity: 0.2 });
+        g.add(this.box(5.4, 3.4, 5.0, st, 0, 1.7, 0));
+        g.add(this.box(5.8, 0.4, 5.4, sd, 0, 3.6, 0));
+        for (const [x, z] of [[-2.2, 2.6], [2.2, 2.6], [-2.2, -2.6], [2.2, -2.6]]) g.add(this.cyl(0.3, 0.35, 3.4, this.plaster, x, 1.7, z, 10));
+        g.add(new THREE.Mesh(new THREE.SphereGeometry(2.2, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), gold).translateY(3.8));
+        g.add(this.cyl(0.12, 0.12, 1.0, gold, 0, 6.4, 0, 6, false)); g.add(this.sphere(0.25, gold, 0, 6.9, 0, 10));
+        g.add(this.box(1.4, 2.2, 0.3, this.mat(0x5a3a1a), 0, 1.1, 2.55)); g.add(this.box(0.2, 0.2, 0.1, gold, 0.4, 1.1, 2.72, false));
+        for (let k = 0; k < 6; k++) g.add(this.box(0.5, 0.5, 0.5, sd, -2.5 + k, 4.0, 2.6));
+        g.userData.torches = [this.torch(g, -1.2, 2.4, 2.7), this.torch(g, 1.2, 2.4, 2.7)];
         break;
       }
       case 'keep': {
@@ -3113,6 +3251,13 @@ class Unit {
       this.integrateMovement(dt);
       if (this.moving && !this.possessed) this.faceToward(this.pos.x + this.moveIntent.x, this.pos.z + this.moveIntent.z, dt, 14);
       if (this.moving) this.trackHeading(dt);
+      // an enemy that wants to move but has not managed to for a while is wedged: put it on the nearest free, reachable cell
+      if (this.team === 'enemy' && !this.flying) {
+        if (this.moving && !(this.target && this.target !== this && this.inRange(this.target, 0))) {
+          this.wedgeT = (this.wedgeT || 0) + dt;
+          if (this.wedgeT > 5) { const moved = U.dist(this.pos.x, this.pos.z, this.wedgeX === undefined ? 1e9 : this.wedgeX, this.wedgeZ || 0); if (moved < 0.6) game.snapToReachable(this, true); this.wedgeX = this.pos.x; this.wedgeZ = this.pos.z; this.wedgeT = 0; }
+        } else { this.wedgeT = 0; this.wedgeX = this.pos.x; this.wedgeZ = this.pos.z; }
+      }
       this.separate(dt);
       if (!this.flying && !game.grid.circleFree(this.pos.x, this.pos.z, this.collisionRadius, this.team)) this.unstuck(dt);
     }
@@ -3338,7 +3483,7 @@ class Building {
     this.group.rotation.y = this.rot * Math.PI / 2;
     this.group.userData.building = this;
     this.game.scene.add(this.group);
-    if (!this.def.keep) { const blob = Models.blob(this.radius * 1.25 + 0.6, 0.35); blob.position.y = 0.04; this.group.add(blob); }
+    if (!this.def.keep) { const blob = Models.blob(this.radius * 1.08 + 0.35, 0.14); blob.position.y = 0.04; this.group.add(blob); }
     if (!this.hpBar) {
       const hb = Models.healthBar(Math.max(2.2, this.radius * 1.5), 0.26);
       this.hpBar = hb; hb.group.visible = false;
@@ -3373,7 +3518,7 @@ class Building {
   }
   get baseCost() { return this.def.cost; }
   upgradeCost() { return Math.round(this.def.cost * DATA.towerUpgrade.costMul * this.level); }
-  canUpgrade() { return this.def.tower && this.level < DATA.towerUpgrade.maxLevel; }
+  canUpgrade() { return this.def.tower && this.def.cat !== 'wonder' && this.level < DATA.towerUpgrade.maxLevel; }
   repairCost() { return Math.round((1 - this.hp / this.maxHp) * this.def.cost * 0.5); }
   sellValue() { const paid = this.paid !== undefined ? this.paid : this.def.cost; return Math.round(paid * 0.6 * (this.hp / this.maxHp) * (1 + 0.5 * (this.level - 1))); }
 
@@ -3388,7 +3533,9 @@ class Building {
     return amount;
   }
   heal(amount) { if (!this.dead) this.hp = Math.min(this.maxHp, this.hp + amount); }
+  disposeExtras() { if (this.beamMesh) { this.game.scene.remove(this.beamMesh); this.beamMesh = null; } }
   destroy(source) {
+    this.disposeExtras();
     if (this.dead) return;
     this.dead = true; this.hp = 0;
     this.game.onBuildingDestroyed(this, source);
@@ -3422,7 +3569,10 @@ class Building {
     if (orb) { orb.rotation.y += dt; orb.position.y += Math.sin(game.time * 2 + this.id) * dt * 0.3; }
     if (this.def.trap) { const plate = this.group.userData.plate; if (plate) plate.position.y += ((this.trapArmed === false ? -0.75 : 0) - plate.position.y) * Math.min(1, dt * 4); }
     if (this.underConstruction || game.replica) return;
-    if (this.def.tower) this.updateTower(dt);
+    if (this.def.storm) this.updateStorm(dt);
+    else if (this.def.beam) this.updateBeam(dt);
+    else if (this.def.tower) this.updateTower(dt);
+    if (this.def.guardian) this.tickGuardian(dt);
     if (this.def.heal && game.waves && game.waves.active) {
       const list = game.unitsNear(this.pos.x, this.pos.z, this.def.heal.radius, 'player');
       for (const u of list) if (u.hp < u.maxHp) u.heal(this.def.heal.hps * dt);
@@ -3496,6 +3646,68 @@ class Building {
       });
       SFX.play(this.def.projectile === 'arrow' ? 'bow' : (this.def.projectile === 'ballista' ? 'ballista' : 'cast'), 0.5);
     }
+  }
+  // arcane spire: a meteor storm on the thickest crowd in range
+  updateStorm(dt) {
+    const game = this.game, st = this.def.storm;
+    this.timer -= dt;
+    const orbs = this.group.userData.orbiters; if (orbs) for (let k = 0; k < orbs.length; k++) { const a = game.time * 1.4 + k * 2.1; orbs[k].position.set(Math.sin(a) * 1.9, 9.5 + Math.sin(a * 1.7) * 0.6, Math.cos(a) * 1.9); orbs[k].rotation.y += dt * 2; }
+    if (this.timer > 0) return;
+    const list = game.unitsNear(this.pos.x, this.pos.z, this.range, 'enemy').filter(u => !u.dead);
+    if (!list.length) return;
+    let best = null, bs = -1;
+    for (const u of list) { let s = 0; for (const v of list) if (v.distTo(u) < 7) s += v.isBoss ? 4 : 1; if (s > bs) { bs = s; best = u; } }
+    this.timer = this.cd;
+    for (let k = 0; k < st.count; k++) {
+      const a = k / st.count * Math.PI * 2 + Math.random(), r = k === 0 ? 0 : Math.random() * st.scatter;
+      const p = { x: best.pos.x + Math.sin(a) * r, z: best.pos.z + Math.cos(a) * r };
+      const delay = st.delay + k * 0.22, dmg = this.dmg, owner = this;
+      game.effects.spawn('ring', p.x, 0.3, p.z, { radius: st.splash, color: 0xc060ff, dur: delay });
+      game.fireProjectile({ from: this, key: 'fireball', kind: 'drop', dest: p, delay, dmg, team: 'player', splash: st.splash, magic: true,
+        onLand: () => { game.areaDamage(p.x, p.z, st.splash, dmg, 'player', owner, { magic: true, burn: { dps: 12, dur: 3 } }); game.effects.spawn('explosion', p.x, 1, p.z, { radius: st.splash, color: 0xb050ff }); } });
+    }
+    SFX.play('cast', 0.8);
+  }
+  // sun altar: a continuous beam on the toughest enemy in range
+  updateBeam(dt) {
+    const game = this.game;
+    this.retargetT -= dt;
+    if (this.retargetT <= 0 || !this.target || this.target.dead || this.distTo(this.target) > this.range + 0.5) {
+      this.retargetT = 0.4;
+      let best = null, bh = -1;
+      for (const u of game.unitsNear(this.pos.x, this.pos.z, this.range, 'enemy')) { if (u.dead) continue; const s = u.hp + (u.isBoss ? 5000 : 0); if (s > bh) { bh = s; best = u; } }
+      this.target = best;
+    }
+    const t = this.target;
+    if (!this.beamMesh) {
+      this.beamMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.5, 1, 8, 1, true), new THREE.MeshBasicMaterial({ color: 0xfff0a0, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+      this.beamMesh.geometry.translate(0, 0.5, 0); this.beamMesh.geometry.rotateX(Math.PI / 2);   // now runs along +z from the origin
+      game.scene.add(this.beamMesh);
+    }
+    if (!t) { this.beamMesh.visible = false; return; }
+    const lens = this.group.userData.orb;
+    const from = new THREE.Vector3(this.pos.x, this.pos.y + (lens ? lens.position.y : this.height), this.pos.z), to = new THREE.Vector3(t.pos.x, t.centerY, t.pos.z);
+    const len = from.distanceTo(to);
+    this.beamMesh.visible = true; this.beamMesh.position.copy(from); this.beamMesh.lookAt(to); this.beamMesh.scale.set(1 + 0.2 * Math.sin(game.time * 30), 1 + 0.2 * Math.sin(game.time * 30), len);
+    t.takeDamage(this.def.beam.dps * dt, this, { magic: true });
+    if (Math.random() < dt * 14) game.effects.spawn('ember', t.pos.x + U.rand(-0.4, 0.4), t.centerY, t.pos.z + U.rand(-0.4, 0.4), { color: 0xffe080 });
+    if (t.dead) { game.effects.spawn('explosion', t.pos.x, t.centerY, t.pos.z, { radius: 1.5, color: 0xfff0a0 }); this.target = null; }
+  }
+  // roost / forge: keep one guardian alive; hatch or reforge it a few waves after it falls
+  tickGuardian(dt) {
+    const game = this.game, gd = this.def.guardian;
+    const g = this.guardian;
+    if (g && !g.dead) return;
+    if (g && g.dead && this.guardianLostWave === undefined) this.guardianLostWave = game.waves.number;
+    if (g && g.dead && game.waves.number - this.guardianLostWave < gd.rebuild) return;
+    if (g && g.dead && game.waves.active) return;   // returns between waves
+    const def = DATA.units[gd.unit];
+    const sp = game.findSpawnSpot(this.pos.x + this.radius + 1.5, this.pos.z);
+    const u = game.spawnUnit(def, 'player', sp.x, sp.z, { owner: this.owner });
+    u.post = { x: sp.x, z: sp.z }; u.guardianOf = this;
+    this.guardian = u; this.guardianLostWave = undefined;
+    game.effects.spawn('ring', sp.x, 0.3, sp.z, { radius: 4, color: gd.unit === 'tamedragon' ? 0xff6020 : 0xa0b0ff, dur: 1 });
+    game.ui.toast(`${u.name} ${g ? 'returns' : 'joins the defence'}!`, 'good');
   }
   distTo(t) { return Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z); }
   pickTarget() {
@@ -3714,28 +3926,40 @@ class Effects {
   constructor(game) {
     this.game = game; this.list = [];
     this.geoBox = new THREE.BoxGeometry(0.16, 0.16, 0.16);
-    this.geoSphere = new THREE.SphereGeometry(1, 10, 8);
+    this.geoSphere = new THREE.SphereGeometry(1, 12, 8);
+    this.geoDome = new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2);   // explosions on the ground never sink into it
   }
   spawn(type, x, y, z, o = {}) {
     if (this.game.netHost) this.game.netHost.fx(type, x, y, z, o);
     if (this.list.length > 220) return;
     const scene = this.game.scene;
-    if (type === 'hit' || type === 'ember' || type === 'flame' || type === 'heal_p') {
+    if (type === 'ember' || type === 'flame') {
+      // fire is a soft additive sprite that rises, flickers and fades, not a box
+      const color = type === 'flame' ? U.choice([0xffa040, 0xffc860, 0xff7030]) : (o.color || 0xff9040);
+      const s = Models.flameSprite(type === 'flame' ? 0.9 + Math.random() * 0.5 : 0.45 + Math.random() * 0.3, color);
+      s.position.set(x, y, z);
+      const vel = o.vel ? o.vel.clone() : new THREE.Vector3(U.rand(-0.6, 0.6), U.rand(1.2, 2.4), U.rand(-0.6, 0.6));
+      scene.add(s);
+      this.list.push({ mesh: s, vel, life: 0, max: type === 'flame' ? 0.7 : 0.55, grav: 1.5, shrink: true, sprite: true, base: s.scale.y });
+    } else if (type === 'hit' || type === 'heal_p') {
       const n = type === 'hit' ? 6 : 1;
       for (let k = 0; k < n; k++) {
-        const color = type === 'heal_p' ? 0x60ff80 : (type === 'flame' ? U.choice([0xff8020, 0xffc040, 0xff4010]) : (o.color || (type === 'ember' ? 0xff8030 : 0xffd090)));
+        const color = type === 'heal_p' ? 0x60ff80 : (o.color || 0xffd090);
         const m = new THREE.Mesh(this.geoBox, new THREE.MeshBasicMaterial({ color, transparent: true }));
         m.position.set(x, y, z);
         const sp = type === 'hit' ? 4 : 1.5;
         const vel = o.vel ? o.vel.clone() : new THREE.Vector3(U.rand(-sp, sp), U.rand(1, sp + 1), U.rand(-sp, sp));
         scene.add(m);
-        this.list.push({ mesh: m, vel, life: 0, max: type === 'flame' ? 0.6 : 0.5, grav: type === 'ember' || type === 'flame' || type === 'heal_p' ? 1 : -12, shrink: true });
+        this.list.push({ mesh: m, vel, life: 0, max: 0.5, grav: type === 'heal_p' ? 1 : -12, shrink: true });
       }
     } else if (type === 'explosion') {
-      const m = new THREE.Mesh(this.geoSphere, new THREE.MeshBasicMaterial({ color: o.color || 0xff6020, transparent: true, opacity: 0.8 }));
-      m.position.set(x, y, z); m.scale.setScalar(0.3);
+      const gy = this.game.groundY(x, z);
+      const onGround = y - gy < 1.6;
+      const m = new THREE.Mesh(onGround ? this.geoDome : this.geoSphere, new THREE.MeshBasicMaterial({ color: o.color || 0xff6020, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending }));
+      m.position.set(x, onGround ? gy + 0.05 : y, z); m.scale.setScalar(0.3);
       scene.add(m);
       this.list.push({ mesh: m, life: 0, max: 0.45, grow: o.radius || 2.5, ring: false });
+      for (let k = 0; k < 5; k++) this.spawn('flame', x + U.rand(-1, 1) * (o.radius || 2.5) * 0.4, (onGround ? gy : y) + 0.4, z + U.rand(-1, 1) * (o.radius || 2.5) * 0.4);
       const r = Models.ring(o.radius || 2.5, o.color || 0xff8040, 0.9); r.position.set(x, 0.1, z); r.scale.setScalar(0.2); scene.add(r);
       this.list.push({ mesh: r, life: 0, max: 0.5, growRing: 1 });
       for (let k = 0; k < 8; k++) this.spawn('hit', x, y, z, { color: o.color || 0xffa040 });
@@ -3766,7 +3990,8 @@ class Effects {
         e.mesh.position.addScaledVector(e.vel, dt);
         if (e.mesh.position.y < 0.05 && e.grav < 0) { e.mesh.position.y = 0.05; e.vel.set(0, 0, 0); }
         e.mesh.material.opacity = 1 - p;
-        if (e.shrink) e.mesh.scale.setScalar(1 - p * 0.7);
+        if (e.shrink && e.sprite) { const f = (1 - p * 0.6) * (0.9 + 0.2 * Math.sin(e.life * 40)); e.mesh.scale.set(0.5 * f * e.base, 1.0 * f * e.base, 1); }
+        else if (e.shrink) e.mesh.scale.setScalar(1 - p * 0.7);
       }
       if (e.grow) { e.mesh.scale.setScalar(0.3 + e.grow * p); e.mesh.material.opacity = 0.8 * (1 - p); }
       if (e.growRing) { e.mesh.scale.setScalar(0.2 + p * e.growRing); e.mesh.material.opacity = 0.9 * (1 - p); }
@@ -4041,7 +4266,7 @@ Unit.prototype.playerThink = function () {
   let anchor = this.post, leash;
   let aggro;
   if (this.isKing) { aggro = Math.max(5, this.range + 3); leash = 6; }   // the King only steps up to what is nearly in reach
-  else if (this.isHero) { aggro = 30; leash = 36; }
+  else if (this.isHero || this.def.guardian) { aggro = 30; leash = 36; }
   else { aggro = 22; leash = 32; }
   if (c && c.type === 'hold') { aggro = this.range + this.radius + 1.5; leash = 0; }
   if (c && c.type === 'follow') { anchor = c.leader.pos; leash = 15; aggro = Math.min(aggro, 14); }
@@ -4646,10 +4871,12 @@ class WaveManager {
     while (this.pending.length && this.pending[0].t <= this.timer) {
       if (++guard > 1000) throw new Error('wave spawn runaway');
       const p = this.pending.shift();
-      const jx = p.sp.x === 0 ? 9 : 4, jz = p.sp.z === 0 ? 9 : 4;
-      const x = U.clamp(p.sp.x + U.rand(-jx, jx), -DATA.MAP_HALF + 1, DATA.MAP_HALF - 1);
-      const z = U.clamp(p.sp.z + U.rand(-jz, jz), -DATA.MAP_HALF + 1, DATA.MAP_HALF - 1);
+      // jitter only along the edge, never inward
+      const jx = p.sp.x === 0 ? 9 : (p.sp.z === 0 ? 0 : 4), jz = p.sp.z === 0 ? 9 : (p.sp.x === 0 ? 0 : 4);
+      const x = U.clamp(p.sp.x + U.rand(-jx, jx), -DATA.MAP_HALF + 0.6, DATA.MAP_HALF - 0.6);
+      const z = U.clamp(p.sp.z + U.rand(-jz, jz), -DATA.MAP_HALF + 0.6, DATA.MAP_HALF - 0.6);
       const u = this.game.spawnEnemy(p.type, x, z, { hpMul: p.hpMul });
+      { const lim = DATA.MAP_HALF - 0.4 - u.collisionRadius; u.pos.x = U.clamp(u.pos.x, -lim, lim); u.pos.z = U.clamp(u.pos.z, -lim, lim); }
       if (this.game.grid.flowDirty && this.game.king) { const kc = this.game.grid.worldToCell(this.game.king.pos.x, this.game.king.pos.z); this.game.grid.computeFlow(kc.i, kc.j); }
       this.game.snapToReachable(u);
       if (p.boss) { this.game.boss = u; this.game.ui.toast(`${u.name} has arrived!`, 'boss'); SFX.play('bossroar'); }
@@ -5447,8 +5674,10 @@ class Controls {
 class Post {
   constructor(renderer) {
     this.renderer = renderer;
-    const gl2 = renderer.capabilities.isWebGL2;
-    const opts = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat, depthBuffer: true, stencilBuffer: false };
+    const gl2 = renderer.capabilities.isWebGL2 && !/[?&]msaa=0/.test(location.search);   // msaa=0: plain target (software renderers crawl on multisampled targets)
+    // stencilBuffer: true makes three.js allocate a 24-bit depth buffer (DEPTH24_STENCIL8). The default, depth-only
+    // target is only 16-bit, which z-fights the water plane through the terrain when zoomed out.
+    const opts = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat, depthBuffer: true, stencilBuffer: true };
     this.rtScene = gl2 && THREE.WebGLMultisampleRenderTarget ? new THREE.WebGLMultisampleRenderTarget(4, 4, opts) : new THREE.WebGLRenderTarget(4, 4, opts);
     if (this.rtScene.samples !== undefined) this.rtScene.samples = 4;
     const q = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat, depthBuffer: false, stencilBuffer: false };
@@ -6150,10 +6379,10 @@ class UI {
     let lastCat = '';
     for (const key of DATA.buildOrder) {
       const d = DATA.buildings[key];
-      if (d.cat !== lastCat) { lastCat = d.cat; const c = document.createElement('div'); c.className = 'cat'; c.textContent = { defense: 'Walls', tower: 'Towers', economy: 'Buildings' }[d.cat]; pb.appendChild(c); }
+      if (d.cat !== lastCat) { lastCat = d.cat; const c = document.createElement('div'); c.className = 'cat'; c.textContent = { defense: 'Walls', tower: 'Towers', economy: 'Buildings', wonder: 'Wonders' }[d.cat]; pb.appendChild(c); }
       const b = document.createElement('button');
       b.className = 'item'; b.dataset.build = key;
-      b.innerHTML = `<span class="sw" style="background:${{ defense: '#9a9a92', tower: '#c0a060', economy: '#8ab060' }[d.cat]}"></span><span class="nm">${d.name}</span><span class="cost">${d.cost}</span>`;
+      b.innerHTML = `<span class="sw" style="background:${{ defense: '#9a9a92', tower: '#c0a060', economy: '#8ab060', wonder: '#e0b0ff' }[d.cat]}"></span><span class="nm">${d.name}</span><span class="cost">${d.cost}</span>`;
       b.addEventListener('click', () => { if (this.game.controls.buildDef && this.game.controls.buildDef.key === key) this.game.controls.cancelBuild(); else this.game.controls.setBuild(key); });
       this.tip(b, () => this.buildingTip(d));
       pb.appendChild(b);
@@ -6534,7 +6763,7 @@ class UI {
     }
     const coop = g.coop;
     for (const bl of g.buildings) {
-      ctx.fillStyle = coop && bl.owner ? g.cssColor(g.playerColor(bl.owner)) : (bl.def.tower ? '#e0c060' : (bl.def.keep ? '#ffd040' : (bl.def.gate ? '#b08040' : (bl.def.temporary ? '#a0e0ff' : (bl.def.cat === 'economy' ? '#80c0ff' : (coop ? '#ffd040' : '#bbb'))))));
+      ctx.fillStyle = coop && bl.owner ? g.cssColor(g.playerColor(bl.owner)) : (bl.def.tower ? '#e0c060' : (bl.def.keep ? '#ffd040' : (bl.def.gate ? '#b08040' : (bl.def.temporary ? '#a0e0ff' : (bl.def.cat === 'economy' ? '#80c0ff' : (bl.def.cat === 'wonder' ? '#e0a0ff' : (coop ? '#ffd040' : '#bbb')))))));
       for (const c of bl.cells) { const w = g.grid.cellToWorld(c.i, c.j); ctx.fillRect(px(w.x - 1), pz(w.z - 1), 2 * s + 0.5, 2 * s + 0.5); }
     }
     for (const u of g.units) {
@@ -6644,7 +6873,7 @@ class Game {
   buildDecor() {
     // forest border with instanced meshes
     const N = 700, H = DATA.MAP_HALF;
-    const trunkGeo = new THREE.CylinderGeometry(0.22, 0.32, 1.8, 6), leafGeo = new THREE.ConeGeometry(1.6, 3.4, 7);
+    const trunkGeo = new THREE.CylinderGeometry(0.18, 0.36, 2.8, 9), leafGeo = Models.canopyGeometry(this.worldType === 'valley' || this.worldType === 'highlands' ? 'round' : 'pine');
     const trunks = new THREE.InstancedMesh(trunkGeo, Models.mat(0x5a3a22), N);
     const leaves = new THREE.InstancedMesh(leafGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), N);
     trunks.castShadow = true; leaves.castShadow = true;
@@ -6654,30 +6883,39 @@ class Game {
     const col = new THREE.Color();
     for (let k = 0; k < N; k++) {
       let x, z, r;
-      do { x = U.rand(-H - 22, H + 22); z = U.rand(-H - 22, H + 22); r = Math.max(Math.abs(x), Math.abs(z)); } while (r < H || r > H + 21);
-      const sc = U.rand(0.8, 1.5), gy = this.groundY(x, z);
-      p.set(x, gy + 0.9 * sc, z); s.set(sc, sc, sc); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * 6);
+      let tries = 0;
+      do { x = U.rand(-H - 4, H + 4); z = U.rand(-H - 4, H + 4); r = Math.max(Math.abs(x), Math.abs(z)); tries++; }
+      while (tries < 40 && (r < H + 0.6 || r > H + 3.8 || DATA.spawnPoints.some(sp => U.dist(sp.x, sp.z, x, z) < 12)));
+      if (tries >= 40) { x = H + 2; z = H + 2; }
+      const sc = U.rand(0.8, 1.4), gy = this.groundY(x, z);
+      p.set(x, gy + 0.75 * sc, z); s.set(sc, sc, sc); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * 6);
       m.compose(p, q, s); trunks.setMatrixAt(k, m);
-      p.set(x, gy + 0.9 * sc + 2.3 * sc, z); m.compose(p, q, s); leaves.setMatrixAt(k, m);
+      p.set(x, gy + 1.8 * sc, z); m.compose(p, q, s); leaves.setMatrixAt(k, m);
       col.setHex(U.choice((this.world && this.world.cfg.palette.leaves) || [0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x4a8a3a])); leaves.setColorAt(k, col);
     }
     trunks.instanceMatrix.needsUpdate = true; leaves.instanceMatrix.needsUpdate = true;
     if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
     this.decor.add(trunks); this.decor.add(leaves);
     // scattered rocks and small trees in the approach ring
-    for (let k = 0; k < 90; k++) {
-      let x, z, r;
-      do { x = U.rand(-H + 1, H - 1); z = U.rand(-H + 1, H - 1); r = Math.max(Math.abs(x), Math.abs(z)); } while (r < DATA.BUILD_RADIUS + 3 || r > H - 2);
-      const o = Math.random() < 0.5 ? Models.rock() : Models.tree();
-      o.position.set(x, this.groundY(x, z), z); this.decor.add(o);
+    // they sit on their own cell, which becomes an obstacle: nothing you can walk into is walkable
+    const g = this.grid, w = this.world;
+    let placed = 0, guard = 0;
+    if (!g) return;   // the first decor pass runs before a world exists
+    while (placed < 70 && guard++ < 600) {
+      const x = U.rand(-H + 3, H - 3), z = U.rand(-H + 3, H - 3), r = Math.max(Math.abs(x), Math.abs(z));
+      if (r < DATA.BUILD_RADIUS + 3 || r > H - 3) continue;
+      const c = g.worldToCell(x, z), k = g.idx(c.i, c.j);
+      if (g.flag[k] !== CELL_FREE || g.natural[k] || g.terrain[k] || (w && w.laneCells && w.laneCells.has(k))) continue;
+      if (DATA.spawnPoints.some(sp => U.dist(sp.x, sp.z, x, z) < 14)) continue;
+      const cc = g.cellToWorld(c.i, c.j);
+      const rock = Math.random() < 0.5;
+      const o = rock ? Models.rock() : Models.tree();
+      if (rock) o.scale.multiplyScalar(0.75);
+      o.position.set(cc.x, this.groundY(cc.x, cc.z), cc.z); this.decor.add(o);
+      g.flag[k] = CELL_ROCK; g.natural[k] = rock ? CELL_ROCK : 5; g.terrain[k] = rock ? CELL_ROCK : 5;
+      placed++;
     }
-    // a few bushes inside the buildable area edges (purely cosmetic, walkable)
-    for (let k = 0; k < 40; k++) {
-      const x = U.rand(-DATA.BUILD_RADIUS, DATA.BUILD_RADIUS), z = U.rand(-DATA.BUILD_RADIUS, DATA.BUILD_RADIUS);
-      if (Math.max(Math.abs(x), Math.abs(z)) < 28) continue;
-      const b = Models.sphere(U.rand(0.5, 0.9), Models.mat(U.choice([0x3f7a35, 0x4a8a3a])), x, this.groundY(x, z) + 0.3, z, 6);
-      b.scale.y = 0.7; this.decor.add(b);
-    }
+    g.flowDirty = true;
   }
   showRange(x, z, r) {
     if (!r) { this.rangeRing.visible = false; return; }
@@ -6957,12 +7195,13 @@ class Game {
     return u;
   }
   // move a freshly spawned enemy onto the nearest cell that can actually reach the King
-  snapToReachable(u) {
+  snapToReachable(u, force = false) {
     if (!u || u.flying) return;
     const g = this.grid;
     const c = g.worldToCell(u.pos.x, u.pos.z);
-    const ok = (i, j) => g.inBounds(i, j) && g.flagAt(i, j) === CELL_FREE && isFinite(g.integ[g.idx(i, j)]);
-    if (ok(c.i, c.j)) return;
+    const r = u.collisionRadius;
+    const ok = (i, j) => { if (!g.inBounds(i, j) || g.flagAt(i, j) !== CELL_FREE || !isFinite(g.integ[g.idx(i, j)])) return false; const w = g.cellToWorld(i, j); return Math.abs(w.x) < DATA.MAP_HALF - r && Math.abs(w.z) < DATA.MAP_HALF - r && g.circleFree(w.x, w.z, r, u.team); };
+    if (!force && ok(c.i, c.j)) return;
     for (let r = 1; r <= 10; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
       if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
       if (ok(c.i + di, c.j + dj)) { const w = g.cellToWorld(c.i + di, c.j + dj); u.pos.x = w.x; u.pos.z = w.z; return; }
@@ -6997,7 +7236,7 @@ class Game {
   spend(c, pid) { const w = this.wallet(pid); if (w) w.gold -= c; this.ui.dirty = true; }
   addGold(n, pid) { const w = this.wallet(pid); if (w) w.gold += n; this.stats.goldEarned += n; this.ui.dirty = true; }
   addGoldAll(n) { for (const id of this.playerOrder) { const w = this.players[id]; if (w) w.gold += n; } this.stats.goldEarned += n; this.ui.dirty = true; }
-  killMult(pid) { return this.difficulty.gold * (1 + (this.hasActive('market', pid) ? DATA.buildings.market.killBonus : 0)) * (1 + 0.1 * (this.upgradesFor(pid).fortune || 0)); }
+  killMult(pid) { return this.difficulty.gold * (1 + (this.hasActive('market', pid) ? DATA.buildings.market.killBonus : 0) + (this.hasActive('royal_treasury', pid) ? DATA.buildings.royal_treasury.bounty : 0)) * (1 + 0.1 * (this.upgradesFor(pid).fortune || 0)); }
   rewardOwner(owner, base) {
     const ids = owner && this.players[owner] ? [owner] : this.playerOrder;
     for (const id of ids) this.addGold(Math.round(base * this.killMult(id)), id);
@@ -7093,7 +7332,7 @@ class Game {
     SFX.play('build'); this.ui.onSelectionChanged();
   }
   repairTotal() { let t = 0; for (const b of this.buildings) if (this.ownsOrShared(b)) t += b.repairCost(); return t; }
-  repairPriority(b) { return b.def.keep ? 5 : (b.def.tower ? 4 : (b.def.gate ? 3 : (b.def.cat === 'economy' ? 2 : 1))); }
+  repairPriority(b) { return b.def.keep ? 5 : (b.def.tower || b.def.cat === 'wonder' ? 4 : (b.def.gate ? 3 : (b.def.cat === 'economy' ? 2 : 1))); }
   // repairs everything it can afford, most important buildings first
   repairsLocked() { return !!(this.waves && this.waves.active); }
   repairAll(auto = false) {
@@ -7127,6 +7366,7 @@ class Game {
     SFX.play('levelup'); this.ui.onSelectionChanged();
   }
   removeBuilding(b) {
+    if (b.disposeExtras) b.disposeExtras();
     b.dead = true;
     this.grid.remove(b);
     b.remove();
@@ -7280,7 +7520,7 @@ class Game {
     this.stats.buildingsLost++;
     this.effects.spawn('explosion', b.pos.x, 1, b.pos.z, { radius: b.radius + 1, color: 0x8a8070 });
     if (b.def.keep) this.ui.toast('The Keep has fallen! The King is exposed!', 'error', 6000);
-    else if (b.def.tower || b.def.cat === 'economy') this.ui.toast(`${b.name} destroyed!`, 'error');
+    else if (b.def.tower || b.def.cat === 'economy' || b.def.cat === 'wonder') this.ui.toast(`${b.name} destroyed!`, 'error');
     if (this.controls.selectedBuilding === b) this.controls.clearSelection();
     if (this.controls.hoveredBuilding === b) this.controls.hoveredBuilding = null;
     for (const u of this.units) if (u.repairTarget === b) u.repairTarget = null;
@@ -7292,6 +7532,9 @@ class Game {
     let income = 0;
     for (const b of this.buildings) if (b.underConstruction) b.finishConstruction();
     for (const b of this.buildings) if (b.def.income && b.active) { income += b.def.income; const ids = b.owner ? [b.owner] : this.playerOrder; for (const id of ids) this.addGold(Math.round(b.def.income * (1 + 0.1 * (this.upgradesFor(id).fortune || 0))), id); }
+    let interest = 0;
+    for (const b of this.buildings) if (b.def.interest && b.active) { const ids = b.owner ? [b.owner] : this.playerOrder; for (const id of ids) { const g = Math.min(b.def.interestCap, Math.round((this.players[id] ? this.players[id].gold : 0) * b.def.interest)); if (g > 0) { this.addGold(g, id); interest += g; } } }
+    if (interest) this.ui.toast(`The treasury pays ${interest} gold in interest`, 'good');
     const bonus = Math.round(DATA.waves.clearBonus(n) * this.difficulty.gold);
     for (const id of this.playerOrder) this.addGold(Math.round(bonus * (1 + 0.1 * (this.upgradesFor(id).fortune || 0))), id);
     this.stats.wavesCleared = n;
@@ -7629,6 +7872,9 @@ function runSelfTest(game, params) {
       say(`content: after 90s: enemies ${before} -> ${game.enemiesAlive()} kills=${game.stats.kills} king=${Math.round(game.king.hp)} buildings=${game.buildings.length} gold=${Math.round(game.gold)} errors=${window.__errors.length}`);
       say(`content: world type=${game.worldType} water=${game.world.kind.filter(k => k === CELL_WATER).length} rock=${game.world.kind.filter(k => k === CELL_ROCK).length} forest=${game.world.kind.filter(k => k === 5).length} fords=${game.world.fords.length}`);
       for (const t of Object.keys(DATA.mapTypes)) { const w = new WorldMap(12345, t); say(`content: map ${t}: water=${w.kind.filter(k => k === CELL_WATER).length} rock=${w.kind.filter(k => k === CELL_ROCK).length} forest=${w.kind.filter(k => k === 5).length} connected=${w.connected()}`); }
+      { let bad = 0, total = 0, lanesTotal = 0, plateaus = 0; const sample = [];
+        for (const t of Object.keys(DATA.mapTypes)) for (const sd of [1, 77, 4242, 90210, 31337, 8, 555, 2024]) { const w = new WorldMap(sd, t); total++; lanesTotal += w.laneSpawns.length; plateaus += w.plateaus.length; if (!w.connected()) { bad++; sample.push(t + ':' + sd); } w.dispose && w.dispose(); }
+        say(`content: lanes: ${total} worlds, ${bad} not connected ${sample.join(',')}, avg lanes=${(lanesTotal / total).toFixed(2)} avg plateaus=${(plateaus / total).toFixed(2)}`); }
     }
     if (params.get('settingstest')) {
       const c = game.controls;
@@ -7788,7 +8034,28 @@ function runSelfTest(game, params) {
         for (const u of game.units) u.syncOwnerMark(); for (const b of game.buildings) b.syncOwnerMark(true);
         game.controls.camDist = 42; game.controls.focus.set(0, 0, 16); game.controls.camPitch = 0.85; game.controls.camYaw = 0; snap('coop');
         game.controls.camDist = 14; game.controls.focus.set(-2, 0, 14); game.controls.camPitch = 0.55; game.controls.camYaw = 0.6; snap('coop_close');
-        game.spawnTestChampion(); game.controls.camDist = 12; game.controls.focus.set(3, 0, 17); game.controls.camPitch = 0.5; snap('champion'); }
+        game.spawnTestChampion(); game.controls.camDist = 12; game.controls.focus.set(3, 0, 17); game.controls.camPitch = 0.5; snap('champion');
+        // wonders, all five, and a storm + beam firing at a crowd
+        game.gold = 99999;
+        const hh = game.grid.half;
+        for (const [key, di, dj] of [['royal_treasury', -14, 16], ['sun_altar', 12, 16], ['arcane_spire', -10, 10], ['dragon_roost', 14, 8], ['titan_forge', -16, 6]]) {
+          let b = null; for (let r = 0; r <= 6 && !b; r++) for (let a = -r; a <= r && !b; a++) for (let c = -r; c <= r && !b; c++) if (Math.max(Math.abs(a), Math.abs(c)) === r && game.grid.canPlace(DATA.buildings[key], hh + di + a, hh + dj + c, 0, game).ok) b = game.placeBuilding(key, hh + di + a, hh + dj + c, 0, true);
+          if (!b) say('probe: could not place ' + key); }
+        for (let k = 0; k < 8; k++) game.spawnEnemy('brute', 6 + k * 1.5, 40 + (k % 3) * 2, {});
+        for (let k = 0; k < 90; k++) game.update(1 / 30);
+        game.controls.camDist = 60; game.controls.focus.set(0, 0, 22); game.controls.camPitch = 0.8; game.controls.camYaw = 0; snap('wonders');
+        game.controls.camDist = 22; game.controls.focus.set(-24, 0, 16); game.controls.camPitch = 0.6; game.controls.camYaw = 0.5; snap('wonders_close');
+        for (let k = 0; k < 4; k++) game.effects.spawn('explosion', 4 + k * 3, 1, 34, { radius: 3 + k, color: 0xff5010 });
+        for (let k = 0; k < 20; k++) game.effects.spawn('flame', 2 + Math.random() * 6, 1, 30 + Math.random() * 3);
+        game.effects.update(0.15);
+        game.controls.camDist = 16; game.controls.focus.set(6, 0, 32); game.controls.camPitch = 0.45; game.controls.camYaw = 0.3; snap('fire');
+        game.controls.camDist = 9; game.controls.focus.set(0, 0, 26); game.controls.camPitch = 0.25; game.controls.camYaw = 0; snap('gate_torches');
+        // a rock belt and a forest belt up close, and the map edge where enemies spawn
+        { const w = game.world; let rc = null, fc = null; for (let j = 0; j < w.n && !(rc && fc); j++) for (let i = 0; i < w.n; i++) { const k = w.kind[w.idx(i, j)]; const c = w.cellCenter(i, j); const r = Math.hypot(c.x, c.z); if (r > 72 && r < 88) { if (k === CELL_ROCK && !rc) rc = c; if (k === 5 && !fc) fc = c; } }
+          if (rc) { game.controls.camDist = 18; game.controls.focus.set(rc.x, 0, rc.z); game.controls.camPitch = 0.5; game.controls.camYaw = 0.4; snap('rock_belt'); }
+          if (fc) { game.controls.camDist = 18; game.controls.focus.set(fc.x, 0, fc.z); game.controls.camPitch = 0.5; game.controls.camYaw = 0.4; snap('forest_belt'); }
+          const sp = DATA.spawnPoints[w.laneSpawns[0]]; game.controls.camDist = 30; game.controls.focus.set(sp.x * 0.9, 0, sp.z * 0.9); game.controls.camPitch = 0.7; game.controls.camYaw = Math.atan2(-sp.x, -sp.z) + Math.PI; snap('spawn_edge'); }
+        game.controls.camDist = 300; game.controls.focus.set(0, 0, 0); game.controls.camPitch = 1.0; game.controls.camYaw = 0.4; snap('zoomed_bloom'); }
       game.setWorld(777, 'valley');
       const ford = game.world.fords[1]; const fc = game.world.cellCenter(ford.i - 0.5, ford.j - 0.5);
       game.controls.camDist = 55; game.controls.focus.set(fc.x, 0, fc.z); game.controls.camPitch = 0.75; snap('valley_ford');

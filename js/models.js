@@ -37,6 +37,19 @@ const Models = {
     x.fillStyle = g; x.fillRect(0, 0, 64, 64);
     const t = new THREE.CanvasTexture(c); this._dot = t; return t;
   },
+  flameTexture() {
+    if (this._flame) return this._flame;
+    const c = document.createElement('canvas'); c.width = 64; c.height = 128; const x = c.getContext('2d');
+    const g = x.createRadialGradient(32, 84, 4, 32, 70, 60);
+    g.addColorStop(0, 'rgba(255,255,220,1)'); g.addColorStop(0.25, 'rgba(255,200,80,0.95)'); g.addColorStop(0.55, 'rgba(255,110,20,0.55)'); g.addColorStop(1, 'rgba(200,40,0,0)');
+    x.fillStyle = g; x.beginPath(); x.ellipse(32, 72, 30, 56, 0, 0, Math.PI * 2); x.fill();
+    const t = new THREE.CanvasTexture(c); this._flame = t; return t;
+  },
+  flameSprite(scale = 1, color = 0xffffff) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.flameTexture(), color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    s.scale.set(0.5 * scale, 1.0 * scale, 1);
+    return s;
+  },
   sunDisc() {
     const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
     const g = x.createRadialGradient(128, 128, 0, 128, 128, 128); g.addColorStop(0, 'rgba(255,250,230,1)'); g.addColorStop(0.18, 'rgba(255,240,200,0.95)'); g.addColorStop(0.3, 'rgba(255,220,160,0.35)'); g.addColorStop(1, 'rgba(255,200,120,0)');
@@ -442,8 +455,9 @@ const Models = {
   // a wall torch: bracket, flame and a flickering light
   torch(g, x, y, z) {
     g.add(this.cyl(0.05, 0.05, 0.5, this.mat(0x2a2a2a), x, y, z, 5, false));
-    const flame = this.cone(0.14, 0.42, this.mat(0xffb040, { emissive: 0xff7010, emissiveIntensity: 1.4 }), x, y + 0.45, z, 6); flame.castShadow = false; g.add(flame);
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.softDot(), color: 0xffa040, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending })); glow.scale.setScalar(1.6); glow.position.set(x, y + 0.5, z); g.add(glow);
+    g.add(this.cyl(0.09, 0.06, 0.16, this.mat(0x3a3a3a), x, y + 0.28, z, 8, false));
+    const flame = this.flameSprite(0.9); flame.position.set(x, y + 0.66, z); g.add(flame);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.softDot(), color: 0xffa040, transparent: true, opacity: 0.28, depthWrite: false, blending: THREE.AdditiveBlending })); glow.scale.setScalar(1.1); glow.position.set(x, y + 0.6, z); g.add(glow);
     const light = new THREE.PointLight(0xffa040, 0.9, 13, 1.6); light.position.set(x, y + 0.6, z); light.castShadow = false; g.add(light);
     light.userData.base = 0.9; light.userData.phase = x * 3 + z * 7; light.userData.flame = flame;
     return light;
@@ -634,6 +648,61 @@ const Models = {
         const ice = new THREE.MeshLambertMaterial({ color: 0xa8e0ff, emissive: 0x2060a0, emissiveIntensity: 0.35, transparent: true, opacity: 0.75 });
         g.add(this.box(2, 2.8, 1.6, ice, 0, 1.4, 0));
         for (let k = 0; k < 3; k++) { const s = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), ice); s.position.set(-0.6 + k * 0.6, 2.9 + (k % 2) * 0.25, 0); g.add(s); }
+        break;
+      }
+      case 'dragon_roost': {
+        const crag = this.mat(0x5a4a44);
+        for (const [x, z, r, hgt] of [[-1.6, -1.4, 1.6, 2.2], [1.7, -1.2, 1.4, 3.0], [0.2, 1.6, 1.5, 1.8], [-1.2, 1.2, 1.1, 2.6], [1.3, 1.4, 1.0, 1.4]]) { const rk = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 1), crag); rk.position.set(x, hgt * 0.35, z); rk.scale.set(1, hgt / r * 0.5, 1); rk.rotation.set(0.3, x * 1.3, 0.2); rk.castShadow = true; rk.receiveShadow = true; g.add(rk); }
+        const nest = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.35, 8, 18), this.mat(0x6a4a2a)); nest.rotation.x = Math.PI / 2; nest.position.y = 1.35; nest.castShadow = true; g.add(nest);
+        for (let k = 0; k < 3; k++) { const egg = this.sphere(0.32, this.mat(0xe8d8b0), Math.sin(k * 2.1) * 0.7, 1.55, Math.cos(k * 2.1) * 0.7, 12); egg.scale.y = 1.35; g.add(egg); }
+        for (let k = 0; k < 4; k++) g.add(this.cyl(0.05, 0.08, 1.2, this.mat(0xe8e0d0), Math.sin(k * 1.6) * 2.4, 0.5, Math.cos(k * 1.6) * 2.4, 5, false).rotateZ(0.6 + k * 0.4));
+        g.userData.torches = [this.torch(g, 2.4, 1.0, 2.4)];
+        break;
+      }
+      case 'titan_forge': {
+        const dark = this.mat(0x3a3a40), iron = this.mat(0x6a6e78);
+        g.add(this.box(5.4, 3.2, 4.6, dark, 0, 1.6, 0));
+        g.add(this.box(5.8, 0.4, 5.0, iron, 0, 3.4, 0));
+        g.add(this.cyl(0.5, 0.7, 3.0, dark, -1.6, 4.9, -1.2, 10));
+        { const smoke = this.flameSprite(1.6, 0xff8040); smoke.position.set(-1.6, 6.8, -1.2); g.add(smoke); }
+        g.add(this.box(2.0, 1.4, 0.3, this.mat(0xff7020, { emissive: 0xff4000, emissiveIntensity: 1.2 }), 0, 1.2, 2.32, false));   // furnace mouth
+        g.add(this.box(1.2, 0.5, 0.6, iron, 1.4, 3.85, 0.4)); g.add(this.box(0.5, 0.6, 0.5, dark, 1.4, 3.45, 0.4));                 // anvil
+        g.add(this.box(0.3, 0.25, 0.3, this.mat(0xffc040, { emissive: 0xff8000, emissiveIntensity: 0.9 }), 1.4, 4.2, 0.4, false));
+        for (const x of [-2.3, 2.3]) g.add(this.cyl(0.35, 0.4, 3.4, iron, x, 1.7, 2.3, 10));
+        g.userData.torches = [this.torch(g, -2.9, 2.2, 2.4), this.torch(g, 2.9, 2.2, 2.4)];
+        break;
+      }
+      case 'arcane_spire': {
+        const violet = this.mat(0x4a3a6a), pale = this.mat(0x9a80c0);
+        g.add(this.cyl(1.6, 1.9, 1.2, pale, 0, 0.6, 0, 8));
+        g.add(this.cyl(0.9, 1.3, 9.0, violet, 0, 5.7, 0, 10));
+        for (let k = 0; k < 4; k++) g.add(new THREE.Mesh(new THREE.TorusGeometry(1.15 - k * 0.08, 0.1, 6, 16), pale).rotateX(Math.PI / 2).translateZ(-(2 + k * 2.2)));
+        g.add(this.cone(1.5, 2.4, this.mat(0x2a1a4a), 0, 11.3, 0, 10));
+        const orb = this.sphere(0.8, this.mat(0xd0a0ff, { emissive: 0xa050ff, emissiveIntensity: 1.2 }), 0, 13.2, 0, 14); g.add(orb); g.userData.orb = orb;
+        g.userData.orbiters = [];
+        for (let k = 0; k < 3; k++) { const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.4, 0), this.mat(0xe0c0ff, { emissive: 0xb070ff, emissiveIntensity: 1 })); c.position.set(Math.sin(k * 2.1) * 1.9, 9.5, Math.cos(k * 2.1) * 1.9); g.add(c); g.userData.orbiters.push(c); }
+        for (let k = 0; k < 4; k++) g.add(this.box(0.4, 0.8, 0.2, this.mat(0xc090ff, { emissive: 0x8040ff, emissiveIntensity: 0.8 }), Math.sin(k * 1.57) * 1.1, 4 + k * 1.6, Math.cos(k * 1.57) * 1.1, false).rotateY(k * 1.57));
+        break;
+      }
+      case 'sun_altar': {
+        const gold = this.mat(0xe0b040, { emissive: 0x604000, emissiveIntensity: 0.25 }), pale = this.plaster;
+        g.add(this.cyl(2.0, 2.2, 0.5, pale, 0, 0.25, 0, 16)); g.add(this.cyl(1.6, 1.8, 0.5, pale, 0, 0.75, 0, 16)); g.add(this.cyl(1.2, 1.4, 0.5, gold, 0, 1.25, 0, 16));
+        for (let k = 0; k < 3; k++) { const a = k / 3 * Math.PI * 2; const leg = this.cyl(0.08, 0.1, 5.0, gold, Math.sin(a) * 1.0, 3.8, Math.cos(a) * 1.0, 6); leg.rotation.set(-Math.cos(a) * 0.2, 0, Math.sin(a) * 0.2); g.add(leg); }
+        g.add(new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.1, 6, 20), gold).rotateX(Math.PI / 2).translateZ(-6.1));
+        const lens = this.sphere(0.75, this.mat(0xfff0a0, { emissive: 0xffd040, emissiveIntensity: 1.3 }), 0, 6.3, 0, 16); g.add(lens); g.userData.orb = lens;
+        const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.softDot(), color: 0xffe080, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending })); halo.scale.setScalar(4); halo.position.y = 6.3; g.add(halo);
+        break;
+      }
+      case 'royal_treasury': {
+        const gold = this.mat(0xe0b040, { emissive: 0x503000, emissiveIntensity: 0.2 });
+        g.add(this.box(5.4, 3.4, 5.0, st, 0, 1.7, 0));
+        g.add(this.box(5.8, 0.4, 5.4, sd, 0, 3.6, 0));
+        for (const [x, z] of [[-2.2, 2.6], [2.2, 2.6], [-2.2, -2.6], [2.2, -2.6]]) g.add(this.cyl(0.3, 0.35, 3.4, this.plaster, x, 1.7, z, 10));
+        g.add(new THREE.Mesh(new THREE.SphereGeometry(2.2, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), gold).translateY(3.8));
+        g.add(this.cyl(0.12, 0.12, 1.0, gold, 0, 6.4, 0, 6, false)); g.add(this.sphere(0.25, gold, 0, 6.9, 0, 10));
+        g.add(this.box(1.4, 2.2, 0.3, this.mat(0x5a3a1a), 0, 1.1, 2.55)); g.add(this.box(0.2, 0.2, 0.1, gold, 0.4, 1.1, 2.72, false));
+        for (let k = 0; k < 6; k++) g.add(this.box(0.5, 0.5, 0.5, sd, -2.5 + k, 4.0, 2.6));
+        g.userData.torches = [this.torch(g, -1.2, 2.4, 2.7), this.torch(g, 1.2, 2.4, 2.7)];
         break;
       }
       case 'keep': {

@@ -9,7 +9,7 @@ DATA.CELL = 2;                                  // metres per grid cell
 DATA.GRID = 110;                                // cells per side (220m map)
 DATA.MAP_HALF = DATA.GRID * DATA.CELL / 2 - 1;  // hard clamp for unit positions
 DATA.BUILD_RADIUS = 72;                         // max |x|,|z| for building placement (metres)
-DATA.SPAWN_RADIUS = DATA.MAP_HALF - 4;          // enemy spawn ring radius: the very edge of the map
+DATA.SPAWN_RADIUS = DATA.MAP_HALF - 1;          // enemy spawn ring radius: the very edge of the map
 
 DATA.difficulties = {
   easy:   { label: 'Easy',   hp: 0.75, dmg: 0.75, budget: 0.75, gold: 1.25 },
@@ -309,7 +309,22 @@ DATA.buildings = {
               interior: [[1, 1], [1, 2]], desc: 'The throne room. Units inside cannot be shot at from outside.' },
 };
 
-DATA.buildOrder = ['wall', 'barricade', 'gate', 'trap', 'arrow_tower', 'ballista_tower', 'mage_tower', 'frost_tower', 'cannon_tower', 'lightning_tower', 'poison_tower', 'watchtower', 'barracks', 'farm', 'mine', 'blacksmith', 'shrine', 'market', 'tavern'];
+// Wonders: ruinously expensive, absurdly strong. One of each per defender.
+DATA.buildings.dragon_roost = { key: 'dragon_roost', name: 'Dragon Roost', cost: 2600, hp: 1800, w: 3, d: 3, cat: 'wonder', unique: true, guardian: { unit: 'tamedragon', rebuild: 2 },
+  desc: 'A tamed dragon nests here: 3200 HP, flies, and breathes fire that splashes 3.5m for 70 (ignores armour). If it dies the roost hatches another two waves later.' };
+DATA.buildings.titan_forge = { key: 'titan_forge', name: 'Titan Forge', cost: 3400, hp: 2400, w: 3, d: 3, cat: 'wonder', unique: true, guardian: { unit: 'irongolem', rebuild: 2 },
+  desc: 'Forges an Iron Titan: 5500 HP, 50% armour, 110-damage cleaving blows. Slow, unstoppable. Reforged two waves after it falls.' };
+DATA.buildings.arcane_spire = { key: 'arcane_spire', name: 'Arcane Spire', cost: 3000, hp: 1300, w: 2, d: 2, cat: 'wonder', unique: true, tower: true, range: 44, dmg: 220, cd: 14, storm: { count: 6, scatter: 7, splash: 5, delay: 1.0 },
+  desc: 'Every 14s calls a meteor storm on the thickest crowd within 44m: six meteors of 220 damage, each splashing 5m and burning.' };
+DATA.buildings.sun_altar = { key: 'sun_altar', name: 'Sun Altar', cost: 2400, hp: 1300, w: 2, d: 2, cat: 'wonder', unique: true, tower: true, range: 38, dmg: 160, cd: 1, beam: { dps: 160 },
+  desc: 'Focuses sunlight into a beam that burns the strongest enemy within 38m for 160 damage per second, ignoring armour. Never misses, never stops.' };
+DATA.buildings.royal_treasury = { key: 'royal_treasury', name: 'Royal Treasury', cost: 2000, hp: 1600, w: 3, d: 3, cat: 'wonder', unique: true, interest: 0.06, interestCap: 600, bounty: 0.5,
+  desc: 'Pays 6% interest on your gold after every wave (up to 600) and raises every bounty your forces collect by 50%.' };
+DATA.units.tamedragon = { key: 'tamedragon', name: 'Tame Dragon', hp: 3200, dmg: 70, range: 7, cd: 1.2, armor: 0.3, speed: 7.5, radius: 1.6, attack: 'ranged', projectile: 'fireball', splash: 3.5, magic: true, flying: true, altitude: 6, large: true, model: 'dragon', scale: 0.9, noCap: true, guardian: true, color: 0x8a2a2a, cloth: 0x5a1a1a,
+  desc: 'The roost\'s dragon. Flies over walls and breathes splashing fire.' };
+DATA.units.irongolem = { key: 'irongolem', name: 'Iron Titan', hp: 5500, dmg: 110, range: 3.2, cd: 2.0, armor: 0.5, speed: 3.4, radius: 1.1, attack: 'melee', cleave: true, large: true, scale: 2.2, noCap: true, guardian: true, color: 0x6a6e78, cloth: 0x4a4e58, weapon: 'club', helmet: true, skin: 0x8a8e98,
+  desc: 'The forge\'s titan. Slow, armoured, cleaves everything in reach.' };
+DATA.buildOrder = ['wall', 'barricade', 'gate', 'trap', 'arrow_tower', 'ballista_tower', 'mage_tower', 'frost_tower', 'cannon_tower', 'lightning_tower', 'poison_tower', 'watchtower', 'barracks', 'farm', 'mine', 'blacksmith', 'shrine', 'market', 'tavern', 'royal_treasury', 'sun_altar', 'arcane_spire', 'dragon_roost', 'titan_forge'];
 
 DATA.towerUpgrade = { maxLevel: 3, dmg: 1.4, range: 1.1, hp: 1.3, costMul: 0.8 };
 
@@ -342,7 +357,7 @@ DATA.waves = {
 };
 
 DATA.spawnPoints = (() => {
-  const R = DATA.SPAWN_RADIUS, D = Math.round(R * 0.9);
+  const R = DATA.SPAWN_RADIUS, D = R - 2;          // diagonals sit in the corners
   return [
     { name: 'North', x: 0, z: -R },      { name: 'North-East', x: D, z: -D },
     { name: 'East', x: R, z: 0 },        { name: 'South-East', x: D, z: D },

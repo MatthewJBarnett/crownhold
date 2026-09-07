@@ -26,8 +26,8 @@ Three.js and the PeerJS networking library load from cdnjs, so an internet conne
 - Farms and Gold Mines get pricier with every one you own (30% and 60% per building). Extra heroes start at
   1200 gold and each purchase raises the next price by 50%. Selling refunds 60% of what you actually paid.
 - Enemies arrive only along the map's two or three lanes (ringed on the minimap; the next wave's lanes are red).
-  Each lane starts at the very edge of the map, winds through two belts of forest or rock around the castle, then
-  crosses open ground to the walls. Enemies path to the King and walk a long way round walls before chewing
+  Each lane starts on the very edge of the map, switchbacks through two solid belts of crag or forest around the
+  castle (doubling back inside each belt), then crosses open ground to the walls. Enemies path to the King and walk a long way round walls before chewing
   through them, so walls steer them into tower fire. The Keep shelters units inside from ranged fire. If the King
   falls, the game is over.
 - Beside every lane are two high-ground summits (cliff-ringed squares). Only a tower fits on one: it gets +30% range
@@ -46,9 +46,17 @@ gate and speed everyone up. Rivers are crossed on wooden bridges that stand on p
 of gold reward a unit that roams out to them. Every lane is guaranteed a route to the King. Selecting a tower, or
 placing one, shows its range draped over the ground.
 
+Wonders (one of each per defender, ruinously expensive): the Royal Treasury (6% interest per wave and +50% bounties),
+the Sun Altar (a beam that burns the toughest enemy in 38 m for 160/s), the Arcane Spire (a six-meteor storm on the
+thickest crowd every 14 s), the Dragon Roost (a tame dragon, rehatched two waves after it dies) and the Titan Forge (an
+Iron Titan, reforged two waves after it falls).
+
 Graphics: rounded units with capes, helmets and shields; stone with relief; grass tufts, round and pine canopies;
-rippling water; drifting snow, embers, pollen or dust depending on the map; torches at the gate and keep; soft
-contact shadows; a sun disc; and a bloom/colour-grading pass (Settings: Glow & colour; turn it off on slow machines).
+rippling water; drifting snow, embers, pollen or dust depending on the map; sprite fire and torches; explosions that
+sit on the ground instead of sinking into it; soft contact shadows; a sun disc; and a bloom/colour-grading pass
+(Settings: Glow & colour; turn it off on slow machines; it renders through a 24-bit depth target so the water never
+z-fights the terrain). Rock belts are crag blocks that fill their cells exactly and forest belts have undergrowth, so
+nothing you can walk into is walkable: every rock and tree inside the map sits on an obstacle cell.
 
 ## Heroes
 

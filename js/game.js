@@ -85,7 +85,7 @@ class Game {
   buildDecor() {
     // forest border with instanced meshes
     const N = 700, H = DATA.MAP_HALF;
-    const trunkGeo = new THREE.CylinderGeometry(0.22, 0.32, 1.8, 6), leafGeo = new THREE.ConeGeometry(1.6, 3.4, 7);
+    const trunkGeo = new THREE.CylinderGeometry(0.18, 0.36, 2.8, 9), leafGeo = Models.canopyGeometry(this.worldType === 'valley' || this.worldType === 'highlands' ? 'round' : 'pine');
     const trunks = new THREE.InstancedMesh(trunkGeo, Models.mat(0x5a3a22), N);
     const leaves = new THREE.InstancedMesh(leafGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), N);
     trunks.castShadow = true; leaves.castShadow = true;
@@ -95,30 +95,39 @@ class Game {
     const col = new THREE.Color();
     for (let k = 0; k < N; k++) {
       let x, z, r;
-      do { x = U.rand(-H - 22, H + 22); z = U.rand(-H - 22, H + 22); r = Math.max(Math.abs(x), Math.abs(z)); } while (r < H || r > H + 21);
-      const sc = U.rand(0.8, 1.5), gy = this.groundY(x, z);
-      p.set(x, gy + 0.9 * sc, z); s.set(sc, sc, sc); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * 6);
+      let tries = 0;
+      do { x = U.rand(-H - 4, H + 4); z = U.rand(-H - 4, H + 4); r = Math.max(Math.abs(x), Math.abs(z)); tries++; }
+      while (tries < 40 && (r < H + 0.6 || r > H + 3.8 || DATA.spawnPoints.some(sp => U.dist(sp.x, sp.z, x, z) < 12)));
+      if (tries >= 40) { x = H + 2; z = H + 2; }
+      const sc = U.rand(0.8, 1.4), gy = this.groundY(x, z);
+      p.set(x, gy + 0.75 * sc, z); s.set(sc, sc, sc); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * 6);
       m.compose(p, q, s); trunks.setMatrixAt(k, m);
-      p.set(x, gy + 0.9 * sc + 2.3 * sc, z); m.compose(p, q, s); leaves.setMatrixAt(k, m);
+      p.set(x, gy + 1.8 * sc, z); m.compose(p, q, s); leaves.setMatrixAt(k, m);
       col.setHex(U.choice((this.world && this.world.cfg.palette.leaves) || [0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x4a8a3a])); leaves.setColorAt(k, col);
     }
     trunks.instanceMatrix.needsUpdate = true; leaves.instanceMatrix.needsUpdate = true;
     if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
     this.decor.add(trunks); this.decor.add(leaves);
     // scattered rocks and small trees in the approach ring
-    for (let k = 0; k < 90; k++) {
-      let x, z, r;
-      do { x = U.rand(-H + 1, H - 1); z = U.rand(-H + 1, H - 1); r = Math.max(Math.abs(x), Math.abs(z)); } while (r < DATA.BUILD_RADIUS + 3 || r > H - 2);
-      const o = Math.random() < 0.5 ? Models.rock() : Models.tree();
-      o.position.set(x, this.groundY(x, z), z); this.decor.add(o);
+    // they sit on their own cell, which becomes an obstacle: nothing you can walk into is walkable
+    const g = this.grid, w = this.world;
+    let placed = 0, guard = 0;
+    if (!g) return;   // the first decor pass runs before a world exists
+    while (placed < 70 && guard++ < 600) {
+      const x = U.rand(-H + 3, H - 3), z = U.rand(-H + 3, H - 3), r = Math.max(Math.abs(x), Math.abs(z));
+      if (r < DATA.BUILD_RADIUS + 3 || r > H - 3) continue;
+      const c = g.worldToCell(x, z), k = g.idx(c.i, c.j);
+      if (g.flag[k] !== CELL_FREE || g.natural[k] || g.terrain[k] || (w && w.laneCells && w.laneCells.has(k))) continue;
+      if (DATA.spawnPoints.some(sp => U.dist(sp.x, sp.z, x, z) < 14)) continue;
+      const cc = g.cellToWorld(c.i, c.j);
+      const rock = Math.random() < 0.5;
+      const o = rock ? Models.rock() : Models.tree();
+      if (rock) o.scale.multiplyScalar(0.75);
+      o.position.set(cc.x, this.groundY(cc.x, cc.z), cc.z); this.decor.add(o);
+      g.flag[k] = CELL_ROCK; g.natural[k] = rock ? CELL_ROCK : 5; g.terrain[k] = rock ? CELL_ROCK : 5;
+      placed++;
     }
-    // a few bushes inside the buildable area edges (purely cosmetic, walkable)
-    for (let k = 0; k < 40; k++) {
-      const x = U.rand(-DATA.BUILD_RADIUS, DATA.BUILD_RADIUS), z = U.rand(-DATA.BUILD_RADIUS, DATA.BUILD_RADIUS);
-      if (Math.max(Math.abs(x), Math.abs(z)) < 28) continue;
-      const b = Models.sphere(U.rand(0.5, 0.9), Models.mat(U.choice([0x3f7a35, 0x4a8a3a])), x, this.groundY(x, z) + 0.3, z, 6);
-      b.scale.y = 0.7; this.decor.add(b);
-    }
+    g.flowDirty = true;
   }
   showRange(x, z, r) {
     if (!r) { this.rangeRing.visible = false; return; }
@@ -398,12 +407,13 @@ class Game {
     return u;
   }
   // move a freshly spawned enemy onto the nearest cell that can actually reach the King
-  snapToReachable(u) {
+  snapToReachable(u, force = false) {
     if (!u || u.flying) return;
     const g = this.grid;
     const c = g.worldToCell(u.pos.x, u.pos.z);
-    const ok = (i, j) => g.inBounds(i, j) && g.flagAt(i, j) === CELL_FREE && isFinite(g.integ[g.idx(i, j)]);
-    if (ok(c.i, c.j)) return;
+    const r = u.collisionRadius;
+    const ok = (i, j) => { if (!g.inBounds(i, j) || g.flagAt(i, j) !== CELL_FREE || !isFinite(g.integ[g.idx(i, j)])) return false; const w = g.cellToWorld(i, j); return Math.abs(w.x) < DATA.MAP_HALF - r && Math.abs(w.z) < DATA.MAP_HALF - r && g.circleFree(w.x, w.z, r, u.team); };
+    if (!force && ok(c.i, c.j)) return;
     for (let r = 1; r <= 10; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
       if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
       if (ok(c.i + di, c.j + dj)) { const w = g.cellToWorld(c.i + di, c.j + dj); u.pos.x = w.x; u.pos.z = w.z; return; }
@@ -438,7 +448,7 @@ class Game {
   spend(c, pid) { const w = this.wallet(pid); if (w) w.gold -= c; this.ui.dirty = true; }
   addGold(n, pid) { const w = this.wallet(pid); if (w) w.gold += n; this.stats.goldEarned += n; this.ui.dirty = true; }
   addGoldAll(n) { for (const id of this.playerOrder) { const w = this.players[id]; if (w) w.gold += n; } this.stats.goldEarned += n; this.ui.dirty = true; }
-  killMult(pid) { return this.difficulty.gold * (1 + (this.hasActive('market', pid) ? DATA.buildings.market.killBonus : 0)) * (1 + 0.1 * (this.upgradesFor(pid).fortune || 0)); }
+  killMult(pid) { return this.difficulty.gold * (1 + (this.hasActive('market', pid) ? DATA.buildings.market.killBonus : 0) + (this.hasActive('royal_treasury', pid) ? DATA.buildings.royal_treasury.bounty : 0)) * (1 + 0.1 * (this.upgradesFor(pid).fortune || 0)); }
   rewardOwner(owner, base) {
     const ids = owner && this.players[owner] ? [owner] : this.playerOrder;
     for (const id of ids) this.addGold(Math.round(base * this.killMult(id)), id);
@@ -534,7 +544,7 @@ class Game {
     SFX.play('build'); this.ui.onSelectionChanged();
   }
   repairTotal() { let t = 0; for (const b of this.buildings) if (this.ownsOrShared(b)) t += b.repairCost(); return t; }
-  repairPriority(b) { return b.def.keep ? 5 : (b.def.tower ? 4 : (b.def.gate ? 3 : (b.def.cat === 'economy' ? 2 : 1))); }
+  repairPriority(b) { return b.def.keep ? 5 : (b.def.tower || b.def.cat === 'wonder' ? 4 : (b.def.gate ? 3 : (b.def.cat === 'economy' ? 2 : 1))); }
   // repairs everything it can afford, most important buildings first
   repairsLocked() { return !!(this.waves && this.waves.active); }
   repairAll(auto = false) {
@@ -568,6 +578,7 @@ class Game {
     SFX.play('levelup'); this.ui.onSelectionChanged();
   }
   removeBuilding(b) {
+    if (b.disposeExtras) b.disposeExtras();
     b.dead = true;
     this.grid.remove(b);
     b.remove();
@@ -721,7 +732,7 @@ class Game {
     this.stats.buildingsLost++;
     this.effects.spawn('explosion', b.pos.x, 1, b.pos.z, { radius: b.radius + 1, color: 0x8a8070 });
     if (b.def.keep) this.ui.toast('The Keep has fallen! The King is exposed!', 'error', 6000);
-    else if (b.def.tower || b.def.cat === 'economy') this.ui.toast(`${b.name} destroyed!`, 'error');
+    else if (b.def.tower || b.def.cat === 'economy' || b.def.cat === 'wonder') this.ui.toast(`${b.name} destroyed!`, 'error');
     if (this.controls.selectedBuilding === b) this.controls.clearSelection();
     if (this.controls.hoveredBuilding === b) this.controls.hoveredBuilding = null;
     for (const u of this.units) if (u.repairTarget === b) u.repairTarget = null;
@@ -733,6 +744,9 @@ class Game {
     let income = 0;
     for (const b of this.buildings) if (b.underConstruction) b.finishConstruction();
     for (const b of this.buildings) if (b.def.income && b.active) { income += b.def.income; const ids = b.owner ? [b.owner] : this.playerOrder; for (const id of ids) this.addGold(Math.round(b.def.income * (1 + 0.1 * (this.upgradesFor(id).fortune || 0))), id); }
+    let interest = 0;
+    for (const b of this.buildings) if (b.def.interest && b.active) { const ids = b.owner ? [b.owner] : this.playerOrder; for (const id of ids) { const g = Math.min(b.def.interestCap, Math.round((this.players[id] ? this.players[id].gold : 0) * b.def.interest)); if (g > 0) { this.addGold(g, id); interest += g; } } }
+    if (interest) this.ui.toast(`The treasury pays ${interest} gold in interest`, 'good');
     const bonus = Math.round(DATA.waves.clearBonus(n) * this.difficulty.gold);
     for (const id of this.playerOrder) this.addGold(Math.round(bonus * (1 + 0.1 * (this.upgradesFor(id).fortune || 0))), id);
     this.stats.wavesCleared = n;
@@ -1070,6 +1084,9 @@ function runSelfTest(game, params) {
       say(`content: after 90s: enemies ${before} -> ${game.enemiesAlive()} kills=${game.stats.kills} king=${Math.round(game.king.hp)} buildings=${game.buildings.length} gold=${Math.round(game.gold)} errors=${window.__errors.length}`);
       say(`content: world type=${game.worldType} water=${game.world.kind.filter(k => k === CELL_WATER).length} rock=${game.world.kind.filter(k => k === CELL_ROCK).length} forest=${game.world.kind.filter(k => k === 5).length} fords=${game.world.fords.length}`);
       for (const t of Object.keys(DATA.mapTypes)) { const w = new WorldMap(12345, t); say(`content: map ${t}: water=${w.kind.filter(k => k === CELL_WATER).length} rock=${w.kind.filter(k => k === CELL_ROCK).length} forest=${w.kind.filter(k => k === 5).length} connected=${w.connected()}`); }
+      { let bad = 0, total = 0, lanesTotal = 0, plateaus = 0; const sample = [];
+        for (const t of Object.keys(DATA.mapTypes)) for (const sd of [1, 77, 4242, 90210, 31337, 8, 555, 2024]) { const w = new WorldMap(sd, t); total++; lanesTotal += w.laneSpawns.length; plateaus += w.plateaus.length; if (!w.connected()) { bad++; sample.push(t + ':' + sd); } w.dispose && w.dispose(); }
+        say(`content: lanes: ${total} worlds, ${bad} not connected ${sample.join(',')}, avg lanes=${(lanesTotal / total).toFixed(2)} avg plateaus=${(plateaus / total).toFixed(2)}`); }
     }
     if (params.get('settingstest')) {
       const c = game.controls;
@@ -1229,7 +1246,28 @@ function runSelfTest(game, params) {
         for (const u of game.units) u.syncOwnerMark(); for (const b of game.buildings) b.syncOwnerMark(true);
         game.controls.camDist = 42; game.controls.focus.set(0, 0, 16); game.controls.camPitch = 0.85; game.controls.camYaw = 0; snap('coop');
         game.controls.camDist = 14; game.controls.focus.set(-2, 0, 14); game.controls.camPitch = 0.55; game.controls.camYaw = 0.6; snap('coop_close');
-        game.spawnTestChampion(); game.controls.camDist = 12; game.controls.focus.set(3, 0, 17); game.controls.camPitch = 0.5; snap('champion'); }
+        game.spawnTestChampion(); game.controls.camDist = 12; game.controls.focus.set(3, 0, 17); game.controls.camPitch = 0.5; snap('champion');
+        // wonders, all five, and a storm + beam firing at a crowd
+        game.gold = 99999;
+        const hh = game.grid.half;
+        for (const [key, di, dj] of [['royal_treasury', -14, 16], ['sun_altar', 12, 16], ['arcane_spire', -10, 10], ['dragon_roost', 14, 8], ['titan_forge', -16, 6]]) {
+          let b = null; for (let r = 0; r <= 6 && !b; r++) for (let a = -r; a <= r && !b; a++) for (let c = -r; c <= r && !b; c++) if (Math.max(Math.abs(a), Math.abs(c)) === r && game.grid.canPlace(DATA.buildings[key], hh + di + a, hh + dj + c, 0, game).ok) b = game.placeBuilding(key, hh + di + a, hh + dj + c, 0, true);
+          if (!b) say('probe: could not place ' + key); }
+        for (let k = 0; k < 8; k++) game.spawnEnemy('brute', 6 + k * 1.5, 40 + (k % 3) * 2, {});
+        for (let k = 0; k < 90; k++) game.update(1 / 30);
+        game.controls.camDist = 60; game.controls.focus.set(0, 0, 22); game.controls.camPitch = 0.8; game.controls.camYaw = 0; snap('wonders');
+        game.controls.camDist = 22; game.controls.focus.set(-24, 0, 16); game.controls.camPitch = 0.6; game.controls.camYaw = 0.5; snap('wonders_close');
+        for (let k = 0; k < 4; k++) game.effects.spawn('explosion', 4 + k * 3, 1, 34, { radius: 3 + k, color: 0xff5010 });
+        for (let k = 0; k < 20; k++) game.effects.spawn('flame', 2 + Math.random() * 6, 1, 30 + Math.random() * 3);
+        game.effects.update(0.15);
+        game.controls.camDist = 16; game.controls.focus.set(6, 0, 32); game.controls.camPitch = 0.45; game.controls.camYaw = 0.3; snap('fire');
+        game.controls.camDist = 9; game.controls.focus.set(0, 0, 26); game.controls.camPitch = 0.25; game.controls.camYaw = 0; snap('gate_torches');
+        // a rock belt and a forest belt up close, and the map edge where enemies spawn
+        { const w = game.world; let rc = null, fc = null; for (let j = 0; j < w.n && !(rc && fc); j++) for (let i = 0; i < w.n; i++) { const k = w.kind[w.idx(i, j)]; const c = w.cellCenter(i, j); const r = Math.hypot(c.x, c.z); if (r > 72 && r < 88) { if (k === CELL_ROCK && !rc) rc = c; if (k === 5 && !fc) fc = c; } }
+          if (rc) { game.controls.camDist = 18; game.controls.focus.set(rc.x, 0, rc.z); game.controls.camPitch = 0.5; game.controls.camYaw = 0.4; snap('rock_belt'); }
+          if (fc) { game.controls.camDist = 18; game.controls.focus.set(fc.x, 0, fc.z); game.controls.camPitch = 0.5; game.controls.camYaw = 0.4; snap('forest_belt'); }
+          const sp = DATA.spawnPoints[w.laneSpawns[0]]; game.controls.camDist = 30; game.controls.focus.set(sp.x * 0.9, 0, sp.z * 0.9); game.controls.camPitch = 0.7; game.controls.camYaw = Math.atan2(-sp.x, -sp.z) + Math.PI; snap('spawn_edge'); }
+        game.controls.camDist = 300; game.controls.focus.set(0, 0, 0); game.controls.camPitch = 1.0; game.controls.camYaw = 0.4; snap('zoomed_bloom'); }
       game.setWorld(777, 'valley');
       const ford = game.world.fords[1]; const fc = game.world.cellCenter(ford.i - 0.5, ford.j - 0.5);
       game.controls.camDist = 55; game.controls.focus.set(fc.x, 0, fc.z); game.controls.camPitch = 0.75; snap('valley_ford');
