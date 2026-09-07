@@ -423,7 +423,7 @@ Unit.prototype.updateSpecials = function (dt) {
     const fx = Math.sin(this.yaw) * cp, fy = sp0, fz = Math.cos(this.yaw) * cp;     // the breath's direction, pitched up or down
     const oy = this.pos.y + (this.def.model === 'dragon' ? 1.5 : this.height * 0.6);
     const R = def.breath.range;
-    const inCone = (x, y, z) => { const dx = x - this.pos.x, dy = y - oy, dz = z - this.pos.z; const d = Math.hypot(dx, dy, dz) || 1; return d <= R + 1 && (dx * fx + dy * fy + dz * fz) / d > 0.72; };
+    const inCone = (x, y, z) => { const dx = x - this.pos.x, dy = y - oy, dz = z - this.pos.z; const d = Math.hypot(dx, dy, dz) || 1; return d <= R + 2.5 && (dx * fx + dy * fy + dz * fz) / d > 0.72; };
     const foe = this.team === 'enemy' ? 'player' : 'enemy';
     for (const u of game.unitsNear(this.pos.x, this.pos.z, R + 2, foe)) {
       if (inCone(u.pos.x, u.centerY, u.pos.z) || inCone(u.pos.x, u.pos.y + 0.2, u.pos.z)) { u.takeDamage(def.breath.dps * dt, this, { magic: true }); u.applyBurn(6, 2, this); }
@@ -482,7 +482,7 @@ Unit.prototype.updateSpecials = function (dt) {
     } else this.specialTimer = 1;
   } else if (def.breath) {
     const t = this.target;
-    if (t && !t.dead && this.distTo(t) < def.breath.range) {
+    if (t && !t.dead && this.distTo(t) < def.breath.range * 0.65) {
       this.faceToward(t.pos.x, t.pos.z, 1, 100);
       { const oy = this.pos.y + 1.5, ty = t instanceof Unit ? t.centerY : t.pos.y + t.height * 0.5; this.breathPitch = Math.atan2(ty - oy, Math.max(0.5, this.distTo(t))); }
       this.breathing = def.breath.dur;

@@ -1171,6 +1171,23 @@ function runSelfTest(game, params) {
       { const aim = game.controls.aimDir(); const flames = game.effects.list.filter(e => e.sprite && e.vel); let sx = 0, sz = 0; for (const f of flames) { sx += f.vel.x; sz += f.vel.z; } const fl = Math.hypot(sx, sz) || 1; const dotv = (sx / fl) * aim.x + (sz / fl) * aim.z; say(`dragon 3rd: aim=(${aim.x.toFixed(2)},${aim.z.toFixed(2)}) yaw=${d.yaw.toFixed(2)} flames=${flames.length} flameDir.aim=${dotv.toFixed(2)} (expect ~1)`); }
       game.controls.attackHeld = false; game.controls.exitControl();
     }
+    if (params.get('npcdragontest')) {
+      // a tame dragon on its own against archers, then the boss dragon against the player's archers
+      const sp = game.findSpawnSpot(-30, 40);
+      const d = game.spawnUnit(DATA.units.tamedragon, 'player', sp.x, sp.z, { owner: 'host' }); d.post = { x: sp.x, z: sp.z };
+      const foes = []; for (let k = 0; k < 3; k++) foes.push(game.spawnEnemy('archer', sp.x + 16 + k * 1.5, sp.z + (k - 1) * 2, { hpMul: 1 }));
+      const hp0 = foes.reduce((a, u) => a + u.hp, 0);
+      let minD = 999, breaths = 0, dhp = d.hp;
+      for (let k = 0; k < 60 * 12; k++) { game.update(1 / 60); const t = foes.find(u => !u.dead); if (t) minD = Math.min(minD, d.distTo(t)); if (d.breathing > 0 && k % 6 === 0) breaths++; }
+      say(`npcdragon tame: archers hp ${Math.round(hp0)} -> ${Math.round(foes.reduce((a, u) => a + (u.dead ? 0 : u.hp), 0))} dead=${foes.filter(u => u.dead).length}/3 closest=${minD.toFixed(1)}m breathFrames=${breaths} dragon hp ${Math.round(dhp)} -> ${Math.round(d.hp)}`);
+      for (const f of foes) if (!f.dead) f.die(null); d.die(null);
+      const sp2 = game.findSpawnSpot(30, 40);
+      const mine = []; for (let k = 0; k < 3; k++) { const a = game.spawnUnit(DATA.units.archer, 'player', sp2.x + (k - 1) * 2, sp2.z, { owner: 'host' }); a.post = { x: a.pos.x, z: a.pos.z }; a.command = { type: 'hold' }; mine.push(a); }
+      const boss = game.spawnEnemy('dragon', sp2.x + 30, sp2.z + 10, { hpMul: 1 });
+      const mh0 = mine.reduce((a, u) => a + u.hp, 0); let minD2 = 999, breaths2 = 0;
+      for (let k = 0; k < 60 * 20; k++) { game.update(1 / 60); const t = mine.find(u => !u.dead); if (t) minD2 = Math.min(minD2, boss.distTo(t)); if (boss.breathing > 0 && k % 6 === 0) breaths2++; if (boss.dead) break; }
+      say(`npcdragon boss: my archers hp ${Math.round(mh0)} -> ${Math.round(mine.reduce((a, u) => a + (u.dead ? 0 : u.hp), 0))} dead=${mine.filter(u => u.dead).length}/3 closest=${minD2.toFixed(1)}m breathFrames=${breaths2} boss hp=${Math.round(boss.hp)}/${Math.round(boss.maxHp)} target=${boss.target ? boss.target.name : 'none'}`);
+    }
     if (params.get('missiontest')) {
       const king = game.king, keep = game.buildings.find(b => b.def.keep);
       const g0 = game.gold, u0 = game.units.length;

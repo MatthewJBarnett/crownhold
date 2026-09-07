@@ -442,7 +442,7 @@ DATA.buildings.heart_of_winter = { key: 'heart_of_winter', name: 'Heart of Winte
 DATA.buildings.apotheosis = { key: 'apotheosis', name: 'The Apotheosis', cost: 300000, hp: 20000, w: 3, d: 3, cat: 'wonder', unique: true, apotheosis: { burn: 0.04, bossBurn: 0.015, radius: 60, skyEvery: 45, sky: 0.4, bossSky: 0.15, bounty: 3, towerCd: 0.6, guard: 0.6 }, globalStats: true,
   desc: 'The King ascends. Every enemy within 60m of the Apotheosis burns for 4% of its whole life every second (bosses 1.5%). Your units and the Keep take 40% less damage. Every bounty pays threefold. Every tower fires two thirds faster. And every 45s the sky opens: everything hostile on the island loses 40% of its remaining life (bosses 15%) and stands stunned for 3s. There is nothing above this.' };
 DATA.units.angel = { key: 'angel', name: 'Celestial Warrior', hp: 650, dmg: 70, range: 2.6, cd: 0.8, armor: 0.3, speed: 9, radius: 0.5, attack: 'melee', cleave: true, flying: true, altitude: 1.2, wings: true, noCap: true, summoned: true, color: 0xfff0c0, cloth: 0xffffff, weapon: 'sword', helmet: true, skin: 0xffe8d0 };
-DATA.units.tamedragon = { key: 'tamedragon', name: 'Tame Dragon', hp: 3200, dmg: 70, range: 9, cd: 2.6, armor: 0.3, speed: 7.5, radius: 1.6, attack: 'melee', breathOnly: true, flying: true, altitude: 6, large: true, model: 'dragon', scale: 0.9, noCap: true, guardian: true, color: 0x8a2a2a, cloth: 0x5a1a1a, breath: { range: 12, dps: 150, dur: 1.3, every: 0 }, noViewWeapon: true,
+DATA.units.tamedragon = { key: 'tamedragon', name: 'Tame Dragon', hp: 3200, dmg: 70, range: 5.5, cd: 2.6, armor: 0.3, speed: 7.5, radius: 1.6, attack: 'melee', breathOnly: true, flying: true, altitude: 6, large: true, model: 'dragon', scale: 0.9, noCap: true, guardian: true, color: 0x8a2a2a, cloth: 0x5a1a1a, breath: { range: 13, dps: 150, dur: 1.3, every: 0 }, noViewWeapon: true,
   desc: 'The roost\'s dragon. Flies over walls and breathes fire in a cone: 150 damage a second to everything in front of it.' };
 DATA.units.irongolem = { key: 'irongolem', name: 'Iron Titan', hp: 5500, dmg: 110, range: 3.2, cd: 2.0, armor: 0.5, speed: 3.4, radius: 1.1, attack: 'melee', cleave: true, large: true, scale: 2.2, noCap: true, guardian: true, color: 0x6a6e78, cloth: 0x4a4e58, weapon: 'club', helmet: true, skin: 0x8a8e98,
   desc: 'The forge\'s titan. Slow, armoured, cleaves everything in reach.' };
@@ -499,7 +499,7 @@ DATA.mapTypes = {
   volcanic:  { zenith: 0x4a2a2a, label: 'Ashlands', desc: 'Black ash, a river of lava and molten pools; rock spires are the only cover.', rocks: [5, 8], forests: [0, 0], hills: 1.6, ruins: 10, decor: 'dead',
                palette: { grass: 0x3a3a3a, grass2: 0x5a5048, dry: 0x6a5a50, sky: 0x8a6a5a, water: 0xff6a10, waterGlow: 0xff3000, road: 0x4a4038, marsh: 0x3a3a30, leaves: [0x4a3a30, 0x5a4a3a, 0x3a2a20, 0x6a5a4a] } },
 };
-DATA.build = '2026-09-07 02:55';
+DATA.build = '2026-09-07 10:46';
 // experiments only: never listed in the hero menu, never unique, never bought. Immortal, splash attacks at range, very fast, abilities on a tenth of the cooldown
 DATA.testChampion = {
   key: 'champion', name: 'The Test Champion', title: 'of the Experiments', role: 'Testing',
