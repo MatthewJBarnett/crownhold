@@ -194,6 +194,6 @@ Unit.prototype.useAbility = function (index, aim) {
     }
     default: return false;
   }
-  ab.timer = ab.def.cd * (this.def.abilityCdMul || 1);
+  ab.timer = ab.def.cd * (this.def.abilityCdMul || 1) * (this.isKing && this.game.realm ? this.game.realm.kingCd || 1 : 1);
   return true;
 };

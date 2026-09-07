@@ -25,8 +25,9 @@ Three.js and the PeerJS networking library load from cdnjs, so an internet conne
 - Every unit is fully healed when a wave ends. The Healing Shrine only works during a wave.
 - Farms and Gold Mines get pricier with every one you own (30% and 60% per building). Extra heroes start at
   1200 gold and each purchase raises the next price by 50%. Selling refunds 60% of what you actually paid.
-- Enemies arrive from the eight edge spawns (ringed on the minimap; the next wave's are red), two per wave at first
-  and more as the siege goes on. Neighbouring spawns share a corridor through the outer belt. The two belts around the
+- Enemies land on the shore in groups, anywhere around the island (the next wave's landing points are red on the
+  minimap), two groups per wave at first and up to six later. From the shore each group walks to the nearest of the
+  eight corridor mouths (ringed on the minimap); neighbouring mouths share a corridor through the outer belt. The two belts around the
   castle are rings of mixed terrain, different on every map: moats you cross on a long bridge, forest, crag, chasms
   and lava. Through solid arcs the corridor switchbacks; over water it is a single bridge. Between the belts the path
   walks sideways to the inner gate past ponds, groves, boulders, cracks and marsh, so nothing runs straight. Enemies path to the King and walk a long way round walls before chewing
@@ -39,7 +40,7 @@ Three.js and the PeerJS networking library load from cdnjs, so an internet conne
 
 ## The world
 
-The map is 280 m across and generated from a seed in one of six styles, chosen on the menu (or by the host):
+The map is a circular island 280 m across, ringed by sea, generated from a seed in one of six styles, chosen on the menu (or by the host):
 River Valley (a river, a tributary, fords and marsh), Highlands (two rings of rock ridges with passes, and lakes),
 Darkwood (a forest belt with lanes and clearings, a stream), Badlands (radial canyons, crags, ruins), Frozen Marsh
 (snow, frozen lakes and slow bog) and Ashlands (a lava river and molten pools). Water, lava, rock and forest
@@ -54,7 +55,12 @@ Titan Forge 3400 (an iron titan), Crown of Storms 5000 (ten-target chain lightni
 rise again, once per wave), World Tree 8000 (2%/s regeneration and +25% tower damage within 32 m, 150 gold a wave),
 Time Anchor 10000 (enemies within 34 m are 45% slower; a 4 s freeze every 30 s), Celestial Gate 14000 (six flying
 warriors every 40 s), Doomsday Engine 20000 (600 damage to every enemy on the map every 60 s, a 25/s burn field) and
-the Throne of Ages 30000 (+5000 King HP and 100/s regeneration, towers and soldiers +50%, farms and mines pay double).
+the Throne of Ages 30000 (+5000 King HP and 100/s regeneration, towers and soldiers +50%, farms and mines pay double),
+the Solar Forge 45000 (towers fire twice as fast and reach 40% further), the Comet Shrine 65000 (a 3000-damage comet
+on the thickest crowd every 45 s, a meteor every 4 s), the Heart of Winter 90000 (every enemy on the island 60% slower
+and 30% more fragile, a 6 s freeze every 40 s) and The Apotheosis 250000 (every enemy burns a tenth of its life a
+second, your units and the Keep cannot die, bounties pay tenfold, towers fire three times as fast, and every 20 s the
+sky opens and everything hostile that is not a boss ceases to exist).
 
 Mechanics: from wave 4 most waves carry a modifier announced in the preview (Night Raid, Thick Fog, Frenzy, Iron Tide,
 Swarm, Siege, Plague, Gold Rush) that changes ranges, speed, armour, numbers or bounties, and night and fog change the
@@ -65,18 +71,29 @@ from their kills and level up to 10 (+7% health, +6% damage a level). The King's
 regeneration reward keeping units alive rather than replacing them.
 
 Graphics: rounded units with capes, helmets and shields; stone with relief; grass tufts, round and pine canopies;
-rippling water; drifting snow, embers, pollen or dust depending on the map; sprite fire and torches; explosions that
+a shader-drawn water surface with rolling waves, ripples, sun glitter, fresnel sky reflection and shore foam (lava
+gets a crust instead); drifting snow, embers, pollen or dust depending on the map; sprite fire and torches; explosions that
 sit on the ground instead of sinking into it; soft contact shadows; a sun disc; and a bloom/colour-grading pass
 (Settings: Glow & colour; turn it off on slow machines; it renders through a 24-bit depth target so the water never
 z-fights the terrain). Rock belts are crag blocks that fill their cells exactly and forest belts have undergrowth, so
 nothing you can walk into is walkable: every rock and tree inside the map sits on an obstacle cell.
+
+## The King's errands
+
+From wave 2 most waves bring an errand: an objective far from the Keep, marked by a beam of light and on the
+minimap, that only the King can resolve. Some he must reach, some he must carry home (heavy ones slow him), some
+take his work for a while at the spot. They are optional and vanish when the wave ends; completing one pays off in
+gold, free soldiers, engineers or a dragon, a free tower or shrine to place, free upgrade levels, permanent gains for
+the King (health, regeneration, damage, a faster Royal Decree), a weaker next wave or horde, a cheaper wonder, a lost
+champion, or every fallen hero back. Twenty errands cycle without repeating; the bigger ones come later.
 
 ## Enemies
 
 Twenty-nine kinds. Besides raiders, archers, brutes, casters, artillery and beasts there are Warchiefs (an aura that
 makes everything near them faster and harder-hitting), Goblin Bombers, Wraiths (fly, take 40% from arrows and blades,
 full damage from magic), Stone Guards (arrows glance off), Battering Rams (five times the damage to walls, explode when
-killed), Plague Rats and Raider Horsemen. Bosses every five waves, in order: the Ogre Warlord, the Orc Warbringer (war
+killed), Plague Rats, Raider Horsemen, and three tiers of siege: Catapults from wave 4, Trebuchets from wave 12 and the Siege
+Colossus from wave 20 (out-ranges every tower, 520-damage shot splashing 5.5 m, explodes when destroyed). Bosses every five waves, in order: the Ogre Warlord, the Orc Warbringer (war
 horn and charge), the Lich, the Hydra (sheds heads as it is hurt, regenerates), the Ancient Dragon, the Stormcaller
 (lightning on your towers, blinks), the Spider Queen and the Iron Golem. Repeats come back stronger.
 
@@ -150,6 +167,7 @@ Possessed unit (first person)
 - `js/grid.js`: build grid, enemy flow field (walls are breakable at a cost), A* for friendly units, circle collision
 - `js/models.js`: procedural meshes for units, buildings, projectiles, owner pennants and shader-drawn health bars
 - `js/post.js`: bloom and colour grading (render target, bright pass, blur, composite) without EffectComposer
+- `js/missions.js`: the King's errands (objective placement, fetch/work/touch logic, rewards, co-op replication)
 - `js/entities.js`: units, buildings (construction, damage tint), projectiles, zones, particle effects
 - `js/ai.js`, `js/abilities.js`: NPC behaviour (including engineers) and hero abilities
 - `js/waves.js`: wave composition and spawning
@@ -163,8 +181,10 @@ Possessed unit (first person)
 `index.html?test=1&waves=5&bot=1` runs a headless simulation and prints a log (used for smoke testing in headless Chrome).
 `index.html?test=1&waves=0&collide=1` drives the possessed hero into walls and reports the closest approach.
 `index.html?test=1&waves=0&mptest=1` runs a host and a client replica in one page over a loopback transport.
+`index.html?test=1&waves=0&missiontest=1` runs every King's errand end to end and reports the rewards.
 `index.html?autostart=1&hero=ranger&fps=1&presim=20&wave=1` starts a game immediately for screenshots.
 `&mapType=valley&seed=777` pins the world in test mode. `?test=1&probe5=1&waves=0` renders a set of views into the page.
 
-Experiments: Settings has a "Spawn a test champion" button (host only in co-op). It spawns an immortal hero with
-absurd splash damage, speed and cooldowns, as many times as you like, purely for reaching late waves quickly.
+Experiments: Settings has a "Spawn a test champion" button and an "Add gold" box (host only in co-op). The champion
+is an immortal hero with absurd splash damage, speed and cooldowns; the gold goes straight into your pocket. Both exist
+purely for reaching late waves quickly.

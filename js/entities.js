@@ -138,6 +138,7 @@ class Unit {
     const H = DATA.MAP_HALF;
     if (this.flying) {
       this.pos.x = U.clamp(this.pos.x + dx, -H, H); this.pos.z = U.clamp(this.pos.z + dz, -H, H);
+      const rr = Math.hypot(this.pos.x, this.pos.z), RR = DATA.MAP_RADIUS - 1; if (rr > RR) { this.pos.x *= RR / rr; this.pos.z *= RR / rr; }
       return null;
     }
     const r = this.collisionRadius, team = this.team;
@@ -301,6 +302,9 @@ class Unit {
     for (const b of this.buffs) if (b.until > this.game.time && b.dmgTaken) a *= b.dmgTaken;
     if (this.isBoss && opts.magic) a *= 0.85;
     a = Math.max(0.5, a);
+    const fl = this.game.flags;
+    if (fl && this.team === 'enemy' && fl.brittle > 1) a *= fl.brittle;
+    if (fl && fl.apo && this.team === 'player') { this.hp = Math.max(1, this.hp - a); this.flashT = 0.12; if (source && source instanceof Unit) this.lastAttacker = source; return a; }
     this.hp -= a;
     this.flashT = 0.12;
     if (source && source instanceof Unit) this.lastAttacker = source;
@@ -636,6 +640,7 @@ class Building {
 
   takeDamage(amount, source) {
     if (this.dead) return 0;
+    if (this.def.keep && this.game.flags && this.game.flags.apo) { this.flashT = 0.1; return 0; }
     if (this.def.spikes && source instanceof Unit && source.attackKind === 'melee' && !source.dead) source.takeDamage(this.def.spikes, null, { magic: true });
     this.hp -= amount;
     this.flashT = 0.1;
@@ -826,6 +831,21 @@ class Building {
     if (def.slowField) for (const u of game.unitsNear(this.pos.x, this.pos.z, def.slowField.radius, 'enemy')) if (!u.dead) { u.applySlow(def.slowField.factor, 0.4); u.addBuff({ tag: 'anchor', attackSpeedMul: 1 - def.slowField.factor, until: game.time + 0.4 }); }
     if (def.burnField) for (const u of game.unitsNear(this.pos.x, this.pos.z, def.burnField.radius, 'enemy')) if (!u.dead) { u.takeDamage(def.burnField.dps * dt, this, { magic: true }); if (Math.random() < dt * 0.5) game.effects.spawn('ember', u.pos.x, u.centerY, u.pos.z, { color: 0xff3020 }); }
     const orbs = this.group.userData.orbiters; if (orbs) for (let k = 0; k < orbs.length; k++) { const a = game.time * (0.8 + k * 0.3) + k * 2.1; orbs[k].rotation.set(a * 0.5, a, 0); }
+    if (def.meteorRain) {
+      this.rTimer = (this.rTimer === undefined ? 2 : this.rTimer) - dt;
+      if (this.rTimer <= 0 && game.waves.active) {
+        this.rTimer = def.meteorRain.every;
+        const foes = game.units.filter(u => u.team === 'enemy' && !u.dead);
+        if (foes.length) { const t = foes[Math.floor(Math.random() * foes.length)], p = { x: t.pos.x, z: t.pos.z }, dmg = def.meteorRain.dmg, sp = def.meteorRain.splash, owner = this;
+          game.effects.spawn('ring', p.x, 0.3, p.z, { radius: sp, color: 0xffa040, dur: 0.9 });
+          game.fireProjectile({ from: this, key: 'fireball', kind: 'drop', dest: p, delay: 0.9, dmg, team: 'player', splash: sp, magic: true, onLand: () => { game.areaDamage(p.x, p.z, sp, dmg, 'player', owner, { magic: true, burn: { dps: 20, dur: 3 } }); game.effects.spawn('explosion', p.x, 1, p.z, { radius: sp, color: 0xff7020 }); } }); }
+      }
+    }
+    if (def.apotheosis) {
+      const a = def.apotheosis;
+      for (const u of game.units) if (u.team === 'enemy' && !u.dead) { u.takeDamage(u.maxHp * (u.isBoss ? a.bossBurn : a.burn) * dt, this, { magic: true }); if (Math.random() < dt * 0.4) game.effects.spawn('flame', u.pos.x, u.centerY, u.pos.z); }
+      const halo = this.group.userData.orb; if (halo) halo.rotation.y += dt * 0.5;
+    }
     if (this.wTimer > 0) return;
     if (def.freeze) {
       this.wTimer = def.freeze.every;
@@ -837,6 +857,25 @@ class Building {
       if (game.waves.active) {
         for (let k = 0; k < def.summonHost.count; k++) { const sp = game.findSpawnSpot(this.pos.x + Math.sin(k) * 3, this.pos.z + Math.cos(k) * 3); const u = game.spawnUnit(DATA.units[def.summonHost.unit], 'player', sp.x, sp.z, { owner: this.owner }); u.expires = game.time + def.summonHost.dur; u.post = { x: sp.x, z: sp.z }; game.effects.spawn('blink', sp.x, 0.3, sp.z); }
         game.effects.spawn('ring', this.pos.x, 0.3, this.pos.z, { radius: 6, color: 0xfff0c0, dur: 1 }); game.ui.toast('Celestial warriors answer the call!', 'good'); SFX.play('summon');
+      } else this.wTimer = 2;
+    } else if (def.comet) {
+      this.wTimer = def.comet.every;
+      const foes = game.units.filter(u => u.team === 'enemy' && !u.dead);
+      if (foes.length && game.waves.active) {
+        let best = null, bs = -1;
+        for (const u of foes) { let s = 0; for (const v of foes) if (v.distTo(u) < def.comet.radius) s += v.isBoss ? 6 : 1; if (s > bs) { bs = s; best = u; } }
+        const p = { x: best.pos.x, z: best.pos.z }, dmg = def.comet.dmg, r = def.comet.radius, owner = this;
+        game.effects.spawn('ring', p.x, 0.3, p.z, { radius: r, color: 0xffffff, dur: 2.0 });
+        game.ui.toast('A comet falls!', 'boss');
+        game.fireProjectile({ from: this, key: 'fireball', kind: 'drop', dest: p, delay: 2.0, dmg, team: 'player', splash: r, magic: true, onLand: () => { game.areaDamage(p.x, p.z, r, dmg, 'player', owner, { magic: true, stun: 2 }); game.effects.spawn('explosion', p.x, 1, p.z, { radius: r, color: 0xfff0c0 }); game.effects.spawn('ring', p.x, 0.3, p.z, { radius: r * 2, color: 0xffd080, dur: 1.2 }); SFX.play('explode'); } });
+      } else this.wTimer = 3;
+    } else if (def.apotheosis) {
+      this.wTimer = def.apotheosis.skyEvery;
+      if (game.waves.active) {
+        let n = 0;
+        for (const u of game.units) if (u.team === 'enemy' && !u.dead) { if (u.isBoss) u.takeDamage(u.maxHp * def.apotheosis.bossSky, this, { magic: true }); else { u.takeDamage(u.hp + 1, this, { magic: true }); n++; } }
+        game.effects.spawn('ring', this.pos.x, 0.3, this.pos.z, { radius: 300, color: 0xffffff, dur: 2.0 }); game.effects.spawn('explosion', 0, 20, 0, { radius: 40, color: 0xfffff0 });
+        game.ui.toast(`The sky opens. ${n} enemies cease to exist.`, 'boss'); SFX.play('explode');
       } else this.wTimer = 2;
     } else if (def.doom) {
       this.wTimer = def.doom.every;

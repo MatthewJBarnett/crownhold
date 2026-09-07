@@ -121,6 +121,7 @@ class UI {
     if (q('.shadows')) q('.shadows').addEventListener('change', () => g.setShadows(q('.shadows').checked));
     if (q('.bloom')) q('.bloom').addEventListener('change', () => g.setBloom(q('.bloom').checked));
     if (q('.spawncheat')) q('.spawncheat').addEventListener('click', () => g.spawnTestChampion());
+    if (q('.goldcheat')) q('.goldcheat').addEventListener('click', () => g.cheatGold(parseInt(q('.goldamt').value, 10)));
     if (q('.showfps')) q('.showfps').addEventListener('change', () => { g.showFps = q('.showfps').checked; g.savePref('showfps', g.showFps ? '1' : '0'); this.$('fpscounter').classList.toggle('hidden', !g.showFps); });
     root.querySelectorAll('input').forEach(i => i.addEventListener('keydown', (e) => e.stopPropagation()));
   }
@@ -271,7 +272,7 @@ class UI {
       const cannot = !g.canAfford(cost) || built;
       b.classList.toggle('disabled', cannot);
       b.classList.toggle('on', !!(g.controls.buildDef && g.controls.buildDef.key === d.key));
-      b.querySelector('.cost').textContent = built ? 'built' : cost;
+      b.querySelector('.cost').textContent = built ? 'built' : (cost === 0 && g.freeTokens && g.freeTokens[d.key] > 0 ? 'free' : cost);
     });
     const capFull = g.soldierCount() >= g.soldierCap();
     document.querySelectorAll('[data-unit]').forEach(b => { const d = DATA.units[b.dataset.unit]; const full = d.noCap ? g.engineerCount() >= d.maxCount : capFull; b.classList.toggle('disabled', !!(!g.canAfford(d.cost) || full)); });
@@ -557,7 +558,8 @@ class UI {
       const modLine = d.mod ? `<br><span class="mod">${d.mod}</span>` : '', ctLine = d.contract ? `<br><span class="contract">Contract. ${d.contract}</span>` : '';
       const live = g.contract ? `<br><span class="contract">${DATA.contracts[g.contract.key].name}: ${g.contract.failed ? 'failed' : (g.contract.need ? `${g.contract.progress}/${g.contract.need}` : 'on track')}</span>` : '';
       const liveMod = g.waveMod ? `<br><span class="mod">${g.waveMod.name}</span>` : '';
-      this.$('wavepreview').innerHTML = g.waves.active ? `<b>Wave ${g.waves.number}</b>: ${g.waves.total} enemies${liveMod}${live}` : `<b>Next: wave ${g.waves.preview.n}</b> from the ${d.from.join(', ')}<br>${d.units.map(u => u.startsWith('BOSS') ? `<span class="boss">${u}</span>` : u).join(', ')}${modLine}${ctLine}`;
+      const mis = g.missions && g.missions.active ? `<br><span class="mission">King's errand: <b>${g.missions.active.def.name}</b>. ${g.missions.brief()}${g.missions.active.def.type === 'work' && g.missions.active.progress > 0 ? ` ${Math.round(g.missions.active.progress / g.missions.active.def.work * 100)}%` : ''}</span>` : '';
+      this.$('wavepreview').innerHTML = g.waves.active ? `<b>Wave ${g.waves.number}</b>: ${g.waves.total} enemies${liveMod}${live}${mis}` : `<b>Next: wave ${g.waves.preview.n}</b> from the ${d.from.join(', ')}<br>${d.units.map(u => u.startsWith('BOSS') ? `<span class="boss">${u}</span>` : u).join(', ')}${modLine}${ctLine}`;
     }
     this.$('speed').querySelectorAll('button').forEach(b => b.classList.toggle('on', parseInt(b.dataset.s, 10) === g.timeScale));
     { const total = g.repairTotal(), ra = this.$('repairall');
@@ -592,7 +594,7 @@ class UI {
     const SPAN = DATA.GRID * DATA.CELL + 20, HALF = SPAN / 2;
     const s = W / SPAN;
     ctx.fillStyle = '#2e5a2a'; ctx.fillRect(0, 0, W, W);
-    ctx.fillStyle = '#3f7a35'; const b = (HALF - DATA.BUILD_RADIUS) * s; ctx.fillRect(b, b, W - 2 * b, W - 2 * b);
+    ctx.fillStyle = '#3f7a35'; ctx.beginPath(); ctx.arc(W / 2, W / 2, DATA.BUILD_RANGE * s, 0, Math.PI * 2); ctx.fill();
     const px = (x) => (x + HALF) * s, pz = (z) => (z + HALF) * s;
     if (g.world) {
       const cs = DATA.CELL * s;
@@ -616,7 +618,9 @@ class UI {
     // lanes enemies can use, and the ones the next wave will take
     if (g.world && g.world.laneSpawns) { ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.5; for (const si of g.world.laneSpawns) { const sp = DATA.spawnPoints[si]; ctx.beginPath(); ctx.arc(px(sp.x), pz(sp.z), 6, 0, Math.PI * 2); ctx.stroke(); } }
     const plan = g.waves.active ? null : g.waves.preview;
-    if (plan && plan.dirs) { ctx.fillStyle = 'rgba(255,80,60,0.9)'; for (const i of plan.dirs) { const sp = DATA.spawnPoints[i]; ctx.beginPath(); ctx.arc(px(sp.x), pz(sp.z), 5, 0, Math.PI * 2); ctx.fill(); } }
+    if (plan && plan.dirs) { ctx.fillStyle = 'rgba(255,80,60,0.9)'; for (const a of plan.dirs) { const x = Math.cos(a) * DATA.SPAWN_RADIUS, z = Math.sin(a) * DATA.SPAWN_RADIUS; ctx.beginPath(); ctx.arc(px(x), pz(z), 5, 0, Math.PI * 2); ctx.fill(); } }
+    // the King's errand
+    if (g.missions && g.missions.active && !g.missions.active.carried) { const m = g.missions.active; ctx.fillStyle = '#ffe080'; ctx.beginPath(); ctx.moveTo(px(m.x), pz(m.z) - 7); ctx.lineTo(px(m.x) + 6, pz(m.z) + 4); ctx.lineTo(px(m.x) - 6, pz(m.z) + 4); ctx.closePath(); ctx.fill(); }
     // camera focus
     const c = g.controls;
     const f = c.mode === 'fps' ? c.controlled.pos : c.focus;

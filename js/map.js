@@ -46,7 +46,12 @@ class WorldMap {
     return s * n * 7 * (this.cfg ? this.cfg.hills : 1);
   }
   heightAt(x, z, arr) {
+    const beyond = Math.max(0, Math.hypot(x, z) - DATA.MAP_HALF);
     x = U.clamp(x, -DATA.MAP_HALF, DATA.MAP_HALF); z = U.clamp(z, -DATA.MAP_HALF, DATA.MAP_HALF);
+    if (beyond > 0 && arr !== this.h0) { const v = this.heightAtRaw(x, z, arr); return v - Math.min(6, beyond * 0.5); }
+    return this.heightAtRaw(x, z, arr);
+  }
+  heightAtRaw(x, z, arr) {
     const fx = x / this.cell + this.half, fz = z / this.cell + this.half;
     const i = U.clamp(Math.floor(fx), 0, this.hs - 2), j = U.clamp(Math.floor(fz), 0, this.hs - 2);
     const tx = U.clamp(fx - i, 0, 1), tz = U.clamp(fz - j, 0, 1);
@@ -96,12 +101,21 @@ class WorldMap {
       if (attempt === 29) { this.usedSeed = this.seed + attempt * 7919; this.carveOpen(); }
     }
     this.layLanes(mulberry32(this.usedSeed + 31));
+    this.laySea();
     if (!this.connected()) this.carveOpen();
     this.layRoads();
     this.placeChests(mulberry32(this.usedSeed + 99));
     this.bakeHeights();
   }
   // ---- tower-defense structure: two obstacle belts around the castle, cut only by the lanes enemies use
+  // the island ends in sea: everything past the rim is water
+  laySea() {
+    const h = this.half, n = this.n, R = DATA.MAP_RADIUS / this.cell;
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const r = Math.hypot(i + 0.5 - h, j + 0.5 - h);
+      if (r > R) { const k = this.idx(i, j); if (this.kind[k] !== 9 && this.kind[k] !== 12) this.kind[k] = CELL_WATER; }
+    }
+  }
   polar(rc, ang, side = 0) { const h = this.half; return { i: h + Math.cos(ang) * rc - Math.sin(ang) * side, j: h + Math.sin(ang) * rc + Math.cos(ang) * side }; }
   layLanes(rnd) {
     const h = this.half, n = this.n;
@@ -157,7 +171,7 @@ class WorldMap {
       if (!cells.length) return;
       let si = 0, sj = 0, rmin = 1e9, rmax = -1e9;
       for (const [i, j] of cells) { si += i + 0.5; sj += j + 0.5; const r = Math.hypot(i + 0.5 - h, j + 0.5 - h); rmin = Math.min(rmin, r); rmax = Math.max(rmax, r); }
-      const f = { i: si / cells.length, j: sj / cells.length, dir: { i: -Math.sin(ang), j: Math.cos(ang) }, len: (rmax - rmin) * this.cell + 5 };
+      const f = { i: si / cells.length, j: sj / cells.length, dir: { i: -Math.sin(ang), j: Math.cos(ang) }, len: (rmax - rmin) * this.cell + 3.5 };
       this.fords.push(f);
     };
     for (let pair = 0; pair < 4; pair++) {
@@ -227,7 +241,7 @@ class WorldMap {
     for (let j = cj - 2; j < cj + 4; j++) for (let i = ci - 2; i < ci + 4; i++) {
       if (!this.inBounds(i, j)) return;
       const cc = this.cellCenter(i, j);
-      if (Math.max(Math.abs(cc.x), Math.abs(cc.z)) < 22 || Math.max(Math.abs(cc.x), Math.abs(cc.z)) > DATA.BUILD_RADIUS - 1) return;
+      if (Math.max(Math.abs(cc.x), Math.abs(cc.z)) < 22 || Math.hypot(cc.x, cc.z) > DATA.BUILD_RANGE - 2) return;
       const k = this.kind[this.idx(i, j)];
       if (k === CELL_WATER || k === 8 || k === 9 || k === 12) return;
       if (this.laneCells && this.laneCells.has(this.idx(i, j))) return;   // never sit on the lane itself
@@ -503,10 +517,11 @@ class WorldMap {
       let high = 0;
       for (const [di, dj] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) if (this.inBounds(i + di, j + dj)) { const kk = this.kind[this.idx(i + di, j + dj)]; if (kk === 9 || kk === 12) high++; }
       if (high) y += 3.0 * (high === cnt ? 1 : 0.55 * high / cnt);
-      this.hWalk[j * w + i] = bridge ? this.h0[j * w + i] + 0.35 : (water && !bridge ? y - 1.4 * (water / cnt) - 0.3 : y);
+      this.hWalk[j * w + i] = bridge ? this.h0[j * w + i] + 0.55 : (water && !bridge ? y - 1.4 * (water / cnt) - 0.3 : y);
       if (water) y -= 1.4 * (water / cnt) + 0.3;
       else { let marsh = 0; for (const [di, dj] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) if (this.inBounds(i + di, j + dj) && this.kind[this.idx(i + di, j + dj)] === 7) marsh++; if (marsh) y -= 0.25 * (marsh / cnt); }
       if (chasm && !water) { const d = 4.0 * (chasm / cnt) + 0.4; y -= d; this.h0[j * w + i] -= d; }   // the trench floor stays above the water plane
+      { const rr = Math.hypot(x, z); if (rr > DATA.MAP_RADIUS - 2) { const t = U.clamp((rr - DATA.MAP_RADIUS + 2) / 12, 0, 1); y -= t * t * 5; } }   // the shore falls away into the sea
       this.h[j * w + i] = y;
       if (!bridge && !water) this.hWalk[j * w + i] = y;
     }
@@ -533,7 +548,7 @@ class WorldMap {
     const group = new THREE.Group();
     // ground with heights and painted cells
     const size = this.n * this.cell, seg = this.n;
-    const geo = new THREE.PlaneGeometry(size + 8, size + 8, seg + 4, seg + 4);
+    const geo = new THREE.PlaneGeometry(size + 60, size + 60, seg + 30, seg + 30);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
     const colors = new Float32Array(pos.count * 3);
@@ -592,14 +607,15 @@ class WorldMap {
       tufts.instanceMatrix.needsUpdate = true; group.add(tufts);
     }
     // water: one big plane just below the plain; it only shows inside the carved bed
-    const wgeo = new THREE.PlaneGeometry(size + 4, size + 4, seg + 2, seg + 2);
+    const wgeo = new THREE.PlaneGeometry(size + 60, size + 60, seg + 30, seg + 30);
     wgeo.rotateX(-Math.PI / 2);
-    { const wp = wgeo.attributes.position; for (let k = 0; k < wp.count; k++) { const x = wp.getX(k), z = wp.getZ(k); wp.setY(k, this.heightAt(x, z, this.h0) - 0.5); } wgeo.computeVertexNormals(); }
+    { const wp = wgeo.attributes.position, depth = new Float32Array(wp.count);
+      for (let k = 0; k < wp.count; k++) { const x = wp.getX(k), z = wp.getZ(k); const lvl = this.heightAt(x, z, this.h0) - 0.5; wp.setY(k, lvl); depth[k] = Math.max(0, lvl - this.heightAtRaw(U.clamp(x, -DATA.MAP_HALF, DATA.MAP_HALF), U.clamp(z, -DATA.MAP_HALF, DATA.MAP_HALF), this.h) + Math.max(0, Math.hypot(x, z) - DATA.MAP_HALF) * 0.5); }
+      wgeo.setAttribute('depth', new THREE.BufferAttribute(depth, 1)); wgeo.computeVertexNormals(); }
     const lava = this.type === 'volcanic';
     const wtex = Models.noiseTexture(256, 0.3, 9); wtex.repeat.set(34, 34);
-    const wbump = Models.noiseTexture(256, 0.7, 33); wbump.repeat.set(26, 26);
-    const water = new THREE.Mesh(wgeo, new THREE.MeshPhongMaterial({ color: pal.water || 0x3a7fc0, transparent: !lava, opacity: lava ? 1 : 0.8, emissive: pal.waterGlow || 0x0a2a50, emissiveIntensity: lava ? 0.9 : 0.35, map: wtex, bumpMap: wbump, bumpScale: lava ? 0.25 : 0.5, shininess: lava ? 10 : 110, specular: lava ? 0x402000 : 0xb0dcff }));
-    water.receiveShadow = !lava;
+    const water = new THREE.Mesh(wgeo, Models.waterMaterial(pal.water || 0x3a7fc0, lava, wtex));
+    water.receiveShadow = false; water.renderOrder = 1;
     group.add(water); this.water = water;
     // fords: a wooden bridge spanning the water, laid across the river's direction and standing on piers down to the bank
     const plank = Models.mat(0x7a5a38), plankDark = Models.mat(0x5a3f26);
@@ -608,7 +624,7 @@ class WorldMap {
       const dir = f.dir || { i: 1, j: 0 };
       const nx = -dir.j, nz = dir.i;               // crossing direction (perpendicular to the flow)
       const len = f.len || 12, wid = 4.4;
-      const deckY = this.heightAt(cc.x, cc.z, this.hWalk);
+      const deckY = this.heightAt(cc.x, cc.z, this.hWalk) - 0.21;   // plank tops sit exactly on the walking surface
       const g = new THREE.Group();
       g.position.set(cc.x, deckY, cc.z); g.rotation.y = Math.atan2(-nz, nx);
       const deck = new THREE.Mesh(new THREE.BoxGeometry(len, 0.3, wid), plank); deck.castShadow = true; deck.receiveShadow = true; g.add(deck);

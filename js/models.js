@@ -117,6 +117,84 @@ const Models = {
     out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); out.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); out.setIndex(idx);
     return out;
   },
+  waterMaterial(colorHex, lava, noise) {
+    const c = new THREE.Color(colorHex);
+    const deep = c.clone().multiplyScalar(lava ? 0.35 : 0.6);
+    const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+      time: { value: 0 }, color: { value: c }, deep: { value: deep }, sky: { value: new THREE.Color(0x9fc8f0) },
+      sunDir: { value: new THREE.Vector3(60, 90, 30).normalize() }, noise: { value: null }, opacity: { value: lava ? 1 : 0.95 }, lava: { value: lava ? 1 : 0 },
+    }]);
+    uniforms.noise.value = noise;
+    const m = new THREE.ShaderMaterial({
+      uniforms, transparent: !lava, depthWrite: !!lava, fog: true,
+      vertexShader: `
+        uniform float time; attribute float depth;
+        varying float vDepth; varying vec3 vWorld; varying vec3 vNormal;
+        #include <fog_pars_vertex>
+        void main() {
+          vec3 p = position;
+          float d = min(1.0, depth * 1.5);
+          float wx = p.x * 0.35 + time * 1.3, wz = p.z * 0.27 + time * 1.1, wd = (p.x + p.z) * 0.5 + time * 2.1;
+          p.y += (sin(wx) * 0.07 + sin(wz) * 0.07 + sin(wd) * 0.035) * d;
+          float dwdx = (cos(wx) * 0.0245 + cos(wd) * 0.0175) * d, dwdz = (cos(wz) * 0.0189 + cos(wd) * 0.0175) * d;
+          vNormal = normalize(vec3(-dwdx * 6.0, 1.0, -dwdz * 6.0));
+          vDepth = depth;
+          vec4 wp = modelMatrix * vec4(p, 1.0); vWorld = wp.xyz;
+          vec4 mvPosition = viewMatrix * wp;
+          gl_Position = projectionMatrix * mvPosition;
+          #include <fog_vertex>
+        }`,
+      fragmentShader: `
+        uniform vec3 color; uniform vec3 deep; uniform vec3 sky; uniform vec3 sunDir; uniform sampler2D noise; uniform float time; uniform float opacity; uniform float lava;
+        varying float vDepth; varying vec3 vWorld; varying vec3 vNormal;
+        #include <fog_pars_fragment>
+        void main() {
+          vec2 uv = vWorld.xz;
+          float n1 = texture2D(noise, uv * 0.045 + time * vec2(0.02, 0.013)).r;
+          float n2 = texture2D(noise, uv * 0.1 - time * vec2(0.017, 0.021)).r;
+          float n3 = texture2D(noise, uv * 0.02 + time * vec2(-0.006, 0.009)).r;
+          vec3 N = normalize(vNormal + vec3((n1 - 0.5) * 0.4, 0.0, (n2 - 0.5) * 0.4));
+          vec3 V = normalize(cameraPosition - vWorld);
+          float diff = 0.78 + 0.22 * max(0.0, dot(N, sunDir));
+          vec3 H = normalize(sunDir + V);
+          float spec = pow(max(0.0, dot(N, H)), 180.0);
+          float fres = pow(1.0 - max(0.0, dot(N, V)), 3.0);
+          float shallow = 1.0 - smoothstep(0.02, 0.55, vDepth);
+          float ripple = 0.35 + 0.5 * (n1 * 0.5 + n2 * 0.5);
+          vec3 col = mix(deep, color, clamp(ripple + shallow * 0.3, 0.0, 1.0)) * diff;
+          col = mix(col, sky, fres * 0.3 * (1.0 - lava));
+          col += spec * (0.5 - lava * 0.4);
+          float crest = step(0.86, (n1 + n2 + n3) / 3.0) * 0.5;
+          float foam = smoothstep(0.62, 0.86, n2 * (0.3 + shallow * 0.7)) * shallow * 0.8 + crest * (1.0 - lava);
+          vec3 foamCol = mix(vec3(1.0), vec3(0.16, 0.05, 0.02), lava);
+          col = mix(col, foamCol, clamp(foam, 0.0, 1.0) * 0.85);
+          col = mix(col, color * 1.5, lava * smoothstep(0.5, 0.9, n3));
+          gl_FragColor = vec4(col, opacity + fres * 0.12 * (1.0 - lava));
+          #include <fog_fragment>
+        }`,
+    });
+    m.userData.isWater = true;
+    return m;
+  },
+  missionObject(kind) {
+    const g = new THREE.Group(), gold = this.mat(0xe8c060, { emissive: 0x604000, emissiveIntensity: 0.4 }), wood = this.mat(0x6a4a2a), stone = this.mat(0x7a7a72);
+    switch (kind) {
+      case 'chest': g.add(this.box(1.4, 0.8, 0.9, wood, 0, 0.4, 0)); g.add(this.box(1.44, 0.34, 0.94, gold, 0, 0.95, 0)); g.add(this.box(0.24, 0.24, 0.12, this.mat(0x3a3a3a), 0, 0.7, 0.5, false)); break;
+      case 'beacon': g.add(this.cyl(0.5, 0.7, 3.2, stone, 0, 1.6, 0, 10)); g.add(this.cyl(0.9, 0.7, 0.5, wood, 0, 3.45, 0, 10)); { const f = this.flameSprite(0.6, 0x6080ff); f.position.y = 3.9; g.add(f); } break;
+      case 'cage': g.add(this.box(2.0, 0.2, 2.0, wood, 0, 0.1, 0)); for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; g.add(this.cyl(0.05, 0.05, 2.2, this.mat(0x3a3a3a), Math.sin(a) * 0.9, 1.2, Math.cos(a) * 0.9, 5, false)); } g.add(this.cyl(1.0, 1.0, 0.15, wood, 0, 2.35, 0, 10)); g.add(this.sphere(0.2, this.mat(0xe8c39e), 0, 1.5, 0, 10)); g.add(this.box(0.4, 0.6, 0.3, this.mat(0x4a4a5a), 0, 1.0, 0)); break;
+      case 'satchel': g.add(this.box(0.9, 0.6, 0.35, this.mat(0x5a3a1a), 0, 0.4, 0)); g.add(this.box(0.9, 0.2, 0.4, this.mat(0x4a2a10), 0, 0.68, 0)); g.add(this.cyl(0.04, 0.04, 1.2, this.mat(0x3a2a1a), 0, 0.7, 0, 5, false).rotateZ(Math.PI / 2)); break;
+      case 'well': g.add(this.cyl(1.1, 1.2, 1.0, stone, 0, 0.5, 0, 12)); g.add(this.cyl(0.7, 0.7, 0.2, this.mat(0x3a6a3a), 0, 0.95, 0, 12)); for (const x of [-0.9, 0.9]) g.add(this.box(0.15, 2.2, 0.15, wood, x, 1.6, 0)); g.add(this.box(2.2, 0.15, 1.0, this.mat(0x8a3a30), 0, 2.7, 0)); break;
+      case 'shrine': g.add(this.box(1.6, 0.4, 1.6, this.plaster, 0, 0.2, 0)); g.add(this.box(1.0, 1.4, 0.5, this.plaster, 0, 1.1, 0)); g.add(this.sphere(0.3, gold, 0, 2.1, 0, 12)); { const f = this.flameSprite(0.5); f.position.set(0, 1.0, 0.45); g.add(f); } break;
+      case 'idol': g.add(this.box(1.6, 0.6, 1.6, stone, 0, 0.3, 0)); g.add(this.box(0.9, 2.2, 0.8, this.mat(0x4a3a3a), 0, 1.7, 0)); g.add(this.box(1.2, 0.9, 0.9, this.mat(0x4a3a3a), 0, 3.2, 0)); g.add(this.box(0.2, 0.2, 0.1, this.mat(0xff3020, { emissive: 0xff2010, emissiveIntensity: 1 }), -0.3, 3.3, 0.46, false)); g.add(this.box(0.2, 0.2, 0.1, this.mat(0xff3020, { emissive: 0xff2010, emissiveIntensity: 1 }), 0.3, 3.3, 0.46, false)); break;
+      case 'stone': { const st = new THREE.Mesh(new THREE.DodecahedronGeometry(1.0, 1), stone); st.position.y = 0.8; st.scale.set(0.9, 1.4, 0.7); st.castShadow = true; g.add(st); for (let k = 0; k < 3; k++) g.add(this.box(0.5, 0.08, 0.08, gold, 0, 0.6 + k * 0.4, 0.7, false)); break; }
+      case 'egg': { const e = this.sphere(0.7, this.mat(0xe8d8b0, { emissive: 0x604020, emissiveIntensity: 0.3 }), 0, 0.9, 0, 14); e.scale.y = 1.4; g.add(e); g.add(this.cyl(1.2, 1.4, 0.4, wood, 0, 0.2, 0, 10)); break; }
+      case 'forge': g.add(this.box(2.2, 1.2, 1.6, this.mat(0x3a3a40), 0, 0.6, 0)); g.add(this.box(0.9, 0.7, 0.3, this.mat(0xff7020, { emissive: 0xff4000, emissiveIntensity: 1 }), 0, 0.6, 0.82, false)); g.add(this.cyl(0.3, 0.4, 1.8, this.mat(0x3a3a40), -0.6, 2.0, -0.4, 8)); g.add(this.box(0.9, 0.4, 0.5, this.mat(0x6a6e78), 0.6, 1.4, 0.2)); break;
+      case 'crown': g.add(this.cyl(0.9, 0.8, 0.5, stone, 0, 0.25, 0, 10)); g.add(this.cyl(0.5, 0.5, 0.3, gold, 0, 0.65, 0, 12)); for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; g.add(this.box(0.12, 0.35, 0.12, gold, Math.sin(a) * 0.45, 0.95, Math.cos(a) * 0.45, false)); } break;
+      default: g.add(this.box(1, 1, 1, gold, 0, 0.5, 0));
+    }
+    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    return g;
+  },
   skyDome() {
     const geo = new THREE.SphereGeometry(1000, 24, 12);
     const pos = geo.attributes.position; const colors = new Float32Array(pos.count * 3);
@@ -768,6 +846,50 @@ const Models = {
         const crown = this.sphere(0.45, gold, 0, 6.4, -0.5, 12); g.add(crown); g.userData.orb = crown;
         for (const [x, z] of [[-2.6, -2.6], [2.6, -2.6], [-2.6, 2.6], [2.6, 2.6]]) { g.add(this.cyl(0.25, 0.3, 5, this.plaster, x, 2.5, z, 10)); this.flag(g, x, 5, z, 0xd8b040); }
         g.userData.torches = [this.torch(g, -1.6, 3.4, 2.6), this.torch(g, 1.6, 3.4, 2.6)];
+        break;
+      }
+      case 'sun_forge': {
+        const gold = this.mat(0xe8b040, { emissive: 0x805000, emissiveIntensity: 0.5 }), dark = this.mat(0x3a3028);
+        g.add(this.box(5.6, 3.0, 5.0, dark, 0, 1.5, 0)); g.add(this.box(6.0, 0.4, 5.4, gold, 0, 3.2, 0));
+        g.add(this.cyl(0.6, 0.9, 3.2, dark, 0, 5.0, 0, 12));
+        const sun = this.sphere(1.4, this.mat(0xfff0a0, { emissive: 0xffc030, emissiveIntensity: 1.5 }), 0, 8.2, 0, 18); g.add(sun); g.userData.orb = sun;
+        for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2; const ray = this.cone(0.14, 1.6, gold, Math.sin(a) * 2.1, 8.2, Math.cos(a) * 2.1, 6); ray.rotation.set(0, 0, 0); ray.lookAt(new THREE.Vector3(Math.sin(a) * 6, 8.2, Math.cos(a) * 6)); ray.rotateX(Math.PI / 2); g.add(ray); }
+        g.add(this.box(2.2, 1.6, 0.3, this.mat(0xff9020, { emissive: 0xff5000, emissiveIntensity: 1.3 }), 0, 1.2, 2.52, false));
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.softDot(), color: 0xffd060, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending })); glow.scale.setScalar(9); glow.position.y = 8.2; g.add(glow);
+        g.userData.torches = [this.torch(g, -2.4, 2.4, 2.6), this.torch(g, 2.4, 2.4, 2.6)];
+        break;
+      }
+      case 'comet_shrine': {
+        const obsidian = this.mat(0x1a1a24), pale = this.mat(0xc0c8e0);
+        g.add(this.cyl(2.6, 2.9, 0.6, obsidian, 0, 0.3, 0, 8));
+        for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; g.add(this.box(0.5, 4.5 + (k % 2) * 1.5, 0.5, obsidian, Math.sin(a) * 2.3, 2.5, Math.cos(a) * 2.3)); }
+        g.add(new THREE.Mesh(new THREE.TorusGeometry(2.3, 0.15, 8, 30), pale).rotateX(Math.PI / 2).translateZ(-5.8));
+        const comet = new THREE.Group(); const core = this.sphere(0.7, this.mat(0xe0f0ff, { emissive: 0x80c0ff, emissiveIntensity: 1.4 }), 0, 0, 0, 14); comet.add(core);
+        const tail = this.cone(0.5, 3.0, this.mat(0x90c0ff, { emissive: 0x4080ff, emissiveIntensity: 0.9 }), 0, 0, -1.8, 8); tail.rotation.x = -Math.PI / 2; comet.add(tail);
+        comet.position.y = 8; g.add(comet); g.userData.orbiters = [comet];
+        break;
+      }
+      case 'heart_of_winter': {
+        const ice = this.mat(0xb0e8ff, { emissive: 0x60b0ff, emissiveIntensity: 0.7 }), frost = this.mat(0xe8f4ff);
+        g.add(this.cyl(2.8, 3.0, 0.8, frost, 0, 0.4, 0, 16));
+        for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; const ic = this.cone(0.3, 2.0 + (k % 3) * 0.8, ice, Math.sin(a) * 2.2, 1.6, Math.cos(a) * 2.2, 6); ic.rotation.set(Math.cos(a) * 0.3, 0, -Math.sin(a) * 0.3); g.add(ic); }
+        const heart = new THREE.Mesh(new THREE.OctahedronGeometry(2.0, 0), ice); heart.position.y = 5.2; heart.castShadow = true; g.add(heart); g.userData.orb = heart;
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.softDot(), color: 0xa0e0ff, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending })); glow.scale.setScalar(10); glow.position.y = 5.2; g.add(glow);
+        break;
+      }
+      case 'apotheosis': {
+        const gold = this.mat(0xffd860, { emissive: 0x806000, emissiveIntensity: 0.6 }), white = this.plaster;
+        g.add(this.box(6, 1.0, 6, white, 0, 0.5, 0)); g.add(this.box(4.8, 1.0, 4.8, white, 0, 1.5, 0)); g.add(this.box(3.6, 1.0, 3.6, gold, 0, 2.5, 0));
+        // a colossal figure of the King
+        const st = new THREE.Group(); st.position.y = 3; st.scale.setScalar(2.6);
+        st.add(this.cyl(0.3, 0.36, 1.2, gold, 0, 0.6, 0, 12)); st.add(this.cyl(0.42, 0.34, 1.1, gold, 0, 1.6, 0, 12)); st.add(this.sphere(0.32, gold, 0, 2.45, 0, 14));
+        for (const s of [-1, 1]) { const arm = this.cyl(0.11, 0.09, 1.0, gold, s * 0.55, 1.7, 0, 8); arm.rotation.z = s * 2.4; st.add(arm); }
+        st.add(this.cyl(0.32, 0.32, 0.18, gold, 0, 2.78, 0, 10)); for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; st.add(this.box(0.08, 0.28, 0.08, gold, Math.sin(a) * 0.3, 2.95, Math.cos(a) * 0.3, false)); }
+        g.add(st);
+        const halo = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.12, 8, 40), this.mat(0xffffff, { emissive: 0xffe080, emissiveIntensity: 1.5 })); halo.position.y = 10.2; g.add(halo); g.userData.orb = halo;
+        for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2 + 0.4; g.add(this.cyl(0.12, 0.25, 60, this.mat(0xfff8e0, { emissive: 0xffe0a0, emissiveIntensity: 1.2 }), Math.sin(a) * 2.6, 32, Math.cos(a) * 2.6, 6, false)); }
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.softDot(), color: 0xfff0c0, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending })); glow.scale.setScalar(18); glow.position.y = 7; g.add(glow);
+        const light = new THREE.PointLight(0xffe0a0, 2.0, 40, 1.4); light.position.y = 8; g.add(light); light.userData.base = 2.0; light.userData.phase = 2; g.userData.torches = [light];
         break;
       }
       case 'keep': {

@@ -101,11 +101,11 @@ class Grid {
 
   canPlace(def, i, j, rot, game) {
     const fp = this.footprint(def, i, j, rot);
-    const lim = DATA.BUILD_RADIUS;
+    const lim = DATA.BUILD_RANGE;
     for (const c of fp.cells) {
       if (!this.inBounds(c.i, c.j)) return { ok: false, reason: 'Out of bounds', cells: fp.cells };
       const w = this.cellToWorld(c.i, c.j);
-      if (!def.temporary && (Math.abs(w.x) > lim || Math.abs(w.z) > lim)) return { ok: false, reason: 'Outside the buildable area', cells: fp.cells };
+      if (!def.temporary && Math.hypot(w.x, w.z) > lim) return { ok: false, reason: 'Outside the buildable circle', cells: fp.cells };
       if (this.natural[this.idx(c.i, c.j)]) {
         const nk = this.natural[this.idx(c.i, c.j)];
         if (nk === 9 && def.tower) continue;   // a tower may stand on a summit

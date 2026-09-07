@@ -237,7 +237,7 @@ class NetHost {
       wave: { n: w.number, active: w.active, pending: w.pending.length, total: w.total || 0, preview: w.preview ? { n: w.preview.n, d: w.describe(w.preview), dirs: w.preview.dirs } : null },
       king: g.king ? g.king.id : 0, boss: g.boss && !g.boss.dead ? g.boss.id : 0,
       fallen: g.fallenHeroes.map(f => f.key),
-      code: this.code, chests: g.world ? g.world.chests.map(c => c.taken ? 1 : 0) : [],
+      code: this.code, chests: g.world ? g.world.chests.map(c => c.taken ? 1 : 0) : [], mis: g.missions ? g.missions.netState() : null,
       units: urec, bld, proj, zones, fx: this.fxQ, sfx: this.sfxQ, toasts: this.toastQ,
     };
     this.fxQ = []; this.sfxQ = []; this.toastQ = [];
@@ -366,6 +366,7 @@ class NetClient {
     if (s.players) { for (const p of s.players) { const w = g.players[p.id] || (g.players[p.id] = g.newWallet(p.id, p.name, p.hero)); w.name = p.name; w.hero = p.hero; w.gold = p.gold; w.heroes = p.heroes || []; w.heroesBought = p.heroesBought || 0; w.cap = p.cap; w.upgrades = p.upgrades || w.upgrades; w.autoRepair = !!p.autoRepair; } g.playerOrder = s.players.map(p => p.id); const me = g.players[g.localPlayer]; g.replicaCap = me ? me.cap : 0; }
     g.readySet = s.ready || [];
     if (s.chests && g.world) s.chests.forEach((tk, k) => { const ch = g.world.chests[k]; if (ch && tk && !ch.taken) { ch.taken = true; if (ch.mesh) ch.mesh.visible = false; } });
+    if (g.missions) g.missions.applyNet(s.mis || null);
     g.paused = s.paused; g.timeScale = s.timeScale;
     if (s.over && !g.over) { g.over = true; g.ui.showGameOver(); }
     const w = s.wave;

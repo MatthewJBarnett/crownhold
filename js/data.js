@@ -8,8 +8,10 @@ const DATA = {};
 DATA.CELL = 2;                                  // metres per grid cell
 DATA.GRID = 140;                                // cells per side (280m map)
 DATA.MAP_HALF = DATA.GRID * DATA.CELL / 2 - 1;  // hard clamp for unit positions
-DATA.BUILD_RADIUS = 92;                         // max |x|,|z| for building placement (metres)
-DATA.SPAWN_RADIUS = DATA.MAP_HALF - 1;          // enemy spawn ring radius: the very edge of the map
+DATA.BUILD_RADIUS = 92;                         // hills and decoration begin past this (metres)
+DATA.BUILD_RANGE = 104;                         // buildings may stand anywhere within this radius of the Keep
+DATA.SPAWN_RADIUS = DATA.MAP_HALF - 3;          // enemy spawn ring: the shore of the island
+DATA.MAP_RADIUS = DATA.MAP_HALF - 1;            // the island is a disc; beyond this is sea
 
 DATA.difficulties = {
   easy:   { label: 'Easy',   hp: 0.75, dmg: 0.75, budget: 0.75, gold: 1.25 },
@@ -193,7 +195,7 @@ DATA.enemies = {
                 attack: 'melee', large: true, scale: 1.35, color: 0x5a4a3a, cloth: 0x3a2a1a, weapon: 'club', skin: 0x6f8a4f },
   pyromancer: { key: 'pyromancer', name: 'Pyromancer', hp: 95, dmg: 24, range: 16, cd: 2.4, armor: 0, speed: 4.2, radius: 0.42, reward: 20, unlock: 5, weight: 3,
                 attack: 'ranged', projectile: 'fireball', splash: 2.6, magic: true, color: 0xb03a1a, cloth: 0x5a1a10, weapon: 'staff', robe: true, hat: true, skin: 0xd9b08c },
-  catapult:   { key: 'catapult', name: 'Catapult', hp: 320, dmg: 45, buildingDmg: 150, range: 26, minRange: 7, cd: 5.0, armor: 0.1, speed: 2.7, radius: 1.0, reward: 45, unlock: 7, weight: 1.5,
+  catapult:   { key: 'catapult', name: 'Catapult', hp: 320, dmg: 45, buildingDmg: 150, range: 26, minRange: 7, cd: 5.0, armor: 0.1, speed: 2.7, radius: 1.0, reward: 45, unlock: 4, weight: 1.5,
                 attack: 'artillery', projectile: 'boulder', splash: 3.2, large: true, prefersBuildings: true, model: 'catapult' },
   assassin:   { key: 'assassin', name: 'Assassin', hp: 85, dmg: 20, range: 2.0, cd: 0.55, armor: 0, speed: 8.2, radius: 0.4, reward: 15, unlock: 8, weight: 3,
                 attack: 'melee', prefersHeroes: true, color: 0x2a2a35, cloth: 0x1a1a22, weapon: 'dagger', hood: true, skin: 0xc9a58a },
@@ -217,7 +219,7 @@ DATA.enemies = {
                 attack: 'melee', deathCloud: { radius: 5, dps: 12, dur: 6 }, color: 0x5a7a3a, cloth: 0x3a4a2a, weapon: 'club', skin: 0x9ab070 },
   troll:      { key: 'troll', name: 'Troll', hp: 520, dmg: 36, range: 2.8, cd: 1.6, armor: 0.1, speed: 3.6, radius: 0.7, reward: 34, unlock: 15, weight: 2,
                 attack: 'melee', large: true, scale: 1.7, regen: 12, color: 0x4a6a4a, cloth: 0x3a3a2a, weapon: 'club', skin: 0x5a7a5a },
-  trebuchet:  { key: 'trebuchet', name: 'Trebuchet', hp: 520, dmg: 60, buildingDmg: 260, range: 34, minRange: 10, cd: 7.0, armor: 0.15, speed: 2.3, radius: 1.2, reward: 70, unlock: 16, weight: 1,
+  trebuchet:  { key: 'trebuchet', name: 'Trebuchet', hp: 520, dmg: 60, buildingDmg: 260, range: 34, minRange: 10, cd: 7.0, armor: 0.15, speed: 2.3, radius: 1.2, reward: 70, unlock: 12, weight: 1,
                 attack: 'artillery', projectile: 'boulder', splash: 3.6, large: true, scale: 1.35, prefersBuildings: true, model: 'catapult' },
   warlock:    { key: 'warlock', name: 'Warlock', hp: 140, dmg: 18, range: 17, cd: 2.2, armor: 0, speed: 4.0, radius: 0.42, reward: 34, unlock: 18, weight: 2,
                 attack: 'ranged', projectile: 'deathbolt', magic: true, kite: true, hex: { dmgMul: 0.5, dur: 5 }, color: 0x6a2a6a, cloth: 0x3a1a3a, weapon: 'staff', robe: true, hat: true, skin: 0xb090b0 },
@@ -225,6 +227,9 @@ DATA.enemies = {
                 attack: 'melee', model: 'spider', scale: 0.55, color: 0x3a2a3a },
   skeleton:   { key: 'skeleton', name: 'Skeleton', hp: 40, dmg: 8, range: 2.0, cd: 1.0, armor: 0, speed: 5.2, radius: 0.38, reward: 1, unlock: 99, weight: 0,
                 attack: 'melee', color: 0xe0e0d0, cloth: 0xe0e0d0, weapon: 'sword', skin: 0xe8e8d8, skeleton: true },
+  colossus:   { key: 'colossus', name: 'Siege Colossus', hp: 1600, dmg: 110, buildingDmg: 520, range: 44, minRange: 12, cd: 8.0, armor: 0.3, speed: 2.0, radius: 1.6, reward: 160, unlock: 20, weight: 0.8,
+                attack: 'artillery', projectile: 'boulder', splash: 5.5, large: true, scale: 1.9, prefersBuildings: true, model: 'catapult', deathBlast: { radius: 6, dmg: 150 },
+                desc: 'A war engine the size of a house. Out-ranges every tower, flattens walls with 520-damage shot that splashes 5.5m, and explodes when destroyed.' },
   // added later: commanders, siege, swarms, spectres
   warchief:   { key: 'warchief', name: 'Warchief', hp: 420, dmg: 24, range: 2.6, cd: 1.2, armor: 0.3, speed: 4.6, radius: 0.55, reward: 60, unlock: 8, weight: 1.2,
                 attack: 'melee', large: true, scale: 1.25, warAura: { radius: 11, dmgMul: 1.25, speedMul: 1.15 }, color: 0x8a3a2a, cloth: 0x4a1a1a, weapon: 'axe', helmet: true, plume: true, skin: 0x8fa86a,
@@ -306,6 +311,30 @@ DATA.contracts = {
   hero:     { key: 'hero', name: 'Champion\'s Due', desc: 'A hero lands the killing blow on 8 enemies.', reward: (n) => 150 + 20 * n, need: 8 },
   casters:  { key: 'casters', name: 'Silence the Chanting', desc: 'Kill 4 casters (shamans, pyromancers, witches, warlocks, necromancers, wraiths).', reward: (n) => 160 + 22 * n, need: 4 },
 };
+// King's errands: an objective far from the keep that only the King can deal with, gone when the wave ends
+DATA.missions = [
+  { key: 'payroll', tier: 1, type: 'fetch', name: 'The Lost Payroll', model: 'chest', text: 'A paymaster fled with the garrison\'s strongbox and dropped it on the shore. The King must fetch it back to the Keep.', reward: { gold: (n) => 220 + 40 * n } },
+  { key: 'beacon', tier: 1, type: 'work', work: 6, name: 'The Cold Beacon', model: 'beacon', text: 'The signal beacon has gone out. Only the King may light it: stand beside it for 6 seconds.', reward: { units: ['swordsman', 4] } },
+  { key: 'captives', tier: 1, type: 'touch', name: 'The Captives', model: 'cage', text: 'Raiders left prisoners caged near the water. The King must reach the cage.', reward: { units: ['archer', 3] } },
+  { key: 'herbs', tier: 1, type: 'fetch', name: 'The Herbalist\'s Satchel', model: 'satchel', text: 'A satchel of healing herbs lies where the herbalist fell. Bring it home and the King will keep some of its virtue.', reward: { kingRegen: 3 } },
+  { key: 'well', tier: 1, type: 'work', work: 8, name: 'The Poisoned Well', model: 'well', text: 'The old well is fouled. The King must purify it: 8 seconds at its side. Every defender will drink from it.', reward: { healAll: true, kingHp: 60 } },
+  { key: 'offering', tier: 1, type: 'touch', name: 'The Wayside Shrine', model: 'shrine', text: 'A wayside shrine waits for a royal offering. Reach it and its priests will raise a Healing Shrine for you at no cost.', reward: { token: 'shrine' } },
+  { key: 'idol', tier: 2, type: 'work', work: 10, name: 'The War Idol', model: 'idol', text: 'The raiders pray to a stone idol on the far side of the belts. If the King smashes it (10 seconds), the next wave loses heart.', reward: { nextWave: 0.85 } },
+  { key: 'engineer', tier: 2, type: 'touch', name: 'The Marooned Engineers', model: 'cage', text: 'Two royal engineers are hiding in a wreck. The King must find them.', reward: { units: ['engineer', 2] } },
+  { key: 'armory', tier: 2, type: 'fetch', name: 'The Armoury Cache', model: 'chest', text: 'A cache of fine steel lies abandoned. Bring it to the Keep for a free level of Weapon Smithing.', reward: { upgrade: 'weapons' } },
+  { key: 'survey', tier: 2, type: 'touch', name: 'The Survey Stone', model: 'stone', text: 'The old surveyors\' stone marks the best ground for a lookout. Reach it and a Watchtower is yours to place for free.', reward: { token: 'watchtower' } },
+  { key: 'siegecache', tier: 2, type: 'fetch', name: 'The Siege Cache', model: 'chest', text: 'A crate of ballista parts. Carry it home for a free Ballista Tower.', reward: { token: 'ballista_tower' } },
+  { key: 'traitor', tier: 2, type: 'fetch', heavy: true, name: 'The Traitor\'s Chest', model: 'chest', text: 'A traitor\'s hoard, too heavy to carry quickly. The King must lug it back to the Keep himself.', reward: { gold: (n) => 500 + 60 * n } },
+  { key: 'relic', tier: 2, type: 'work', work: 12, name: 'The Relic of Kings', model: 'stone', text: 'A relic of the old kings lies buried. Dig for 12 seconds and Royal Decree recharges twice as fast forever.', reward: { kingCd: 0.5 } },
+  { key: 'egg', tier: 3, type: 'fetch', name: 'The Dragon Egg', model: 'egg', text: 'A dragon egg, warm and heavy, lies on the shore. Carry it to the Keep and it hatches for the realm.', reward: { units: ['tamedragon', 1] } },
+  { key: 'losthero', tier: 3, type: 'touch', name: 'The Lost Champion', model: 'cage', text: 'A champion of the realm is chained out there. Reach them and they join you.', reward: { hero: true } },
+  { key: 'forge', tier: 3, type: 'work', work: 15, name: 'The Ancient Forge', model: 'forge', text: 'Dwarven work, cold for centuries. Tend it for 15 seconds: a free level of Tower Engineering and of Masonry.', reward: { upgrades: ['towers', 'walls'] } },
+  { key: 'blueprint', tier: 3, type: 'fetch', name: 'The Wonder Blueprint', model: 'satchel', text: 'Plans in a dead architect\'s satchel. Bring them home and your next wonder costs 30% less.', reward: { wonderDiscount: 0.3 } },
+  { key: 'totem', tier: 3, type: 'work', work: 12, name: 'The Cursed Totem', model: 'idol', text: 'A totem that hardens the horde. Break it (12 seconds) and every enemy from now on has 5% less health.', reward: { enemyHp: 0.95 } },
+  { key: 'crown', tier: 3, type: 'fetch', name: 'The Old Crown', model: 'crown', text: 'The crown of the first king, lost in the marsh. Wear it: +25% damage and +500 health for the King, forever.', reward: { kingHp: 500, kingDmg: 0.25 } },
+  { key: 'feather', tier: 3, type: 'touch', name: 'The Phoenix Feather', model: 'egg', text: 'A feather that burns without ash. Reach it and every fallen hero of the realm returns at once, free.', reward: { heroesBack: true } },
+];
+DATA.missionChance = (n) => n < 2 ? 0 : 0.6;
 DATA.heroXp = (level) => Math.round(90 * Math.pow(level, 1.45));
 DATA.heroMaxLevel = 10;
 
@@ -404,12 +433,20 @@ DATA.buildings.doomsday_engine = { key: 'doomsday_engine', name: 'Doomsday Engin
   desc: 'Every 60s it detonates: every enemy on the map takes 600 damage (bosses 300). Enemies within 40m burn for 25 damage a second all the time.' };
 DATA.buildings.throne_of_ages = { key: 'throne_of_ages', name: 'Throne of Ages', cost: 30000, hp: 5000, w: 3, d: 3, cat: 'wonder', unique: true, throne: { kingHp: 5000, kingRegen: 100, towerDmg: 1.5, soldierDmg: 1.5, income: 2 },
   desc: 'The King gains 5000 HP and heals 100 a second, your towers and soldiers hit 50% harder, and your farms and mines pay double.' };
+DATA.buildings.sun_forge = { key: 'sun_forge', name: 'Solar Forge', cost: 45000, hp: 4000, w: 3, d: 3, cat: 'wonder', unique: true, towerBoost: { cd: 0.5, range: 1.4 }, globalStats: true,
+  desc: 'The sun itself is your smith: every tower of yours fires twice as fast and reaches 40% further.' };
+DATA.buildings.comet_shrine = { key: 'comet_shrine', name: 'Comet Shrine', cost: 65000, hp: 4000, w: 3, d: 3, cat: 'wonder', unique: true, comet: { every: 45, dmg: 3000, radius: 12 }, meteorRain: { every: 4, dmg: 320, splash: 4 },
+  desc: 'Every 45s a comet obliterates the thickest crowd anywhere on the island: 3000 damage across 12m. Between comets a meteor falls on a random enemy every 4s.' };
+DATA.buildings.heart_of_winter = { key: 'heart_of_winter', name: 'Heart of Winter', cost: 90000, hp: 5000, w: 3, d: 3, cat: 'wonder', unique: true, slowField: { radius: 400, factor: 0.6 }, brittle: 1.3, freeze: { every: 40, radius: 400, dur: 6 }, globalStats: true,
+  desc: 'The whole island freezes. Every enemy anywhere moves and fights 60% slower and takes 30% more damage, and every 40s everything hostile freezes solid for 6s.' };
+DATA.buildings.apotheosis = { key: 'apotheosis', name: 'The Apotheosis', cost: 250000, hp: 20000, w: 3, d: 3, cat: 'wonder', unique: true, apotheosis: { burn: 0.10, bossBurn: 0.05, skyEvery: 20, bossSky: 0.5, bounty: 10, towerCd: 0.33 }, globalStats: true,
+  desc: 'The King ascends. Every enemy that sets foot on the island burns for a tenth of its entire life every second (bosses a twentieth): nothing survives ten seconds. Your soldiers, your heroes and the Keep cannot die. Every bounty pays tenfold. Every tower fires three times as fast. And every 20s the sky opens and everything hostile on the island that is not a boss simply ceases to exist, while bosses lose half their life. There is nothing above this.' };
 DATA.units.angel = { key: 'angel', name: 'Celestial Warrior', hp: 650, dmg: 70, range: 2.6, cd: 0.8, armor: 0.3, speed: 9, radius: 0.5, attack: 'melee', cleave: true, flying: true, altitude: 1.2, wings: true, noCap: true, summoned: true, color: 0xfff0c0, cloth: 0xffffff, weapon: 'sword', helmet: true, skin: 0xffe8d0 };
 DATA.units.tamedragon = { key: 'tamedragon', name: 'Tame Dragon', hp: 3200, dmg: 70, range: 7, cd: 1.2, armor: 0.3, speed: 7.5, radius: 1.6, attack: 'ranged', projectile: 'fireball', splash: 3.5, magic: true, flying: true, altitude: 6, large: true, model: 'dragon', scale: 0.9, noCap: true, guardian: true, color: 0x8a2a2a, cloth: 0x5a1a1a, breath: { range: 12, dps: 150, dur: 0.2, every: 0 }, noViewWeapon: true,
   desc: 'The roost\'s dragon. Flies over walls and breathes splashing fire.' };
 DATA.units.irongolem = { key: 'irongolem', name: 'Iron Titan', hp: 5500, dmg: 110, range: 3.2, cd: 2.0, armor: 0.5, speed: 3.4, radius: 1.1, attack: 'melee', cleave: true, large: true, scale: 2.2, noCap: true, guardian: true, color: 0x6a6e78, cloth: 0x4a4e58, weapon: 'club', helmet: true, skin: 0x8a8e98,
   desc: 'The forge\'s titan. Slow, armoured, cleaves everything in reach.' };
-DATA.buildOrder = ['wall', 'barricade', 'gate', 'trap', 'arrow_tower', 'ballista_tower', 'mage_tower', 'frost_tower', 'cannon_tower', 'lightning_tower', 'poison_tower', 'watchtower', 'barracks', 'farm', 'mine', 'blacksmith', 'shrine', 'market', 'tavern', 'royal_treasury', 'sun_altar', 'arcane_spire', 'dragon_roost', 'titan_forge', 'storm_crown', 'phoenix_pyre', 'world_tree', 'time_anchor', 'celestial_gate', 'doomsday_engine', 'throne_of_ages'];
+DATA.buildOrder = ['wall', 'barricade', 'gate', 'trap', 'arrow_tower', 'ballista_tower', 'mage_tower', 'frost_tower', 'cannon_tower', 'lightning_tower', 'poison_tower', 'watchtower', 'barracks', 'farm', 'mine', 'blacksmith', 'shrine', 'market', 'tavern', 'royal_treasury', 'sun_altar', 'arcane_spire', 'dragon_roost', 'titan_forge', 'storm_crown', 'phoenix_pyre', 'world_tree', 'time_anchor', 'celestial_gate', 'doomsday_engine', 'throne_of_ages', 'sun_forge', 'comet_shrine', 'heart_of_winter', 'apotheosis'];
 
 DATA.towerUpgrade = { maxLevel: 3, dmg: 1.4, range: 1.1, hp: 1.3, costMul: 0.8 };
 
@@ -441,14 +478,11 @@ DATA.waves = {
   maxCount: 130,
 };
 
+DATA.compass = ['North', 'North-East', 'East', 'South-East', 'South', 'South-West', 'West', 'North-West'];
+DATA.compassName = (ang) => DATA.compass[((Math.round((ang + Math.PI / 2) / (Math.PI / 4)) % 8) + 8) % 8];
 DATA.spawnPoints = (() => {
-  const R = DATA.SPAWN_RADIUS, D = R - 2;          // diagonals sit in the corners
-  return [
-    { name: 'North', x: 0, z: -R },      { name: 'North-East', x: D, z: -D },
-    { name: 'East', x: R, z: 0 },        { name: 'South-East', x: D, z: D },
-    { name: 'South', x: 0, z: R },       { name: 'South-West', x: -D, z: D },
-    { name: 'West', x: -R, z: 0 },       { name: 'North-West', x: -D, z: -D },
-  ];
+  const R = DATA.SPAWN_RADIUS;
+  return DATA.compass.map((name, k) => { const a = -Math.PI / 2 + k * Math.PI / 4; return { name, x: Math.round(Math.cos(a) * R * 10) / 10, z: Math.round(Math.sin(a) * R * 10) / 10, ang: a }; });
 })();
 
 DATA.mapTypes = {

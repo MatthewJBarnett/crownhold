@@ -6,7 +6,7 @@
 <title>Crownhold</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=c57296b2">
+<link rel="stylesheet" href="css/style.css?v=11c81449">
 </head>
 <body>
 <div id="game"></div>
@@ -152,6 +152,7 @@
           <li>High-ground summits beside the lanes take a tower each: +30% range, +15% damage, and melee cannot reach them (artillery, archers and harpies can)</li>
           <li>Wonders at the bottom of the Build panel are ruinously expensive and absurdly strong, from a treasury that pays interest up to the Throne of Ages</li>
           <li>The wave preview names the wave's modifier (night, fog, frenzy, swarm, siege...) and its contract, a goal paid to every defender. Elites wear a coloured ring and pay double. Heroes level up from their kills</li>
+          <li>King's errands: a beam of light marks something far away that only the King can fetch, reach or work on. Optional, gone when the wave ends, and richly rewarded</li>
           <li>The Keep shelters units inside from ranged attacks, and units inside cannot shoot out either. The King fights back if enemies get in</li>
           <li>Catapults out-range your towers: send a hero or cavalry of swordsmen to kill them</li>
           <li>A fallen hero stays dead until you buy them back; there is only ever one of each hero. A fallen King ends the game</li>
@@ -183,7 +184,7 @@
     <div class="setrow"><label>Sound volume</label><input type="range" class="vol" min="0" max="100" step="5" value="50"><span class="volval">50%</span></div>
     <div class="setrow"><label>Shadows</label><label class="chk"><input type="checkbox" class="shadows" checked> On (turn off on slow machines)</label></div>
     <div class="setrow"><label>Glow &amp; colour</label><label class="chk"><input type="checkbox" class="bloom" checked> On (bloom and colour grading; turn off on slow machines)</label></div>
-    <div class="setrow experiments"><label>Experiments</label><div><button class="spawncheat">Spawn a test champion</button><div class="hint">For testing only: an immortal hero with absurd stats, so you can reach the late waves without effort. Press again for another. Only the host can do this in co-op.</div></div></div>
+    <div class="setrow experiments"><label>Experiments</label><div><button class="spawncheat">Spawn a test champion</button> <input type="number" class="goldamt" value="10000" min="1" max="10000000" step="1000" style="width:110px"> <button class="goldcheat">Add gold</button><div class="hint">For testing only: an immortal hero with absurd stats, and gold on demand, so you can reach the late waves without effort. Only the host can do this in co-op.</div></div></div>
     <div class="setrow"><label>Frame rate</label><label class="chk"><input type="checkbox" class="showfps"> Show a frames-per-second counter</label></div>
     <p class="hint">In play: <kbd>[</kbd> <kbd>]</kbd> also change sensitivity, <kbd>M</kbd> mutes, <kbd>O</kbd> opens this screen.</p>
     <button id="settingsclose" class="big">Done</button>
@@ -213,20 +214,21 @@ window.addEventListener('error', function (e) {
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script src="js/data.js?v=c57296b2"></script>
-<script src="js/util.js?v=c57296b2"></script>
-<script src="js/audio.js?v=c57296b2"></script>
-<script src="js/grid.js?v=c57296b2"></script>
-<script src="js/map.js?v=c57296b2"></script>
-<script src="js/models.js?v=c57296b2"></script>
-<script src="js/entities.js?v=c57296b2"></script>
-<script src="js/ai.js?v=c57296b2"></script>
-<script src="js/abilities.js?v=c57296b2"></script>
-<script src="js/waves.js?v=c57296b2"></script>
-<script src="js/controls.js?v=c57296b2"></script>
-<script src="js/post.js?v=c57296b2"></script>
-<script src="js/net.js?v=c57296b2"></script>
-<script src="js/ui.js?v=c57296b2"></script>
-<script src="js/game.js?v=c57296b2"></script>
+<script src="js/data.js?v=11c81449"></script>
+<script src="js/util.js?v=11c81449"></script>
+<script src="js/audio.js?v=11c81449"></script>
+<script src="js/grid.js?v=11c81449"></script>
+<script src="js/map.js?v=11c81449"></script>
+<script src="js/models.js?v=11c81449"></script>
+<script src="js/entities.js?v=11c81449"></script>
+<script src="js/ai.js?v=11c81449"></script>
+<script src="js/abilities.js?v=11c81449"></script>
+<script src="js/waves.js?v=11c81449"></script>
+<script src="js/controls.js?v=11c81449"></script>
+<script src="js/post.js?v=11c81449"></script>
+<script src="js/missions.js?v=11c81449"></script>
+<script src="js/net.js?v=11c81449"></script>
+<script src="js/ui.js?v=11c81449"></script>
+<script src="js/game.js?v=11c81449"></script>
 </body>
 </html>

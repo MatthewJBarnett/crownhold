@@ -68,11 +68,11 @@ class Game {
     this.sunDisc = Models.sunDisc(); this.sunDisc.position.copy(this.sunOffset).normalize().multiplyScalar(820); scene.add(this.sunDisc);
     this.decor = new THREE.Group(); scene.add(this.decor);
     this.buildDecor();
-    const gh = new THREE.GridHelper(DATA.BUILD_RADIUS * 2 + 2, DATA.BUILD_RADIUS + 1, 0x335533, 0x335533);
+    const gh = new THREE.GridHelper(DATA.BUILD_RANGE * 2 + 2, DATA.BUILD_RANGE + 1, 0x335533, 0x335533);
     gh.material.transparent = true; gh.material.opacity = 0.35; gh.position.y = 0.04; gh.visible = false;
     scene.add(gh); this.gridHelper = gh;
     // buildable-area outline
-    const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(DATA.BUILD_RADIUS * 2 + 2, DATA.BUILD_RADIUS * 2 + 2)), new THREE.LineBasicMaterial({ color: 0x224422, transparent: true, opacity: 0.5 }));
+    const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.RingGeometry(DATA.BUILD_RANGE - 0.15, DATA.BUILD_RANGE + 0.15, 96)), new THREE.LineBasicMaterial({ color: 0x224422, transparent: true, opacity: 0.5 }));
     outline.rotation.x = -Math.PI / 2; outline.position.y = 0.05; outline.visible = false;
     scene.add(outline); this.buildOutline = outline;
     // command marker
@@ -84,7 +84,7 @@ class Game {
   }
   buildDecor() {
     // forest border with instanced meshes
-    const N = 700, H = DATA.MAP_HALF;
+    const N = 0, H = DATA.MAP_HALF;
     const trunkGeo = new THREE.CylinderGeometry(0.18, 0.36, 2.8, 9), leafGeo = Models.canopyGeometry(this.worldType === 'valley' || this.worldType === 'highlands' ? 'round' : 'pine');
     const trunks = new THREE.InstancedMesh(trunkGeo, Models.mat(0x5a3a22), N);
     const leaves = new THREE.InstancedMesh(leafGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), N);
@@ -107,15 +107,15 @@ class Game {
     }
     trunks.instanceMatrix.needsUpdate = true; leaves.instanceMatrix.needsUpdate = true;
     if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
-    this.decor.add(trunks); this.decor.add(leaves);
+    if (N > 0) { this.decor.add(trunks); this.decor.add(leaves); }
     // scattered rocks and small trees in the approach ring
     // they sit on their own cell, which becomes an obstacle: nothing you can walk into is walkable
     const g = this.grid, w = this.world;
     let placed = 0, guard = 0;
     if (!g) return;   // the first decor pass runs before a world exists
     while (placed < 70 && guard++ < 600) {
-      const x = U.rand(-H + 3, H - 3), z = U.rand(-H + 3, H - 3), r = Math.max(Math.abs(x), Math.abs(z));
-      if (r < DATA.BUILD_RADIUS + 3 || r > H - 3) continue;
+      const x = U.rand(-H + 3, H - 3), z = U.rand(-H + 3, H - 3), r = Math.hypot(x, z);
+      if (r < DATA.BUILD_RADIUS + 3 || r > DATA.MAP_RADIUS - 6) continue;
       const c = g.worldToCell(x, z), k = g.idx(c.i, c.j);
       if (g.flag[k] !== CELL_FREE || g.natural[k] || g.terrain[k] || (w && w.laneCells && w.laneCells.has(k))) continue;
       if (DATA.spawnPoints.some(sp => U.dist(sp.x, sp.z, x, z) < 14)) continue;
@@ -152,6 +152,7 @@ class Game {
   towerRangeFor(def, level = 1) { return def.range * (1 + 0.08 * (this.upgrades.towers || 0)) * Math.pow(DATA.towerUpgrade.range, level - 1); }
   groundY(x, z) { return this.world ? this.world.walkY(x, z) : 0; }
   setBloom(on) { this.bloomOn = !!on; this.savePref('bloom', on ? '1' : '0'); }
+  ensureMissions() { if (!this.missions) this.missions = new MissionManager(this); else this.missions.reset(); this.realm = null; this.freeTokens = null; }
   // draws the frame, through the bloom/grading pipeline when it is on
   renderFrame() {
     if (this.bloomOn && typeof Post !== 'undefined') {
@@ -159,6 +160,13 @@ class Game {
       catch (e) { console.warn('post-processing off:', e); this.bloomOn = false; this.renderer.setRenderTarget(null); }
     }
     this.renderer.render(this.scene, this.camera);
+  }
+  cheatGold(n) {
+    if (!this.started || this.over) { this.ui.toast('Start a game first', 'error'); return; }
+    if (this.replica) { this.ui.toast('Only the host can add gold', 'error'); return; }
+    if (!isFinite(n) || n <= 0) return;
+    this.addGold(Math.floor(n), this.localPlayer);
+    this.ui.toast(`Experiments: +${Math.floor(n)} gold`, 'good'); this.ui.dirty = true;
   }
   // experiments: an immortal, absurdly strong hero for reaching late waves. Not a real hero: never unique, never bought back
   spawnTestChampion() {
@@ -265,6 +273,7 @@ class Game {
   newGame(heroKey, difficultyKey, opts = {}) {
     this.reset();
     this.setWorld(opts.seed !== undefined ? opts.seed : (Math.random() * 0xffffffff) >>> 0, opts.mapType || this.ui.selectedMap || 'random');
+    this.ensureMissions();
     this.difficulty = DATA.difficulties[difficultyKey] || DATA.difficulties.normal;
     this.difficultyKey = difficultyKey;
     const roster = opts.players || [{ id: 'host', name: this.players.host ? this.players.host.name : 'You', hero: heroKey }];
@@ -369,8 +378,8 @@ class Game {
   applyStats(u, initial) {
     const def = u.def, up = this.upgradesFor(u.owner), diff = this.difficulty, pid = u.owner || 'host';
     let hpMul = 1, dmgMul = 1, armorAdd = 0, regen = def.regen || 0;
-    if (u.team === 'enemy') { hpMul = u.hpMul * (u.affix && u.affix.hp ? u.affix.hp : 1); dmgMul = diff.dmg * (u.affix && u.affix.dmg ? u.affix.dmg : 1); armorAdd = (u.affix && u.affix.armor ? u.affix.armor : 0) + (u.modArmor || 0); }
-    else if (u.isKing) { hpMul = 1 + 0.25 * (up.royal || 0); regen += 2 * (up.royal || 0); if (this.hasActive('throne_of_ages')) { hpMul += DATA.buildings.throne_of_ages.throne.kingHp / def.hp; regen += DATA.buildings.throne_of_ages.throne.kingRegen; } }
+    if (u.team === 'enemy') { hpMul = u.hpMul * (u.affix && u.affix.hp ? u.affix.hp : 1) * (this.realm ? this.realm.enemyHp || 1 : 1); dmgMul = diff.dmg * (u.affix && u.affix.dmg ? u.affix.dmg : 1); armorAdd = (u.affix && u.affix.armor ? u.affix.armor : 0) + (u.modArmor || 0); }
+    else if (u.isKing) { hpMul = 1 + 0.25 * (up.royal || 0); regen += 2 * (up.royal || 0); if (this.realm) { hpMul += (this.realm.kingHp || 0) / def.hp; regen += this.realm.kingRegen || 0; dmgMul *= 1 + (this.realm.kingDmg || 0); } if (this.hasActive('throne_of_ages')) { hpMul += DATA.buildings.throne_of_ages.throne.kingHp / def.hp; regen += DATA.buildings.throne_of_ages.throne.kingRegen; } }
     else if (u.isHero) { const lv = (u.level || 1) - 1; hpMul = (1 + 0.15 * (up.hero || 0)) * (1 + 0.07 * lv); dmgMul = (1 + 0.15 * (up.hero || 0)) * (1 + 0.06 * lv); }
     else if (u.isSoldier) { dmgMul = (1 + 0.15 * (up.weapons || 0)) * (this.hasActive('blacksmith', pid) ? 1 + DATA.buildings.blacksmith.soldierDmg : 1) * (this.hasActive('throne_of_ages', pid) ? DATA.buildings.throne_of_ages.throne.soldierDmg : 1); armorAdd = 0.08 * (up.armor || 0); }
     const frac = initial ? 1 : u.hp / u.maxHp;
@@ -396,7 +405,13 @@ class Game {
       b.dmg = def.dmg * (1 + 0.2 * (up.towers || 0)) * Math.pow(DATA.towerUpgrade.dmg, b.level - 1) * (b.high ? 1.15 : 1);
       b.range = def.range * (1 + 0.08 * (up.towers || 0)) * Math.pow(DATA.towerUpgrade.range, b.level - 1) * (b.high ? 1.3 : 1) * (this.waveMod && this.waveMod.towerRange ? this.waveMod.towerRange : 1);
       b.cd = def.cd;
+      if (this.hasActive('sun_forge', b.owner)) { b.cd *= DATA.buildings.sun_forge.towerBoost.cd; b.range *= DATA.buildings.sun_forge.towerBoost.range; }
+      if (this.hasActive('apotheosis')) b.cd *= DATA.buildings.apotheosis.apotheosis.towerCd;
     }
+  }
+  // cached once or twice a second: global effects of the top wonders
+  refreshFlags() {
+    this.flags = { brittle: this.hasActive('heart_of_winter') ? DATA.buildings.heart_of_winter.brittle : 1, apo: this.hasActive('apotheosis') };
   }
   refreshStats() {
     for (const u of this.units) if (!u.dead) this.applyStats(u, false);
@@ -465,7 +480,7 @@ class Game {
   spend(c, pid) { const w = this.wallet(pid); if (w) w.gold -= c; this.ui.dirty = true; }
   addGold(n, pid) { const w = this.wallet(pid); if (w) w.gold += n; this.stats.goldEarned += n; this.ui.dirty = true; }
   addGoldAll(n) { for (const id of this.playerOrder) { const w = this.players[id]; if (w) w.gold += n; } this.stats.goldEarned += n; this.ui.dirty = true; }
-  killMult(pid) { return this.difficulty.gold * (this.waveMod && this.waveMod.bounty ? this.waveMod.bounty : 1) * (1 + (this.hasActive('market', pid) ? DATA.buildings.market.killBonus : 0) + (this.hasActive('royal_treasury', pid) ? DATA.buildings.royal_treasury.bounty : 0)) * (1 + 0.1 * (this.upgradesFor(pid).fortune || 0)); }
+  killMult(pid) { return this.difficulty.gold * (this.flags && this.flags.apo ? DATA.buildings.apotheosis.apotheosis.bounty : 1) * (this.waveMod && this.waveMod.bounty ? this.waveMod.bounty : 1) * (1 + (this.hasActive('market', pid) ? DATA.buildings.market.killBonus : 0) + (this.hasActive('royal_treasury', pid) ? DATA.buildings.royal_treasury.bounty : 0)) * (1 + 0.1 * (this.upgradesFor(pid).fortune || 0)); }
   // ---- wave modifiers
   setWaveMod(mod) {
     this.waveMod = mod || null;
@@ -562,6 +577,8 @@ class Game {
   upgradeCost(key, pid) { const d = DATA.upgrades[key]; return Math.round(d.cost * Math.pow(DATA.upgradeCostGrowth, (this.upgradesFor(pid || this.localPlayer)[key] || 0))); }
   // buildings with costGrowth get pricier for every one you already own (destroyed ones do not count)
   buildingCost(def) {
+    if (this.freeTokens && this.freeTokens[def.key] > 0) return 0;
+    if (def.cat === 'wonder' && this.realm && this.realm.wonderDiscount) return Math.round(def.cost * (1 - this.realm.wonderDiscount));
     if (!def.costGrowth && !def.costLinear) return def.cost;
     const n = this.buildings.filter(b => b.def.key === def.key && !b.dead && b.paid > 0).length;
     return Math.round(def.cost * (def.costGrowth ? Math.pow(def.costGrowth, n) : 1) * (1 + (def.costLinear || 0) * n));
@@ -582,7 +599,9 @@ class Game {
     b.high = res.cells.every(c => this.grid.natural[this.grid.idx(c.i, c.j)] === 9);
     if (b.high) this.applyBuildingStats(b, true);
     b.paid = free ? 0 : cost;
-    if (def.throne) this.refreshStats();
+    if (!free && this.freeTokens && this.freeTokens[def.key] > 0) { this.freeTokens[def.key]--; this.ui.toast(`${def.name} placed for free (King's errand)`, 'good'); }
+    if (!free && def.cat === 'wonder' && this.realm && this.realm.wonderDiscount) { this.realm.wonderDiscount = 0; }
+    if (def.throne || def.globalStats) { this.refreshStats(); this.refreshFlags(); }
     b.owner = free ? null : this.actor;
     this.grid.place(b);
     this.buildings.push(b);
@@ -805,7 +824,7 @@ class Game {
         if (pyre) { this.revives = this.revives || []; this.revives.push({ def: u.def, owner: u.owner, hero: u.isHero, heroKey: u.heroKey, level: u.level, xp: u.xp, at: this.time + 3, wave: this.waves.number, pyre }); }
       }
       if (u.isKing) { this.gameOver(); }
-      else if (u.isHero) { const w = this.wallet(u.owner || 'host'); w.heroes = w.heroes.filter(k => k !== u.heroKey); this.ui.toast(`${u.name} has fallen. Buy them back from the Recruit tab if you want them again.`, 'error', 6000); }
+      else if (u.isHero) { const w = this.wallet(u.owner || 'host'); w.heroes = w.heroes.filter(k => k !== u.heroKey); w.heroesLost = w.heroesLost || []; if (!w.heroesLost.includes(u.heroKey)) w.heroesLost.push(u.heroKey); this.ui.toast(`${u.name} has fallen. Buy them back from the Recruit tab if you want them again.`, 'error', 6000); }
     }
     if (this.controls.controlled === u) this.controls.exitControl();
     if (u.selected) { u.selected = false; this.controls.selected.delete(u); this.ui.onSelectionChanged(); }
@@ -823,11 +842,12 @@ class Game {
     if (this.controls.selectedBuilding === b) this.controls.clearSelection();
     if (this.controls.hoveredBuilding === b) this.controls.hoveredBuilding = null;
     for (const u of this.units) if (u.repairTarget === b) u.repairTarget = null;
-    if (b.def.soldierCap || b.def.key === 'blacksmith' || b.def.throne) this.refreshStats();
+    if (b.def.soldierCap || b.def.key === 'blacksmith' || b.def.throne || b.def.globalStats) { this.refreshStats(); this.refreshFlags(); }
     SFX.play('explode', 0.8);
     this.ui.dirty = true;
   }
   onWaveCleared(n) {
+    if (this.missions) this.missions.expire();
     this.settleContract(n);
     this.setWaveMod(null);
     let income = 0;
@@ -916,7 +936,7 @@ class Game {
     t.addScaledVector(this.sunRight, sx).addScaledVector(this.sunUp, sy);
     this.sun.target.position.copy(t); this.sun.position.copy(t).add(this.sunOffset);
     if (this.clouds) { this.clouds.position.x = (this.clouds.position.x + realDt * 0.6) % 60; }
-    if (this.world && this.world.water && this.world.water.material.map) { const off = this.world.water.material.map.offset; off.x += realDt * 0.01; off.y += realDt * 0.006; const bm = this.world.water.material.bumpMap; if (bm) { bm.offset.x -= realDt * 0.016; bm.offset.y += realDt * 0.011; } }
+    if (this.world && this.world.water && this.world.water.material.uniforms) { const un = this.world.water.material.uniforms; un.time.value += realDt * (this.paused ? 0.3 : 1); if (this.sun) un.sunDir.value.copy(this.sunOffset).normalize(); }
     if (!this.paused) this.tickParticles(realDt * Math.min(1, this.timeScale || 1));
     for (const b of this.buildings) { const tl = b.group && b.group.userData.torches; if (tl) for (const l of tl) { const fl = 0.75 + 0.25 * Math.sin(this.time * 17 + l.userData.phase) * Math.sin(this.time * 7.3 + l.userData.phase * 2); l.intensity = l.userData.base * fl; if (l.userData.flame) l.userData.flame.scale.setScalar(0.85 + 0.3 * fl); } }
     if (this.markerT > 0) { this.markerT -= realDt; this.marker.scale.setScalar(0.6 + (1 - this.markerT / 0.7) * 1.5); this.marker.material.opacity = Math.max(0, this.markerT); if (this.markerT <= 0) this.marker.visible = false; }
@@ -925,6 +945,8 @@ class Game {
   update(dt) {
     this.time += dt;
     if (this.revives && this.revives.length) this.tickRevives();
+    if (this.missions) this.missions.update(dt);
+    if (!this.flags || (this.flagT = (this.flagT || 0) + dt) > 0.7) { this.flagT = 0; this.refreshFlags(); }
     const prof = this.prof || (this.prof = { hash: 0, flow: 0, waves: 0, units: 0, buildings: 0, projectiles: 0, zones: 0, astar: 0, astarN: 0, flowN: 0 });
     let t0 = performance.now();
     // spatial hash
@@ -1105,6 +1127,23 @@ function runSelfTest(game, params) {
         game.buyUpgrade('walls');
         game.controls.setBuild('wall'); game.controls.cancelBuild();
       }
+    }
+    if (params.get('missiontest')) {
+      const king = game.king, keep = game.buildings.find(b => b.def.keep);
+      const g0 = game.gold, u0 = game.units.length;
+      let done = 0, fails = [];
+      for (const def of DATA.missions) {
+        const m = game.missions.forceStart(def.key, 9);
+        if (!m) { fails.push(def.key + ':nospot'); continue; }
+        king.pos.x = m.x; king.pos.z = m.z;
+        for (let k = 0; k < 20 * 60 && game.missions.active; k++) {
+          game.missions.update(1 / 60);
+          if (game.missions.active && game.missions.active.carried) { king.pos.x = keep.pos.x; king.pos.z = keep.pos.z + 6; }
+        }
+        if (game.missions.active) { fails.push(def.key + ':stuck'); game.missions.clear(); } else done++;
+      }
+      say(`missions: ${done}/${DATA.missions.length} completed, fails=${fails.join(',') || 'none'}; gold ${g0}->${Math.round(game.gold)} units ${u0}->${game.units.length} realm=${JSON.stringify(game.realm)} tokens=${JSON.stringify(game.freeTokens)} kingHp=${Math.round(game.king.maxHp)} regen=${game.king.regen}`);
+      say(`missions: heroes in play=${game.units.filter(u => u.isHero && !u.dead).map(u => u.heroKey).join(',')} wonder cost=${game.buildingCost(DATA.buildings.sun_altar)}`);
     }
     if (params.get('mptest')) {
       const [A, B] = LoopbackTransport.pair();
