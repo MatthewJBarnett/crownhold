@@ -222,7 +222,7 @@ class Controls {
 
   onWheel(e) {
     if (this.mode === 'fps') return;
-    this.camDist = U.clamp(this.camDist * (1 + Math.sign(e.deltaY) * 0.12), 12, 150);
+    this.camDist = U.clamp(this.camDist * (1 + Math.sign(e.deltaY) * 0.12), 12, 230);
   }
 
   // ------------------------------------------------------------------ picking
@@ -278,6 +278,7 @@ class Controls {
     this.selected.clear();
     if (this.selectedBuilding) this.selectedBuilding.selected = false;
     this.selectedBuilding = null;
+    if (!this.buildDef) this.game.showRange(null);
     this.game.ui.onSelectionChanged();
   }
   setSelection(units) {
@@ -308,16 +309,16 @@ class Controls {
     if (!found.length && !additive) { this.clearSelection(); return; }
     if (additive) for (const u of found) this.addToSelection(u); else this.setSelection(found);
   }
-  selectAllSoldiers() { this.setSelection(this.game.units.filter(u => u.isSoldier && !u.dead && !u.possessed)); }
+  selectAllSoldiers() { const lp = this.game.localPlayer; this.setSelection(this.game.units.filter(u => u.isSoldier && !u.dead && !u.possessed && (!u.owner || u.owner === lp))); }
   selectKing() { if (this.game.king && !this.game.king.dead) { this.setSelection([this.game.king]); this.focusOnSelection(); } }
-  selectHeroes() { const hs = this.game.units.filter(u => u.isHero && !u.dead); if (hs.length) { this.setSelection(hs); this.focusOnSelection(); } }
+  selectHeroes() { const lp = this.game.localPlayer; const hs = this.game.units.filter(u => u.isHero && !u.dead && (!u.owner || u.owner === lp)); if (hs.length) { this.setSelection(hs); this.focusOnSelection(); } }
   focusOnSelection() {
     const list = [...this.selected];
     if (!list.length) return;
     let x = 0, z = 0; for (const u of list) { x += u.pos.x; z += u.pos.z; }
     this.focus.set(x / list.length, 0, z / list.length);
   }
-  selectedUnits() { return [...this.selected].filter(u => !u.dead && u.team === 'player' && !u.possessed); }
+  selectedUnits() { return [...this.selected].filter(u => !u.dead && u.team === 'player' && !u.possessed && (!u.owner || u.owner === this.game.localPlayer)); }
 
   // ------------------------------------------------------------------ commands (RTS)
   issueCommandAt(x, y) {
@@ -349,13 +350,14 @@ class Controls {
 
   // ------------------------------------------------------------------ possession
   controlSelected() {
-    const list = [...this.selected].filter(u => !u.dead && u.team === 'player');
-    if (!list.length) { this.game.ui.toast('Select one of your units first (King, hero or soldier)'); return; }
+    const list = [...this.selected].filter(u => !u.dead && u.team === 'player' && (!u.owner || u.owner === this.game.localPlayer));
+    if (!list.length) { this.game.ui.toast('Select one of your own units first (King, hero or soldier)'); return; }
     this.enterControl(list[0]);
   }
   enterControl(unit) {
     if (!unit || unit.dead || unit.team !== 'player') return;
     if (unit.possessedBy && !(this.game.replica && unit.possessedBy === this.game.net.myId)) { this.game.ui.toast('Another player is controlling that unit', 'error'); return; }
+    if (unit.owner && unit.owner !== this.game.localPlayer) { this.game.ui.toast(`${unit.name} belongs to ${this.game.playerName(unit.owner)}`, 'error'); return; }
     if (this.game.replica) this.game.net.send({ t: 'possess', id: unit.id });
     if (this.buildDef) this.cancelBuild();
     // soldiers selected alongside become the squad for first-person commands
@@ -579,7 +581,8 @@ class Controls {
 
   // ------------------------------------------------------------------ squad commands (first person)
   squadUnits() {
-    const all = this.game.units.filter(u => u.isSoldier && !u.dead && !u.possessed);
+    const lp = this.game.localPlayer;
+    const all = this.game.units.filter(u => u.isSoldier && !u.dead && !u.possessed && (!u.owner || u.owner === lp));
     if (this.squad) { const s = all.filter(u => this.squad.has(u)); if (s.length) return s; }
     return all;
   }
@@ -613,6 +616,7 @@ class Controls {
     this.clearDragGhosts();
     this.buildDef = null; this.dragStart = null;
     this.game.gridHelper.visible = false;
+    this.game.showRange(null);
     this.game.ui.onBuildModeChanged();
   }
   cellUnderMouse() {
@@ -636,6 +640,7 @@ class Controls {
     this.ghost.position.set(cx / res.cells.length, 0, cz / res.cells.length);
     this.ghost.rotation.y = this.buildRot * Math.PI / 2;
     this.ghostOk = res.ok && this.game.canAfford(this.game.buildingCost(this.buildDef)) && !(this.buildDef.unique && this.game.hasBuilding(this.buildDef.key));
+    if (this.buildDef.tower) this.game.showRange(this.ghost.position.x, this.ghost.position.z, this.game.towerRangeFor(this.buildDef));
     Models.setGhostValid(this.ghost, this.ghostOk, this.game.waves && this.game.waves.active);
     this.game.ui.showBuildHint(res.ok ? (this.ghostOk ? '' : (this.buildDef.unique && this.game.hasBuilding(this.buildDef.key) ? 'Already built' : 'Not enough gold')) : res.reason);
   }
@@ -681,7 +686,7 @@ class Controls {
   }
 
   // ------------------------------------------------------------------ per-frame
-  clampFocus() { this.focus.x = U.clamp(this.focus.x, -85, 85); this.focus.z = U.clamp(this.focus.z, -85, 85); }
+  clampFocus() { const L = DATA.MAP_HALF + 8; this.focus.x = U.clamp(this.focus.x, -L, L); this.focus.z = U.clamp(this.focus.z, -L, L); }
   update(dt, realDt) {
     const cam = this.camera;
     if (this.mode === 'rts') {

@@ -23,6 +23,11 @@
         <button data-d="easy">Easy</button><button data-d="normal" class="on">Normal</button><button data-d="hard">Hard</button>
       </div>
     </div>
+    <div class="menu-row">
+      <label>Map</label>
+      <div class="seg" id="mapsel"><button data-m="random" class="on">Random</button><button data-m="valley">River Valley</button><button data-m="highlands">Highlands</button><button data-m="darkwood">Darkwood</button><button data-m="badlands">Badlands</button></div>
+    </div>
+    <p id="mapdesc" class="hint" style="margin-top:4px">A different layout every game.</p>
     <div class="menu-row settings">
       <label>Mouse sensitivity</label>
       <input type="range" class="sens" min="10" max="400" step="5" value="100"><span class="sensval">100%</span>
@@ -162,6 +167,15 @@
   </div>
 </div>
 
+<div id="lobby" class="overlay hidden">
+  <div class="menu-box">
+    <h2 class="title small">War Council</h2>
+    <p class="subtitle">Room <b id="lobbycode" class="code"></b> <button id="lobbycopy" class="mini">Copy code</button> <button id="lobbylink" class="mini">Copy invite link</button></p>
+    <div id="lobbyplayers" class="players"></div>
+    <p id="lobbyinfo" class="hint"></p>
+    <div class="menu-row"><button id="lobbystart" class="big hidden">Start the siege</button><span id="lobbywait" class="hint hidden">Waiting for the host to start…</span><button id="lobbyleave">Leave</button></div>
+  </div>
+</div>
 <div id="connecting" class="overlay hidden"><div class="menu-box"><h2 class="title small">Joining the defence…</h2><p class="subtitle">Waiting for the host to send the battlefield.</p></div></div>
 
 <!-- ===================== game over ===================== -->
@@ -190,6 +204,7 @@ window.addEventListener('error', function (e) {
 <script src="js/util.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/grid.js"></script>
+<script src="js/map.js"></script>
 <script src="js/models.js"></script>
 <script src="js/entities.js"></script>
 <script src="js/ai.js"></script>

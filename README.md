@@ -22,10 +22,19 @@ Three.js and the PeerJS networking library load from cdnjs, so an internet conne
   repairs and auto-repair happen between waves. Engineers run from enemies.
 - Damaged buildings darken. Bars appear when a building drops below 60% or when you hover the Repair button.
   Repair everything with R (most important buildings first), or tick auto-repair to do it after every wave.
+- Every unit is fully healed when a wave ends. The Healing Shrine only works during a wave.
 - Farms and Gold Mines get pricier with every one you own (30% and 60% per building). Extra heroes start at
   1200 gold and each purchase raises the next price by 50%. Selling refunds 60% of what you actually paid.
 - Enemies path to the King and break through the cheapest walls in their way. The Keep shelters units inside
   from ranged fire. Fallen heroes return after the wave. If the King falls, the game is over.
+
+## The world
+
+The map is 220 m across and generated from a seed in one of four styles, chosen on the menu (or by the host):
+River Valley (a river with three fords), Highlands (rock ridges and mountain lakes), Darkwood (dense forests
+and a stream) and Badlands (open, dry ground with ruins). Water, rock and forest cells cannot be built on or
+walked through, so enemies funnel through fords and gaps; every spawn point is guaranteed a route to the King.
+Hills rise toward the edges. Selecting a tower, or placing one, shows its range on the ground.
 
 ## Heroes
 
@@ -36,14 +45,28 @@ temporary ice walls) and Wren the Beastmaster (summons a wolf pack, war horn). Y
 
 ## Playing together
 
-One player clicks Host a game and shares the six-letter room code shown at the top of their screen, using the
-Copy code or Copy invite link buttons next to it (the invite link opens the game with the code filled in). Others
-enter the code and Join with the hero they picked. Everyone shares the same fortress, gold and King, and can
-build, give orders, and take control of any unit nobody else is controlling. The host runs the simulation, so
-the host should have the steadiest connection. Play from the game files on your computer (`index.html`), not from
+One player clicks Host a game and lands in a lobby with a six-letter room code (Copy code and Copy invite link
+buttons are right there; the invite link opens the game with the code filled in). Friends enter the code and Join
+with the hero they picked, appear in the lobby, and the host presses Start. Nobody can join once the siege has
+begun. Every defender has their own gold, hero, garrison and buildings, and only they can order, control, sell or
+repair those. The King and the starting castle are shared, and any free unit of yours (or the King) can be taken
+over in first person. Waves scale with the number of defenders. The host runs the simulation, so the host should
+have the steadiest connection. After a defeat the host's Rise again returns everyone to the lobby. Play from the game files on your computer (`index.html`), not from
 a page that blocks direct connections. An embedded copy that blocks them says so on the menu and, where the host
 allows it, offers to save `crownhold.html` for you. `peertest.html?role=host&code=ABC` / `?role=client&code=ABC` is a tiny
 connectivity check if joining fails.
+
+## Roster
+
+Enemies: raiders, archers, brutes, wargs, shieldbearers, crossbowmen, sappers (blow up walls), pyromancers,
+catapults and trebuchets, assassins, shamans, harpies (fly over walls), plaguebearers (poison cloud on death),
+necromancers, trolls (regenerate), frost witches, warlocks (hex your damage), and bosses every five waves:
+Ogre Warlord, Lich, Ancient Dragon, Spider Queen, Iron Golem.
+
+Your units: swordsmen, archers, pikemen, crossbowmen, mounted knights, apprentices, priests (heal), engineers
+(build and repair). Towers: arrow, ballista, mage, frost, cannon (splash, minimum range), lightning (chains,
+ignores armour), poison, watchtower (36 m reach, picks off casters). Defences: walls, spiked barricades, gates,
+spike traps. Buildings: barracks, farm, gold mine, blacksmith, healing shrine, market, tavern.
 
 ## Controls
 

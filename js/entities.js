@@ -15,7 +15,8 @@ class Unit {
     this.isSoldier = team === 'player' && !this.isHero && !this.isKing;
     this.isBoss = !!def.boss; this.large = !!def.large; this.flying = !!def.flying;
     this.radius = def.radius || 0.45;
-    this.pos = new THREE.Vector3(x, this.flying ? def.altitude : 0, z);
+    this.owner = opts.owner || null;
+    this.pos = new THREE.Vector3(x, (this.flying ? def.altitude : 0) + game.groundY(x, z), z);
     this.yaw = opts.yaw || 0;
     this.attackKind = def.attack || 'melee';
     this.hpMul = opts.hpMul || 1;
@@ -46,10 +47,13 @@ class Unit {
     let m;
     if (def.model === 'catapult') m = Models.catapult(def);
     else if (def.model === 'wolf') m = Models.wolf(def);
+    else if (def.model === 'rider') m = Models.rider(def);
+    else if (def.model === 'spider') m = Models.spider(def);
     else if (def.model === 'dragon') m = Models.dragon(def);
     else m = Models.humanoid(def, this.team);
     this.group = m.group; this.parts = m.parts; this.mats = m.mats;
-    this.eyeHeight = m.eyeHeight; this.height = m.height; this.pickMesh = m.mesh;
+    this.eyeHeight = m.eyeHeight; this.height = m.height; this.pickMesh = m.mesh; this.legSwing = m.legSwing || 0.7;
+    if (def.scale && (def.model === 'catapult' || def.model === 'wolf')) { this.group.scale.setScalar(def.scale); this.eyeHeight *= def.scale; this.height *= def.scale; }
     this.group.position.copy(this.pos);
     this.group.rotation.y = this.yaw;
     this.group.userData.unit = this;
@@ -86,6 +90,7 @@ class Unit {
     this.buffs.push(b);
   }
   applySlow(factor, dur) {
+    if (this.def.unstoppable) return;
     const until = this.game.time + dur;
     if (!this.slow || this.slow.until < this.game.time || factor >= this.slow.factor) this.slow = { factor, until };
     else this.slow.until = Math.max(this.slow.until, until);
@@ -95,7 +100,8 @@ class Unit {
     if (!this.burn || this.burn.until < this.game.time) this.burn = { dps, until, source };
     else { this.burn.dps = Math.max(this.burn.dps, dps); this.burn.until = Math.max(this.burn.until, until); }
   }
-  stun(dur) { this.stunUntil = Math.max(this.stunUntil, this.game.time + dur); }
+  stun(dur) { if (this.def.unstoppable) return; this.stunUntil = Math.max(this.stunUntil, this.game.time + dur); }
+  applyPoison(dps, dur, source) { this.applyBurn(dps, dur, source); this.burn.poison = true; }
 
   distTo(t) { return Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z); }
   // edge-to-edge distance to a target (unit or building)
@@ -119,14 +125,19 @@ class Unit {
     const r = this.collisionRadius, team = this.team;
     let blocked = null;
     const hit = (x, z, sx, sz) => g.buildingAtWorld(x + sx * r, z + sz * r) || g.buildingAtWorld(x + sx * r, z + sz * r + r * 0.7) || g.buildingAtWorld(x + sx * r, z + sz * r - r * 0.7) || g.buildingAtWorld(x + sx * r + r * 0.7, z + sz * r) || g.buildingAtWorld(x + sx * r - r * 0.7, z + sz * r);
+    const slide = Math.min(0.25, Math.abs(dx) + Math.abs(dz) + 0.08);
     if (dx) {
       const nx = this.pos.x + dx;
       if (g.circleFree(nx, this.pos.z, r, team)) this.pos.x = nx;
+      else if (g.circleFree(nx, this.pos.z + slide, r, team)) { this.pos.x = nx; this.pos.z += slide; }   // slip past a corner
+      else if (g.circleFree(nx, this.pos.z - slide, r, team)) { this.pos.x = nx; this.pos.z -= slide; }
       else blocked = hit(nx, this.pos.z, Math.sign(dx), 0) || blocked;
     }
     if (dz) {
       const nz = this.pos.z + dz;
       if (g.circleFree(this.pos.x, nz, r, team)) this.pos.z = nz;
+      else if (g.circleFree(this.pos.x + slide, nz, r, team)) { this.pos.z = nz; this.pos.x += slide; }
+      else if (g.circleFree(this.pos.x - slide, nz, r, team)) { this.pos.z = nz; this.pos.x -= slide; }
       else blocked = hit(this.pos.x, nz, 0, Math.sign(dz)) || blocked;
     }
     return blocked;
@@ -240,7 +251,7 @@ class Unit {
       game.fireProjectile({
         from: this, target, key: def.projectile, dmg, team: this.team,
         splash: def.splash || pdef.splash || 0, buildingDmg: def.buildingDmg ? def.buildingDmg * this.dmgMul : 0,
-        slow: def.slow || pdef.slow || null, burn: pdef.burn || null, magic: !!def.magic, bonusVsLarge: def.bonusVsLarge || 1,
+        slow: def.slow || pdef.slow || null, burn: pdef.burn || null, magic: !!def.magic, bonusVsLarge: def.bonusVsLarge || 1, hex: def.hex || null,
       });
       SFX.play(def.projectile === 'arrow' ? 'bow' : (def.projectile === 'boulder' ? 'catapult' : 'cast'));
       return true;
@@ -279,6 +290,12 @@ class Unit {
     this.dead = true; this.hp = 0; this.deathTimer = 0;
     this.target = null; this.command = null; this.path = null;
     this.hpBar.group.visible = false; this.ring.visible = false;
+    if (this.def.deathCloud) {
+      const dc = this.def.deathCloud, other = this.team === 'player' ? 'enemy' : 'player', g = this.game, src = this;
+      g.addZone({ x: this.pos.x, z: this.pos.z, radius: dc.radius, duration: dc.dur, tickEvery: 0.5, color: 0x80c040, opacity: 0.3,
+        onTick: (zone, dt) => { for (const u of g.unitsNear(zone.x, zone.z, zone.radius, other)) if (!u.dead) u.takeDamage(dc.dps * dt, src, { magic: true }); } });
+      g.effects.spawn('explosion', this.pos.x, 1, this.pos.z, { radius: dc.radius, color: 0x80c040 });
+    }
     this.game.onUnitDied(this, source);
     SFX.play(this.isBoss ? 'bossdie' : (this.team === 'enemy' ? 'die' : 'allydie'));
   }
@@ -292,7 +309,7 @@ class Unit {
     // status effects
     if (this.burn && this.burn.until > time) {
       this.takeDamage(this.burn.dps * dt, this.burn.source, { magic: true });
-      if (Math.random() < dt * 8) game.effects.spawn('ember', this.pos.x + U.rand(-0.3, 0.3), this.centerY, this.pos.z + U.rand(-0.3, 0.3));
+      if (Math.random() < dt * 8) game.effects.spawn('ember', this.pos.x + U.rand(-0.3, 0.3), this.centerY, this.pos.z + U.rand(-0.3, 0.3), this.burn.poison ? { color: 0x60ff60 } : {});
       if (this.dead) return;
     }
     this.tickFlash(dt);
@@ -315,10 +332,11 @@ class Unit {
       this.separate(dt);
       if (!this.flying && !game.grid.circleFree(this.pos.x, this.pos.z, this.collisionRadius, this.team)) this.unstuck(dt);
     }
+    const gy = game.groundY(this.pos.x, this.pos.z);
     if (this.flying) {
-      const want = this.def.altitude;
+      const want = this.def.altitude + gy;
       this.pos.y += (want + Math.sin(time * 1.5) * 0.4 - this.pos.y) * Math.min(1, dt * 2);
-    }
+    } else this.pos.y = gy;
     this.visualTail(dt);
   }
   integrateMovement(dt) {
@@ -350,6 +368,7 @@ class Unit {
       this.separate(dt);
       if (!this.flying && !game.grid.circleFree(this.pos.x, this.pos.z, this.collisionRadius, this.team)) this.unstuck(dt);
       if (this.localAtkT > 0) this.localAtkT -= dt;
+      if (!this.flying) this.pos.y = game.groundY(this.pos.x, this.pos.z);
     } else if (this.netAttackAnim > this.attackAnim + 0.35) this.attackAnim = this.netAttackAnim;
   }
   tickFlash(dt) {
@@ -387,7 +406,7 @@ class Unit {
       this.hpBar.setDepth(this.game.controls.mode === 'fps');
     }
     this.ring.visible = this.selected || this.hovered;
-    if (this.ring.visible) { this.ring.position.set(this.pos.x, 0.06, this.pos.z); this.ring.material.color.setHex(this.selected ? (this.team === 'player' ? 0x50ff80 : 0xff5050) : 0xffffff); }
+    if (this.ring.visible) { this.ring.position.set(this.pos.x, this.game.groundY(this.pos.x, this.pos.z) + 0.06, this.pos.z); this.ring.material.color.setHex(this.selected ? (this.team === 'player' ? 0x50ff80 : 0xff5050) : 0xffffff); }
   }
 
   onBlocked(building) {
@@ -410,9 +429,10 @@ class Unit {
       if (p.arm) p.arm.rotation.x = -0.9 + (this.attackAnim > 0.6 ? (this.attackAnim - 0.6) * 4.5 : 0) * -0.35 - (1 - Math.min(1, this.attackAnim * 1.7)) * 0;
       return;
     }
+    if (p.wingL) { const f = Math.sin(this.game.time * 9 + this.id) * 0.7; p.wingL.rotation.z = f; p.wingR.rotation.z = -f; }
     if (this.moving) {
       this.animT += dt * Math.min(14, this.effSpeed * 2.2);
-      const s = Math.sin(this.animT) * 0.7;
+      const s = Math.sin(this.animT) * this.legSwing;
       if (p.legL) p.legL.rotation.x = s; if (p.legR) p.legR.rotation.x = -s;
       if (p.armL) p.armL.rotation.x = -s * 0.6;
       if (p.armR && this.attackAnim <= 0) p.armR.rotation.x = s * 0.6;
@@ -422,10 +442,11 @@ class Unit {
       if (p.armL) p.armL.rotation.x *= 0.8;
       if (p.armR && this.attackAnim <= 0) p.armR.rotation.x *= 0.8;
     }
-    if (this.attackAnim > 0 && p.armR) {
+    const swingArm = p.riderArmR || p.armR;
+    if (this.attackAnim > 0 && swingArm) {
       const a = this.attackAnim;
-      if (this.attackKind === 'melee') p.armR.rotation.x = -Math.sin(a * Math.PI) * 2.2;
-      else p.armR.rotation.x = -1.3 * a;
+      if (this.attackKind === 'melee') swingArm.rotation.x = -Math.sin(a * Math.PI) * 2.2;
+      else swingArm.rotation.x = -1.3 * a;
     }
     if (this.spinT > 0) { this.spinT -= dt; this.yaw += dt * 14; }
     if (this.stunned) { this.group.rotation.z = Math.sin(this.game.time * 20) * 0.08; } else this.group.rotation.z = 0;
@@ -458,6 +479,8 @@ class Building {
     let sx = 0, sz = 0;
     for (const c of cells) { const w = game.grid.cellToWorld(c.i, c.j); sx += w.x; sz += w.z; }
     this.pos = new THREE.Vector3(sx / cells.length, 0, sz / cells.length);
+    this.owner = null;
+    this.pos.y = game.groundY(this.pos.x, this.pos.z);
     const fp = (rot % 2 === 0) ? { w: def.w, d: def.d } : { w: def.d, d: def.w };
     this.radius = Math.max(fp.w, fp.d) * DATA.CELL / 2;
     this.height = def.tower ? 7 : (def.keep ? 9 : 3);
@@ -496,6 +519,7 @@ class Building {
   build3D() {
     if (this.group) { this.game.scene.remove(this.group); }
     this.group = Models.building(this.def, this.level);
+    this.pos.y = this.game.groundY(this.pos.x, this.pos.z);
     this.group.position.copy(this.pos);
     this.group.rotation.y = this.rot * Math.PI / 2;
     this.group.userData.building = this;
@@ -518,6 +542,7 @@ class Building {
 
   takeDamage(amount, source) {
     if (this.dead) return 0;
+    if (this.def.spikes && source instanceof Unit && source.attackKind === 'melee' && !source.dead) source.takeDamage(this.def.spikes, null, { magic: true });
     this.hp -= amount;
     this.flashT = 0.1;
     this.game.grid.flowDirty = true; // wall cost changed
@@ -556,12 +581,14 @@ class Building {
     if (this.def.gate) this.updateGate(dt);
     const orb = this.group.userData.orb;
     if (orb) { orb.rotation.y += dt; orb.position.y += Math.sin(game.time * 2 + this.id) * dt * 0.3; }
+    if (this.def.trap) { const plate = this.group.userData.plate; if (plate) plate.position.y += ((this.trapArmed === false ? -0.75 : 0) - plate.position.y) * Math.min(1, dt * 4); }
     if (this.underConstruction || game.replica) return;
     if (this.def.tower) this.updateTower(dt);
-    if (this.def.heal) {
+    if (this.def.heal && game.waves && game.waves.active) {
       const list = game.unitsNear(this.pos.x, this.pos.z, this.def.heal.radius, 'player');
       for (const u of list) if (u.hp < u.maxHp) u.heal(this.def.heal.hps * dt);
     }
+    if (this.def.trap) this.updateTrap(dt);
   }
   // buildings darken and dirty as they lose HP so damage is visible without a bar
   applyDamageTint(f) {
@@ -587,6 +614,17 @@ class Building {
     door.position.y += (want - door.position.y) * Math.min(1, dt * 5);
   }
   static get _soot() { if (!Building.__soot) Building.__soot = new THREE.Color(0x26190f); return Building.__soot; }
+  updateTrap(dt) {
+    const t = this.def.trap, game = this.game;
+    if (this.trapArmed === undefined) this.trapArmed = true;
+    if (!this.trapArmed) { this.rearmT -= dt; if (this.rearmT <= 0) this.trapArmed = true; return; }
+    const victims = game.unitsNear(this.pos.x, this.pos.z, t.radius, 'enemy').filter(u => !u.dead && !u.flying);
+    if (!victims.length) return;
+    game.areaDamage(this.pos.x, this.pos.z, t.radius + 0.4, t.dmg, 'player', this, { slow: { factor: t.slow, dur: 2.5 } });
+    game.effects.spawn('ring', this.pos.x, 0.3, this.pos.z, { radius: t.radius + 0.5, color: 0xcfd6dd, dur: 0.4 });
+    SFX.play('heavyhit', 0.7);
+    this.trapArmed = false; this.rearmT = t.rearm;
+  }
   updateTower(dt) {
     const game = this.game;
     this.timer -= dt; this.retargetT -= dt;
@@ -596,6 +634,20 @@ class Building {
     }
     const turret = this.group.userData.turret;
     if (this.target && turret) turret.rotation.y = Math.atan2(this.target.pos.x - this.pos.x, this.target.pos.z - this.pos.z) - this.rot * Math.PI / 2;
+    if (this.target && this.timer <= 0 && this.def.chain) {
+      // chain lightning: instant, armour-piercing, arcs to nearby enemies
+      this.timer = this.cd;
+      const hit = [this.target]; let last = this.target;
+      for (let k = 1; k < this.def.chain.count; k++) {
+        let next = null, nd = Infinity;
+        for (const u of game.unitsNear(last.pos.x, last.pos.z, this.def.chain.radius, 'enemy')) { if (u.dead || hit.includes(u)) continue; const d = last.distTo(u); if (d < nd) { nd = d; next = u; } }
+        if (!next) break; hit.push(next); last = next;
+      }
+      let prev = { x: this.pos.x, y: this.height + 1.5, z: this.pos.z };
+      for (const u of hit) { u.takeDamage(this.dmg, this, { magic: true }); game.effects.spawn('bolt', prev.x, prev.y, prev.z, { to: { x: u.pos.x, y: u.centerY, z: u.pos.z } }); game.effects.spawn('hit', u.pos.x, u.centerY, u.pos.z, { color: 0x80c0ff }); prev = { x: u.pos.x, y: u.centerY, z: u.pos.z }; }
+      SFX.play('cast', 0.6);
+      return;
+    }
     if (this.target && this.timer <= 0) {
       this.timer = this.cd;
       const pdef = DATA.projectiles[this.def.projectile];
@@ -613,8 +665,10 @@ class Building {
     for (const u of list) {
       if (u.dead) continue;
       let s = this.distTo(u);
+      if (this.def.minRange && s < this.def.minRange) continue;
       if (this.def.bonusVsLarge && u.large) s -= 12;
       if (u.flying) s -= 6;
+      if (this.def.prefersCasters && (u.def.magic || u.def.prefersBuildings || u.isBoss)) s -= 30;
       if (this.def.key === 'frost_tower' && u.slow && u.slow.until > this.game.time) s += 8;
       if (s < bestScore) { bestScore = s; best = u; }
     }
@@ -633,6 +687,7 @@ class Projectile {
     this.team = o.team; this.dmg = o.dmg; this.source = o.from;
     this.splash = o.splash || 0; this.buildingDmg = o.buildingDmg || 0;
     this.slow = o.slow; this.burn = o.burn; this.magic = !!o.magic; this.bonusVsLarge = o.bonusVsLarge || 1;
+    this.poison = o.poison || this.pdef.poison || null; this.hex = o.hex || null;
     this.target = o.target || null;
     this.speed = o.speed || this.pdef.speed;
     this.life = 0; this.maxLife = o.maxLife || 6;
@@ -685,6 +740,8 @@ class Projectile {
     if (target instanceof Unit) {
       if (this.slow) target.applySlow(this.slow.factor, this.slow.dur);
       if (this.burn) target.applyBurn(this.burn.dps, this.burn.dur, this.source);
+      if (this.poison) target.applyPoison(this.poison.dps, this.poison.dur, this.source);
+      if (this.hex) target.addBuff({ tag: 'hex', dmgMul: this.hex.dmgMul, until: this.game.time + this.hex.dur });
     }
     return dealt;
   }
@@ -762,16 +819,19 @@ class Projectile {
           this.kill(); return;
         }
       }
-      if (this.pos.y <= 0.05) {
-        if (this.splash > 0) this.explode(this.pos.x, 0.3, this.pos.z);
+      const gy = this.game.groundY(this.pos.x, this.pos.z);
+      if (this.pos.y <= gy + 0.05) {
+        if (this.splash > 0) this.explode(this.pos.x, gy + 0.3, this.pos.z);
         this.kill(); return;
       }
       if (this.pos.y < 6 && this.team === 'enemy') {
         const b = this.game.grid.buildingAtWorld(this.pos.x, this.pos.z);
         if (b && !b.dead && this.game.grid.isSolidAt(this.game.grid.worldToCell(this.pos.x, this.pos.z).i, this.game.grid.worldToCell(this.pos.x, this.pos.z).j)) { this.applyHit(b); this.kill(); return; }
+        const fl = this.game.grid.worldToCell(this.pos.x, this.pos.z); if (this.game.grid.flagAt(fl.i, fl.j) === CELL_ROCK) { this.kill(); return; }
       } else if (this.pos.y < 3.2 && this.team === 'player') {
         const c = this.game.grid.worldToCell(this.pos.x, this.pos.z);
-        if (this.game.grid.flagAt(c.i, c.j) !== CELL_FREE) { if (this.splash > 0) this.explode(this.pos.x, this.pos.y, this.pos.z); this.kill(); return; }
+        const fl = this.game.grid.flagAt(c.i, c.j);
+        if (fl !== CELL_FREE && fl !== CELL_WATER && this.pos.y < 3.2) { if (this.splash > 0) this.explode(this.pos.x, this.pos.y, this.pos.z); this.kill(); return; }
       }
     }
   }
@@ -790,11 +850,12 @@ class Zone {
     this.game = game; this.id = NEXT_ID++; this.color = o.color || 0xffd040; this.x = o.x; this.z = o.z; this.radius = o.radius;
     this.until = game.time + o.duration; this.tickEvery = o.tickEvery || 0.5; this.acc = 0;
     this.onTick = o.onTick; this.dead = false; this.follow = o.follow || null;
+    const gy = game.groundY(this.x, this.z);
     this.mesh = Models.disc(this.radius, o.color || 0xffd040, o.opacity || 0.3);
-    this.mesh.position.set(this.x, 0.08, this.z);
+    this.mesh.position.set(this.x, gy + 0.08, this.z);
     game.scene.add(this.mesh);
     this.ring = Models.ring(this.radius, o.color || 0xffd040, 0.8);
-    this.ring.position.set(this.x, 0.09, this.z);
+    this.ring.position.set(this.x, gy + 0.09, this.z);
     game.scene.add(this.ring);
   }
   update(dt) {
@@ -823,7 +884,7 @@ class Effects {
     if (type === 'hit' || type === 'ember' || type === 'flame' || type === 'heal_p') {
       const n = type === 'hit' ? 6 : 1;
       for (let k = 0; k < n; k++) {
-        const color = type === 'heal_p' ? 0x60ff80 : (type === 'flame' ? U.choice([0xff8020, 0xffc040, 0xff4010]) : (o.color || 0xffd090));
+        const color = type === 'heal_p' ? 0x60ff80 : (type === 'flame' ? U.choice([0xff8020, 0xffc040, 0xff4010]) : (o.color || (type === 'ember' ? 0xff8030 : 0xffd090)));
         const m = new THREE.Mesh(this.geoBox, new THREE.MeshBasicMaterial({ color, transparent: true }));
         m.position.set(x, y, z);
         const sp = type === 'hit' ? 4 : 1.5;
@@ -839,6 +900,11 @@ class Effects {
       const r = Models.ring(o.radius || 2.5, o.color || 0xff8040, 0.9); r.position.set(x, 0.1, z); r.scale.setScalar(0.2); scene.add(r);
       this.list.push({ mesh: r, life: 0, max: 0.5, growRing: 1 });
       for (let k = 0; k < 8; k++) this.spawn('hit', x, y, z, { color: o.color || 0xffa040 });
+    } else if (type === 'bolt') {
+      const to = o.to; const dx = to.x - x, dy = to.y - y, dz = to.z - z; const len = Math.hypot(dx, dy, dz) || 0.1;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, len), new THREE.MeshBasicMaterial({ color: 0xa0d0ff, transparent: true }));
+      m.position.set(x + dx / 2, y + dy / 2, z + dz / 2); m.lookAt(to.x, to.y, to.z);
+      scene.add(m); this.list.push({ mesh: m, life: 0, max: 0.18, fade: true });
     } else if (type === 'ring') {
       const r = Models.ring(o.radius || 5, o.color || 0xffd040, 0.9); r.position.set(x, 0.1, z); r.scale.setScalar(0.1); scene.add(r);
       this.list.push({ mesh: r, life: 0, max: o.dur || 0.7, growRing: 1 });
@@ -866,6 +932,7 @@ class Effects {
       if (e.grow) { e.mesh.scale.setScalar(0.3 + e.grow * p); e.mesh.material.opacity = 0.8 * (1 - p); }
       if (e.growRing) { e.mesh.scale.setScalar(0.2 + p * e.growRing); e.mesh.material.opacity = 0.9 * (1 - p); }
       if (e.rise) { e.mesh.position.y += e.rise * dt; e.mesh.material.opacity = 0.9 * (1 - p); }
+      if (e.fade) e.mesh.material.opacity = 1 - p;
       if (p >= 1) { this.game.scene.remove(e.mesh); e.mesh.material.dispose(); this.list.splice(k, 1); }
     }
   }

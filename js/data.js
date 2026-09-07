@@ -5,11 +5,11 @@
 
 const DATA = {};
 
-DATA.CELL = 2;          // metres per grid cell
-DATA.GRID = 80;         // cells per side (160m map)
-DATA.BUILD_RADIUS = 56; // max |x|,|z| for building placement (metres)
-DATA.SPAWN_RADIUS = 72; // enemy spawn ring radius
-DATA.MAP_HALF = 79;     // hard clamp for unit positions
+DATA.CELL = 2;                                  // metres per grid cell
+DATA.GRID = 110;                                // cells per side (220m map)
+DATA.MAP_HALF = DATA.GRID * DATA.CELL / 2 - 1;  // hard clamp for unit positions
+DATA.BUILD_RADIUS = 72;                         // max |x|,|z| for building placement (metres)
+DATA.SPAWN_RADIUS = DATA.MAP_HALF - 11;         // enemy spawn ring radius
 
 DATA.difficulties = {
   easy:   { label: 'Easy',   hp: 0.75, dmg: 0.75, budget: 0.75, gold: 1.25 },
@@ -150,6 +150,26 @@ DATA.units = {
     desc: 'Repairs damaged buildings for free, 35 HP per second. Runs from enemies and does not count against the soldier cap (max 4).',
     color: 0x7a5a3a, cloth: 0x6a5a3a, weapon: 'hammer', skin: 0xe8c39e,
   },
+  crossbowman: {
+    key: 'crossbowman', name: 'Crossbowman', cost: 80, hp: 95, dmg: 19, range: 15, cd: 1.7, armor: 0.1, speed: 5.4, radius: 0.4,
+    attack: 'ranged', projectile: 'bolt', magic: true, desc: 'Armour-piercing bolts. Slow to reload but ignores armour.',
+    color: 0x6a6a7a, cloth: 0x4a3a5a, weapon: 'bow', helmet: true,
+  },
+  cavalry: {
+    key: 'cavalry', name: 'Knight', cost: 130, hp: 230, dmg: 28, range: 2.6, cd: 1.0, armor: 0.3, speed: 8.4, radius: 0.55,
+    attack: 'melee', large: true, model: 'rider', desc: 'Mounted lancer. Fast enough to run down catapults and casters.',
+    color: 0xb0b8c0, cloth: 0x8a2a2a, weapon: 'pike', helmet: true,
+  },
+  priest: {
+    key: 'priest', name: 'Priest', cost: 90, hp: 85, dmg: 5, range: 2.0, cd: 1.5, armor: 0, speed: 5.6, radius: 0.4,
+    attack: 'melee', medic: { hps: 9, radius: 6 }, noCap: false, desc: 'Heals allies within 6m for 9 HP/s and follows the fighting. Does not fight.',
+    color: 0xf0e6d0, cloth: 0xe8dcc0, weapon: 'staff', robe: true, hood: true,
+  },
+  apprentice: {
+    key: 'apprentice', name: 'Apprentice', cost: 110, hp: 75, dmg: 22, range: 16, cd: 1.8, armor: 0, speed: 5.4, radius: 0.4,
+    attack: 'ranged', projectile: 'fireball', splash: 2.0, magic: true, desc: 'Fireballs that splash in 2m. Fragile.',
+    color: 0xb04a2a, cloth: 0x5a2a1a, weapon: 'staff', robe: true, hat: true,
+  },
   wolf: {
     key: 'wolf', name: 'Wolf', hp: 95, dmg: 15, range: 1.8, cd: 0.7, armor: 0.05, speed: 8.0, radius: 0.4,
     attack: 'melee', noCap: true, summoned: true, model: 'wolf', color: 0x6a6a6a,
@@ -183,6 +203,26 @@ DATA.enemies = {
                 attack: 'ranged', projectile: 'deathbolt', magic: true, kite: true, summon: { type: 'skeleton', count: 3, every: 10 }, color: 0x5a3a7a, cloth: 0x2a1a3a, weapon: 'staff', robe: true, hood: true, skin: 0xb0b0c0 },
   frostwitch: { key: 'frostwitch', name: 'Frost Witch', hp: 130, dmg: 15, range: 16, cd: 1.8, armor: 0, speed: 4.2, radius: 0.42, reward: 28, unlock: 9, weight: 2,
                 attack: 'ranged', projectile: 'frostbolt', slow: { factor: 0.45, dur: 2.5 }, magic: true, kite: true, slowAura: { radius: 7, factor: 0.3 }, color: 0x8ac0e0, cloth: 0x2a4a6a, weapon: 'staff', robe: true, hat: true, skin: 0xd0e0f0 },
+  warg:       { key: 'warg', name: 'Warg', hp: 120, dmg: 16, range: 2.0, cd: 0.8, armor: 0.05, speed: 8.2, radius: 0.45, reward: 12, unlock: 4, weight: 3,
+                attack: 'melee', model: 'wolf', color: 0x3a3a3a },
+  shieldbearer:{ key: 'shieldbearer', name: 'Shieldbearer', hp: 240, dmg: 12, range: 2.2, cd: 1.2, armor: 0.5, speed: 3.8, radius: 0.48, reward: 18, unlock: 5, weight: 3,
+                attack: 'melee', color: 0x7a7a80, cloth: 0x4a4a52, weapon: 'sword', helmet: true, shield: true, skin: 0x8fa86a },
+  crossbow:   { key: 'crossbow', name: 'Crossbowman', hp: 70, dmg: 15, range: 16, cd: 1.9, armor: 0.05, speed: 4.5, radius: 0.4, reward: 12, unlock: 6, weight: 3,
+                attack: 'ranged', projectile: 'bolt', magic: true, color: 0x5a5a6a, cloth: 0x3a3a4a, weapon: 'bow', helmet: true, skin: 0x8fa86a },
+  sapper:     { key: 'sapper', name: 'Sapper', hp: 65, dmg: 5, range: 1.8, cd: 1, armor: 0, speed: 6.6, radius: 0.4, reward: 14, unlock: 7, weight: 2.5,
+                attack: 'melee', prefersBuildings: true, suicide: { radius: 3.2, buildingDmg: 420, unitDmg: 60 }, color: 0x8a6a3a, cloth: 0x5a4a2a, weapon: 'club', skin: 0x8fa86a },
+  harpy:      { key: 'harpy', name: 'Harpy', hp: 75, dmg: 11, range: 2.0, cd: 0.9, armor: 0, speed: 7.2, radius: 0.42, reward: 14, unlock: 9, weight: 2.5,
+                attack: 'melee', flying: true, altitude: 2.6, wings: true, color: 0x7a5a8a, cloth: 0x4a3a5a, weapon: 'dagger', skin: 0xc9a58a },
+  plaguebearer:{ key: 'plaguebearer', name: 'Plaguebearer', hp: 110, dmg: 10, range: 2.2, cd: 1.1, armor: 0, speed: 4.4, radius: 0.44, reward: 16, unlock: 10, weight: 2.5,
+                attack: 'melee', deathCloud: { radius: 5, dps: 12, dur: 6 }, color: 0x5a7a3a, cloth: 0x3a4a2a, weapon: 'club', skin: 0x9ab070 },
+  troll:      { key: 'troll', name: 'Troll', hp: 520, dmg: 36, range: 2.8, cd: 1.6, armor: 0.1, speed: 3.6, radius: 0.7, reward: 34, unlock: 11, weight: 2,
+                attack: 'melee', large: true, scale: 1.7, regen: 12, color: 0x4a6a4a, cloth: 0x3a3a2a, weapon: 'club', skin: 0x5a7a5a },
+  trebuchet:  { key: 'trebuchet', name: 'Trebuchet', hp: 520, dmg: 60, buildingDmg: 260, range: 34, minRange: 10, cd: 7.0, armor: 0.15, speed: 1.8, radius: 1.2, reward: 70, unlock: 12, weight: 1,
+                attack: 'artillery', projectile: 'boulder', splash: 3.6, large: true, scale: 1.35, prefersBuildings: true, model: 'catapult' },
+  warlock:    { key: 'warlock', name: 'Warlock', hp: 140, dmg: 18, range: 17, cd: 2.2, armor: 0, speed: 4.0, radius: 0.42, reward: 34, unlock: 13, weight: 2,
+                attack: 'ranged', projectile: 'deathbolt', magic: true, kite: true, hex: { dmgMul: 0.5, dur: 5 }, color: 0x6a2a6a, cloth: 0x3a1a3a, weapon: 'staff', robe: true, hat: true, skin: 0xb090b0 },
+  spiderling: { key: 'spiderling', name: 'Spiderling', hp: 45, dmg: 9, range: 1.8, cd: 0.8, armor: 0, speed: 7.0, radius: 0.36, reward: 2, unlock: 99, weight: 0,
+                attack: 'melee', model: 'spider', scale: 0.55, color: 0x3a2a3a },
   skeleton:   { key: 'skeleton', name: 'Skeleton', hp: 40, dmg: 8, range: 2.0, cd: 1.0, armor: 0, speed: 5.2, radius: 0.38, reward: 1, unlock: 99, weight: 0,
                 attack: 'melee', color: 0xe0e0d0, cloth: 0xe0e0d0, weapon: 'sword', skin: 0xe8e8d8, skeleton: true },
   // bosses
@@ -191,11 +231,15 @@ DATA.enemies = {
   lich:       { key: 'lich', name: 'The Lich', boss: true, hp: 3300, dmg: 45, range: 18, cd: 1.4, armor: 0.15, speed: 3.6, radius: 0.7, reward: 520,
                 attack: 'ranged', projectile: 'deathbolt', magic: true, large: true, scale: 1.5, summon: { type: 'skeleton', count: 5, every: 12 }, blink: { every: 14, dist: 12 },
                 color: 0x3a2a5a, cloth: 0x1a1030, weapon: 'staff', robe: true, crown: true, skin: 0xc0c0d0 },
+  spiderqueen:{ key: 'spiderqueen', name: 'Spider Queen', boss: true, hp: 4600, dmg: 55, range: 3.0, cd: 1.5, armor: 0.2, speed: 4.2, radius: 1.6, reward: 700,
+                attack: 'melee', large: true, model: 'spider', scale: 1.6, summon: { type: 'spiderling', count: 6, every: 11 }, webShot: { every: 7, range: 16, slow: 0.7, dur: 3 }, color: 0x2a1a2a },
+  golem:      { key: 'golem', name: 'Iron Golem', boss: true, hp: 6500, dmg: 90, range: 3.4, cd: 2.4, armor: 0.5, speed: 3.2, radius: 1.2, reward: 1000,
+                attack: 'melee', large: true, scale: 2.6, unstoppable: true, slam: { every: 7, radius: 8, dmg: 70 }, color: 0x5a5a66, cloth: 0x3a3a44, weapon: 'club', skin: 0x6a6a76 },
   dragon:     { key: 'dragon', name: 'Ancient Dragon', boss: true, hp: 5200, dmg: 60, range: 4.5, cd: 1.8, armor: 0.25, speed: 6.5, radius: 2.2, reward: 900,
                 attack: 'melee', large: true, flying: true, altitude: 3.2, breath: { every: 9, range: 13, dps: 32, dur: 3 }, model: 'dragon', color: 0x8a1a1a },
 };
 
-DATA.bossSchedule = ['ogre', 'lich', 'dragon'];
+DATA.bossSchedule = ['ogre', 'lich', 'dragon', 'spiderqueen', 'golem'];
 
 // ---------------------------------------------------------------------------
 // Projectiles
@@ -210,6 +254,10 @@ DATA.projectiles = {
   frostbolt: { speed: 32, kind: 'homing', model: 'bolt', color: 0x70d0ff },
   magic:     { speed: 30, kind: 'lob', model: 'fireball', splash: 3.5, burn: { dps: 8, dur: 3 } },
   frost:     { speed: 34, kind: 'homing', model: 'bolt', color: 0x70d0ff, slow: { factor: 0.5, dur: 2.5 } },
+  cannon:    { speed: 26, kind: 'lob', model: 'boulder', splash: 3.2 },
+  poison:    { speed: 34, kind: 'homing', model: 'bolt', color: 0x60ff60, poison: { dps: 12, dur: 4 } },
+  sniper:    { speed: 90, kind: 'homing', model: 'ballista' },
+  web:       { speed: 30, kind: 'homing', model: 'bolt', color: 0xe0e0e0, slow: { factor: 0.7, dur: 3 } },
 };
 
 // ---------------------------------------------------------------------------
@@ -229,6 +277,18 @@ DATA.buildings = {
                    range: 22, dmg: 45, cd: 2.2, projectile: 'magic', desc: 'Lobs exploding fire that splashes in 3.5m and burns.' },
   frost_tower:   { key: 'frost_tower', name: 'Frost Tower', cost: 260, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 18, dmg: 14, cd: 0.9, projectile: 'frost', desc: 'Weak damage but slows targets by 50%.' },
+  cannon_tower:  { key: 'cannon_tower', name: 'Cannon Tower', cost: 380, hp: 1100, w: 2, d: 2, cat: 'tower', tower: true,
+                   range: 24, dmg: 120, cd: 4.0, projectile: 'cannon', minRange: 6, desc: 'Lobs iron shot that splashes in 3m. Cannot hit anything closer than 6m.' },
+  lightning_tower:{ key: 'lightning_tower', name: 'Lightning Tower', cost: 340, hp: 850, w: 2, d: 2, cat: 'tower', tower: true,
+                   range: 18, dmg: 32, cd: 1.5, chain: { count: 4, radius: 6 }, desc: 'Chain lightning that arcs to four enemies and ignores armour.' },
+  poison_tower:  { key: 'poison_tower', name: 'Poison Tower', cost: 240, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
+                   range: 18, dmg: 8, cd: 1.1, projectile: 'poison', desc: 'Darts that poison for 12 damage/s over 4s. Stacks nothing, but never misses.' },
+  watchtower:    { key: 'watchtower', name: 'Watchtower', cost: 300, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
+                   range: 36, dmg: 65, cd: 3.2, projectile: 'sniper', prefersCasters: true, desc: 'Marksmen with a 36m reach who pick off casters and artillery first.' },
+  barricade: { key: 'barricade', name: 'Spiked Barricade', cost: 9, hp: 320, w: 1, d: 1, cat: 'defense', drag: true, spikes: 7,
+              desc: 'Cheap and weak, but every melee blow against it wounds the attacker for 7.' },
+  trap:     { key: 'trap', name: 'Spike Trap', cost: 45, hp: 200, w: 1, d: 1, cat: 'defense', interior: [[0, 0]], trap: { dmg: 70, radius: 1.6, slow: 0.5, rearm: 20 },
+              desc: 'Hidden in the ground. Enemies stepping on it take 70 damage and are slowed. Rearms after 20s.' },
   barracks: { key: 'barracks', name: 'Barracks', cost: 160, hp: 1200, w: 3, d: 3, cat: 'economy', soldierCap: 6,
               desc: '+6 soldier capacity. Recruits muster here.' },
   farm:     { key: 'farm', name: 'Farm', cost: 150, hp: 500, w: 3, d: 3, cat: 'economy', income: 45, costGrowth: 1.3,
@@ -237,15 +297,19 @@ DATA.buildings = {
               desc: '+90 gold at the end of each wave. Each mine you own makes the next one 60% pricier.' },
   blacksmith: { key: 'blacksmith', name: 'Blacksmith', cost: 300, hp: 900, w: 3, d: 3, cat: 'economy', unique: true, soldierDmg: 0.15,
               desc: 'Soldiers deal +15% damage. Unlocks the Weapon and Armor upgrades.' },
-  shrine:   { key: 'shrine', name: 'Healing Shrine', cost: 220, hp: 600, w: 2, d: 2, cat: 'economy', heal: { radius: 10, hps: 6 },
-              desc: 'Heals friendly units within 10m for 6 HP/s.' },
+  shrine:   { key: 'shrine', name: 'Healing Shrine', cost: 220, hp: 600, w: 2, d: 2, cat: 'economy', heal: { radius: 10, hps: 7 },
+              desc: 'During a wave, heals friendly units within 10m for 7 HP/s. Everyone is healed fully between waves anyway.' },
+  market:   { key: 'market', name: 'Market', cost: 350, hp: 700, w: 3, d: 3, cat: 'economy', unique: true, killBonus: 0.25,
+              desc: '+25% gold from kills. One per fortress.' },
+  tavern:   { key: 'tavern', name: 'Tavern', cost: 260, hp: 800, w: 3, d: 3, cat: 'economy', unique: true, soldierCap: 3, soldierSpeed: 0.12,
+              desc: '+3 soldier capacity and soldiers move 12% faster. One per fortress.' },
   icewall:  { key: 'icewall', name: 'Ice Wall', cost: 0, hp: 450, w: 1, d: 1, cat: 'special', temporary: true, hidden: true,
               desc: 'Conjured ice. Melts on its own.' },
   keep:     { key: 'keep', name: 'The Keep', cost: 0, hp: 3200, w: 3, d: 3, cat: 'core', unique: true, keep: true, soldierCap: 8,
               interior: [[1, 1], [1, 2]], desc: 'The throne room. Units inside cannot be shot at from outside.' },
 };
 
-DATA.buildOrder = ['wall', 'gate', 'arrow_tower', 'ballista_tower', 'mage_tower', 'frost_tower', 'barracks', 'farm', 'mine', 'blacksmith', 'shrine'];
+DATA.buildOrder = ['wall', 'barricade', 'gate', 'trap', 'arrow_tower', 'ballista_tower', 'mage_tower', 'frost_tower', 'cannon_tower', 'lightning_tower', 'poison_tower', 'watchtower', 'barracks', 'farm', 'mine', 'blacksmith', 'shrine', 'market', 'tavern'];
 
 DATA.towerUpgrade = { maxLevel: 3, dmg: 1.4, range: 1.1, hp: 1.3, costMul: 0.8 };
 
@@ -260,6 +324,8 @@ DATA.upgrades = {
   hero:     { key: 'hero', name: 'Hero Training', cost: 250, max: 5, desc: 'Heroes gain +15% damage and +15% HP per level.' },
   royal:    { key: 'royal', name: 'Royal Guard', cost: 220, max: 5, desc: 'The King gains +25% HP and +2 HP/s regen per level.' },
   garrison: { key: 'garrison', name: 'Garrison', cost: 120, max: 6, desc: '+3 soldier capacity per level.' },
+  marksman: { key: 'marksman', name: 'Marksmanship', cost: 160, max: 4, desc: 'Archers, crossbowmen and apprentices gain +12% range and +10% damage per level.' },
+  fortune:  { key: 'fortune', name: 'Fortune', cost: 300, max: 3, desc: '+10% gold from every source per level.' },
 };
 DATA.upgradeCostGrowth = 1.55;
 
@@ -267,20 +333,30 @@ DATA.upgradeCostGrowth = 1.55;
 // Waves
 // ---------------------------------------------------------------------------
 DATA.waves = {
-  budget: (n) => 40 + 32 * n + 5 * n * n,
+  budget: (n) => 48 + 38 * n + 6 * n * n,
   clearBonus: (n) => 70 + 35 * n,
-  hpScale: (n) => n <= 8 ? 1 : 1 + (n - 8) * 0.05,
+  hpScale: (n) => n <= 6 ? 1 : 1 + (n - 6) * 0.055,
+  playerScale: (players) => 1 + 0.65 * Math.max(0, players - 1),
   bossEvery: 5,
   maxCount: 130,
 };
 
-DATA.spawnPoints = [
-  { name: 'North', x: 0, z: -70 },      { name: 'North-East', x: 63, z: -63 },
-  { name: 'East', x: 70, z: 0 },        { name: 'South-East', x: 63, z: 63 },
-  { name: 'South', x: 0, z: 70 },       { name: 'South-West', x: -63, z: 63 },
-  { name: 'West', x: -70, z: 0 },       { name: 'North-West', x: -63, z: -63 },
-];
+DATA.spawnPoints = (() => {
+  const R = DATA.SPAWN_RADIUS, D = Math.round(R * 0.9);
+  return [
+    { name: 'North', x: 0, z: -R },      { name: 'North-East', x: D, z: -D },
+    { name: 'East', x: R, z: 0 },        { name: 'South-East', x: D, z: D },
+    { name: 'South', x: 0, z: R },       { name: 'South-West', x: -D, z: D },
+    { name: 'West', x: -R, z: 0 },       { name: 'North-West', x: -D, z: -D },
+  ];
+})();
 
+DATA.mapTypes = {
+  valley:    { label: 'River Valley', desc: 'A river with three fords splits the plain; scattered rocks and woods.', river: true, rocks: [5, 7], forests: [3, 4], lakes: 0, hills: 1, palette: { grass: 0x4f8a3a, grass2: 0x7aa14a, dry: 0x8a9a4a, sky: 0x9cc4e4 } },
+  highlands: { label: 'Highlands', desc: 'Rock ridges and two mountain lakes; enemies funnel through the gaps.', river: false, rocks: [9, 12], forests: [1, 2], lakes: 2, hills: 1.6, palette: { grass: 0x5a8a4a, grass2: 0x8aa060, dry: 0x9a9a6a, sky: 0xa8c8e8 } },
+  darkwood:  { label: 'Darkwood', desc: 'Dense forests everywhere, a slow stream, and few open lanes.', river: true, rocks: [2, 3], forests: [7, 9], lakes: 0, hills: 0.7, palette: { grass: 0x3f6f32, grass2: 0x5a8a40, dry: 0x6a7a3a, sky: 0x8ab0cc } },
+  badlands:  { label: 'Badlands', desc: 'Dry, open ground with ruins and a few crags. Nowhere to hide.', river: false, rocks: [4, 6], forests: [0, 1], lakes: 1, hills: 1.2, palette: { grass: 0x9a8a4a, grass2: 0xb8a060, dry: 0xc0a870, sky: 0xd8c4a0 }, ruins: 14 },
+};
 DATA.siteUrl = 'https://matthewjbarnett.github.io/crownhold/'; // the full game, outside any embedding sandbox
 DATA.startGold = 500;
 DATA.baseSoldierCap = 0; // keep + barracks + garrison supply the cap

@@ -173,6 +173,14 @@ const Models = {
       const cape = this.box(0.6, 0.9, 0.06, this.mat(0x7a1030), 0, 0.95, -0.2);
       g.add(cape);
     }
+    if (def.wings) {
+      const wm = this.freshMat(0x5a3a6a); mats.push(wm);
+      for (const s of [-1, 1]) {
+        const pivot = new THREE.Group(); pivot.position.set(s * 0.3, 1.3, -0.15);
+        const wing = this.box(1.3, 0.06, 0.6, wm, s * 0.65, 0.1, 0); wing.rotation.y = s * 0.3; pivot.add(wing);
+        g.add(pivot); parts[s < 0 ? 'wingL' : 'wingR'] = pivot;
+      }
+    }
     g.scale.setScalar(s);
     return { group: g, parts, mats, eyeHeight: 1.62 * s, height: 1.8 * s, mesh: torso };
   },
@@ -195,6 +203,53 @@ const Models = {
       g.add(hip); parts[name] = hip;
     }
     return { group: g, parts, mats: [fur], eyeHeight: 0.85, height: 1.0, mesh: body };
+  },
+  rider(def) {
+    // a horse with the humanoid rider on top; horse legs reuse the limb names so the walk cycle just works
+    const g = new THREE.Group();
+    const parts = {};
+    const horse = this.freshMat(0x6a4a2a), dark = this.mat(0x2a1a10);
+    const body = this.box(0.6, 0.6, 1.5, horse, 0, 1.05, 0); g.add(body); parts.body = body;
+    const neck = this.box(0.3, 0.7, 0.35, horse, 0, 1.55, 0.75); neck.rotation.x = -0.5; g.add(neck);
+    g.add(this.box(0.28, 0.3, 0.55, horse, 0, 1.85, 1.05));
+    for (const s of [-1, 1]) g.add(this.box(0.08, 0.16, 0.06, dark, s * 0.1, 2.05, 0.95, false));
+    const tail = this.box(0.1, 0.6, 0.1, dark, 0, 1.0, -0.8); tail.rotation.x = 0.5; g.add(tail);
+    for (const [name, x, z] of [['armL', -0.22, 0.55], ['armR', 0.22, 0.55], ['legL', -0.22, -0.55], ['legR', 0.22, -0.55]]) {
+      const hip = new THREE.Group(); hip.position.set(x, 0.8, z);
+      hip.add(this.box(0.16, 0.8, 0.18, horse, 0, -0.4, 0)); g.add(hip); parts[name] = hip;
+    }
+    const man = this.humanoid(Object.assign({}, def, { scale: 0.85 }), 'player');
+    man.group.position.set(0, 0.85, 0);
+    // rider legs straddle the horse
+    if (man.parts.legL) man.parts.legL.rotation.x = -0.9; if (man.parts.legR) man.parts.legR.rotation.x = -0.9;
+    man.parts.legL = null; man.parts.legR = null;
+    g.add(man.group);
+    parts.riderArmR = man.parts.armR; parts.riderArmL = man.parts.armL; parts.weapon = man.parts.weapon; parts.head = man.parts.head;
+    return { group: g, parts, mats: [horse].concat(man.mats), eyeHeight: 2.45, height: 2.7, mesh: body };
+  },
+  spider(def) {
+    const g = new THREE.Group();
+    const fur = this.freshMat(def.color || 0x3a2a3a), dark = this.mat(0x1a1018);
+    const parts = {};
+    const body = this.sphere(0.55, fur, 0, 0.75, 0.2, 8); g.add(body); parts.body = body;
+    const abd = this.sphere(0.8, fur, 0, 0.85, -0.9, 8); abd.scale.set(1, 0.85, 1.2); g.add(abd);
+    const head = this.sphere(0.32, dark, 0, 0.8, 0.75, 8); g.add(head); parts.head = head;
+    const eye = this.mat(0xff3030, { emissive: 0xff1010, emissiveIntensity: 1 });
+    for (let k = 0; k < 4; k++) g.add(this.box(0.07, 0.07, 0.05, eye, -0.18 + k * 0.12, 0.88 + (k % 2) * 0.08, 1.02, false));
+    for (const s of [-1, 1]) g.add(this.cone(0.06, 0.35, dark, s * 0.12, 0.6, 1.0, 5).rotateX(Math.PI / 2));
+    // four leg pairs: each pair hangs from one pivot so the walk cycle animates them
+    for (let k = 0; k < 4; k++) {
+      const name = ['armL', 'armR', 'legL', 'legR'][k];
+      const side = k % 2 === 0 ? -1 : 1, z = 0.55 - Math.floor(k / 2) * 0.9;
+      const pivot = new THREE.Group(); pivot.position.set(side * 0.4, 0.8, z);
+      for (const zz of [0, -0.45]) {
+        const upper = this.box(0.9, 0.09, 0.09, fur, side * 0.45, 0.25, zz); upper.rotation.z = side * -0.6; pivot.add(upper);
+        const lower = this.box(0.09, 0.9, 0.09, fur, side * 0.95, -0.2, zz); pivot.add(lower);
+      }
+      g.add(pivot); parts[name] = pivot;
+    }
+    const s = def.scale || 1; g.scale.setScalar(s);
+    return { group: g, parts, mats: [fur], eyeHeight: 1.1 * s, height: 1.5 * s, mesh: body, legSwing: 0.35 };
   },
   catapult(def) {
     const g = new THREE.Group();
@@ -304,6 +359,74 @@ const Models = {
         { const c = new THREE.Mesh(new THREE.OctahedronGeometry(1.1, 0), this.mat(0x90e0ff, { emissive: 0x40b0ff, emissiveIntensity: 1 })); c.position.y = 7.8; c.castShadow = true; g.add(c); g.userData.orb = c; }
         for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2 + 0.4; const s = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), this.mat(0xc0f0ff, { emissive: 0x60c0ff, emissiveIntensity: 0.6 })); s.position.set(Math.sin(a) * 1.5, 6.7, Math.cos(a) * 1.5); g.add(s); }
         break;
+      case 'cannon_tower': {
+        g.add(this.box(3.6, 4.5, 3.6, st, 0, 2.25, 0));
+        g.add(this.box(4.0, 0.5, 4.0, sd, 0, 4.75, 0));
+        this.merlons(g, 4.0, 4.0, 5.25, 1.15);
+        const t = new THREE.Group(); t.position.y = 5.2;
+        t.add(this.cyl(0.32, 0.4, 2.6, this.mat(0x2a2a2e), 0, 0.6, 0.6, 10).rotateX(Math.PI / 2 - 0.25));
+        t.add(this.box(1.2, 0.5, 1.0, wd, 0, 0.25, -0.2)); t.add(this.cyl(0.35, 0.35, 0.25, wd, -0.6, 0.35, -0.2, 8).rotateZ(Math.PI / 2)); t.add(this.cyl(0.35, 0.35, 0.25, wd, 0.6, 0.35, -0.2, 8).rotateZ(Math.PI / 2));
+        g.add(t); g.userData.turret = t;
+        break;
+      }
+      case 'lightning_tower': {
+        g.add(this.cyl(1.0, 1.4, 7.5, this.mat(0x6a5a4a), 0, 3.75, 0, 8));
+        for (let k = 0; k < 3; k++) g.add(new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.12, 6, 14), this.mat(0xc08a40)).rotateX(Math.PI / 2).translateZ(-(2 + k * 2)));
+        const orb = this.sphere(0.6, this.mat(0xc0e0ff, { emissive: 0x60a0ff, emissiveIntensity: 1.2 }), 0, 8.6, 0, 10); g.add(orb); g.userData.orb = orb;
+        for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2; g.add(this.cyl(0.05, 0.05, 1.6, this.mat(0xc08a40), Math.sin(a) * 0.9, 8.2, Math.cos(a) * 0.9, 5, false).rotateX(0.5 * Math.cos(a)).rotateZ(-0.5 * Math.sin(a))); }
+        break;
+      }
+      case 'poison_tower': {
+        g.add(this.cyl(1.3, 1.6, 5.0, this.mat(0x5a6a4a), 0, 2.5, 0, 8));
+        g.add(this.cyl(1.7, 1.4, 0.6, wd, 0, 5.3, 0, 10));
+        const vat = this.cyl(1.2, 1.0, 1.4, this.mat(0x3a4a3a), 0, 6.2, 0, 10); g.add(vat);
+        const goo = this.cyl(1.1, 1.1, 0.2, this.mat(0x60ff60, { emissive: 0x30c030, emissiveIntensity: 0.9 }), 0, 6.95, 0, 10); g.add(goo); g.userData.orb = goo;
+        for (let k = 0; k < 3; k++) g.add(this.sphere(0.18, this.mat(0x80ff80, { emissive: 0x30c030, emissiveIntensity: 0.8 }), Math.sin(k * 2.1) * 0.6, 7.2 + k * 0.3, Math.cos(k * 2.1) * 0.6, 6));
+        break;
+      }
+      case 'watchtower': {
+        for (const [x, z] of [[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5]]) g.add(this.box(0.3, 10, 0.3, wd, x, 5, z));
+        for (let y = 2.5; y < 9; y += 3) { g.add(this.box(3.4, 0.15, 0.15, wd, 0, y, -1.5)); g.add(this.box(3.4, 0.15, 0.15, wd, 0, y, 1.5)); g.add(this.box(0.15, 0.15, 3.4, wd, -1.5, y, 0)); g.add(this.box(0.15, 0.15, 3.4, wd, 1.5, y, 0)); }
+        g.add(this.box(3.8, 0.3, 3.8, wd, 0, 10, 0));
+        for (const [x, z] of [[-1.7, 0], [1.7, 0], [0, -1.7], [0, 1.7]]) g.add(this.box(x ? 0.15 : 3.8, 1.0, z ? 0.15 : 3.8, wd, x, 10.6, z));
+        { const r = this.cone(3.0, 1.6, this.roof, 0, 12.2, 0, 4); r.rotation.y = Math.PI / 4; g.add(r); }
+        this.flag(g, 0, 12.8, 0, 0x3060c0);
+        break;
+      }
+      case 'barricade': {
+        for (const s of [-1, 1]) { const b = this.box(0.25, 2.4, 0.25, wd, 0, 0.9, s * 0.35); b.rotation.x = s * 0.7; g.add(b); const sp = this.cone(0.12, 0.5, this.mat(0xcfd6dd), 0, 2.15, s * 1.0, 5); sp.rotation.x = s * 0.7; g.add(sp); }
+        g.add(this.box(2.0, 0.25, 0.25, wd, 0, 1.1, 0));
+        for (let k = -1; k <= 1; k++) { const sp = this.cone(0.1, 0.6, this.mat(0xcfd6dd), k * 0.7, 0.35, 0.6, 5); sp.rotation.x = -1.2; g.add(sp); }
+        break;
+      }
+      case 'trap': {
+        const plate = new THREE.Group();
+        plate.add(this.box(1.7, 0.12, 1.7, this.mat(0x5a5248), 0, 0.06, 0));
+        for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) plate.add(this.cone(0.1, 0.7, this.mat(0xcfd6dd), a * 0.5, 0.45, b * 0.5, 5));
+        g.add(plate); g.userData.plate = plate;
+        break;
+      }
+      case 'market': {
+        g.add(this.box(5.0, 0.4, 5.0, this.plaster, 0, 0.2, 0));
+        for (const [x, z] of [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]]) g.add(this.box(0.25, 3.2, 0.25, wd, x, 1.6, z));
+        { const awn = this.box(5.4, 0.2, 5.4, this.mat(0xc04040), 0, 3.3, 0); g.add(awn); }
+        for (let k = 0; k < 5; k++) g.add(this.box(1.0, 0.1, 5.4, this.mat(k % 2 ? 0xf0e0c0 : 0xc04040), -2.0 + k * 1.0, 3.42, 0, false));
+        g.add(this.box(3.6, 0.9, 1.2, wd, 0, 0.85, 1.4));
+        for (let k = 0; k < 4; k++) g.add(this.sphere(0.25, this.mat([0xd04030, 0xe0b040, 0x60a040, 0xe08030][k]), -1.2 + k * 0.8, 1.45, 1.4, 6));
+        g.add(this.box(1.2, 1.0, 1.2, wd, -1.4, 0.9, -1.2)); g.add(this.box(1.2, 1.0, 1.2, wd, 1.2, 0.9, -1.4));
+        break;
+      }
+      case 'tavern': {
+        g.add(this.box(5.2, 3.4, 4.8, this.plaster, 0, 1.7, 0));
+        g.add(this.box(5.4, 1.2, 5.0, wd, 0, 0.6, 0));
+        { const r = this.cone(4.2, 2.2, this.mat(0x5a3a2a), 0, 4.5, 0, 4); r.rotation.y = Math.PI / 4; g.add(r); }
+        g.add(this.box(0.7, 2.0, 0.7, st, 1.6, 5.2, -1.2));
+        g.add(this.box(1.1, 2.0, 0.3, wd, 0, 1.0, 2.45));
+        for (const x of [-1.7, 1.7]) g.add(this.box(0.9, 0.8, 0.2, this.mat(0xffd070, { emissive: 0xa06010, emissiveIntensity: 0.6 }), x, 2.0, 2.45, false));
+        g.add(this.box(0.1, 1.4, 0.1, wd, 2.9, 3.0, 2.2, false)); g.add(this.box(1.2, 0.8, 0.08, this.mat(0x8a5a2a), 2.9, 3.4, 2.7, false));
+        g.add(this.cyl(0.35, 0.35, 0.7, wd, -2.6, 0.35, 2.6, 8)); g.add(this.cyl(0.35, 0.35, 0.7, wd, 2.2, 0.35, -2.7, 8));
+        break;
+      }
       case 'barracks':
         g.add(this.box(5.4, 3.2, 5.4, this.plaster, 0, 1.6, 0));
         g.add(this.box(5.6, 1.0, 5.6, wd, 0, 0.5, 0));

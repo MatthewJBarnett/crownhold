@@ -66,6 +66,14 @@ button.icon { width: 34px; height: 30px; padding: 0; font-size: 13px; }
 #mpblocked button { margin-left: 8px; border-color: var(--gold); color: var(--gold); font-weight: 600; }
 #mpstatus.err { color: var(--bad); }
 #roomstat { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 8px; }
+.code { color: var(--gold); letter-spacing: 0.18em; font-family: 'Cinzel', serif; font-size: 20px; }
+.players { display: flex; flex-direction: column; gap: 6px; max-width: 460px; margin: 14px auto; }
+.players .p { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; text-align: left; }
+.players .p .sw { width: 12px; height: 12px; border-radius: 50%; }
+.players .p .nm { flex: 1; font-weight: 600; }
+.players .p .hero { color: var(--muted); font-size: 12px; }
+.players .p .tag { font-size: 11px; color: var(--gold); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; }
+#lobby .menu-row { gap: 14px; margin-top: 10px; }
 button.mini { padding: 3px 8px; font-size: 11px; }
 .settings { margin: 6px 0 4px; flex-wrap: wrap; }
 .settings input[type=range] { width: 200px; accent-color: #e8c060; }
@@ -222,6 +230,11 @@ button.mini { padding: 3px 8px; font-size: 11px; }
         <button data-d="easy">Easy</button><button data-d="normal" class="on">Normal</button><button data-d="hard">Hard</button>
       </div>
     </div>
+    <div class="menu-row">
+      <label>Map</label>
+      <div class="seg" id="mapsel"><button data-m="random" class="on">Random</button><button data-m="valley">River Valley</button><button data-m="highlands">Highlands</button><button data-m="darkwood">Darkwood</button><button data-m="badlands">Badlands</button></div>
+    </div>
+    <p id="mapdesc" class="hint" style="margin-top:4px">A different layout every game.</p>
     <div class="menu-row settings">
       <label>Mouse sensitivity</label>
       <input type="range" class="sens" min="10" max="400" step="5" value="100"><span class="sensval">100%</span>
@@ -361,6 +374,15 @@ button.mini { padding: 3px 8px; font-size: 11px; }
   </div>
 </div>
 
+<div id="lobby" class="overlay hidden">
+  <div class="menu-box">
+    <h2 class="title small">War Council</h2>
+    <p class="subtitle">Room <b id="lobbycode" class="code"></b> <button id="lobbycopy" class="mini">Copy code</button> <button id="lobbylink" class="mini">Copy invite link</button></p>
+    <div id="lobbyplayers" class="players"></div>
+    <p id="lobbyinfo" class="hint"></p>
+    <div class="menu-row"><button id="lobbystart" class="big hidden">Start the siege</button><span id="lobbywait" class="hint hidden">Waiting for the host to start…</span><button id="lobbyleave">Leave</button></div>
+  </div>
+</div>
 <div id="connecting" class="overlay hidden"><div class="menu-box"><h2 class="title small">Joining the defence…</h2><p class="subtitle">Waiting for the host to send the battlefield.</p></div></div>
 
 <!-- ===================== game over ===================== -->
@@ -393,11 +415,11 @@ window.addEventListener('error', function (e) {
 
 const DATA = {};
 
-DATA.CELL = 2;          // metres per grid cell
-DATA.GRID = 80;         // cells per side (160m map)
-DATA.BUILD_RADIUS = 56; // max |x|,|z| for building placement (metres)
-DATA.SPAWN_RADIUS = 72; // enemy spawn ring radius
-DATA.MAP_HALF = 79;     // hard clamp for unit positions
+DATA.CELL = 2;                                  // metres per grid cell
+DATA.GRID = 110;                                // cells per side (220m map)
+DATA.MAP_HALF = DATA.GRID * DATA.CELL / 2 - 1;  // hard clamp for unit positions
+DATA.BUILD_RADIUS = 72;                         // max |x|,|z| for building placement (metres)
+DATA.SPAWN_RADIUS = DATA.MAP_HALF - 11;         // enemy spawn ring radius
 
 DATA.difficulties = {
   easy:   { label: 'Easy',   hp: 0.75, dmg: 0.75, budget: 0.75, gold: 1.25 },
@@ -538,6 +560,26 @@ DATA.units = {
     desc: 'Repairs damaged buildings for free, 35 HP per second. Runs from enemies and does not count against the soldier cap (max 4).',
     color: 0x7a5a3a, cloth: 0x6a5a3a, weapon: 'hammer', skin: 0xe8c39e,
   },
+  crossbowman: {
+    key: 'crossbowman', name: 'Crossbowman', cost: 80, hp: 95, dmg: 19, range: 15, cd: 1.7, armor: 0.1, speed: 5.4, radius: 0.4,
+    attack: 'ranged', projectile: 'bolt', magic: true, desc: 'Armour-piercing bolts. Slow to reload but ignores armour.',
+    color: 0x6a6a7a, cloth: 0x4a3a5a, weapon: 'bow', helmet: true,
+  },
+  cavalry: {
+    key: 'cavalry', name: 'Knight', cost: 130, hp: 230, dmg: 28, range: 2.6, cd: 1.0, armor: 0.3, speed: 8.4, radius: 0.55,
+    attack: 'melee', large: true, model: 'rider', desc: 'Mounted lancer. Fast enough to run down catapults and casters.',
+    color: 0xb0b8c0, cloth: 0x8a2a2a, weapon: 'pike', helmet: true,
+  },
+  priest: {
+    key: 'priest', name: 'Priest', cost: 90, hp: 85, dmg: 5, range: 2.0, cd: 1.5, armor: 0, speed: 5.6, radius: 0.4,
+    attack: 'melee', medic: { hps: 9, radius: 6 }, noCap: false, desc: 'Heals allies within 6m for 9 HP/s and follows the fighting. Does not fight.',
+    color: 0xf0e6d0, cloth: 0xe8dcc0, weapon: 'staff', robe: true, hood: true,
+  },
+  apprentice: {
+    key: 'apprentice', name: 'Apprentice', cost: 110, hp: 75, dmg: 22, range: 16, cd: 1.8, armor: 0, speed: 5.4, radius: 0.4,
+    attack: 'ranged', projectile: 'fireball', splash: 2.0, magic: true, desc: 'Fireballs that splash in 2m. Fragile.',
+    color: 0xb04a2a, cloth: 0x5a2a1a, weapon: 'staff', robe: true, hat: true,
+  },
   wolf: {
     key: 'wolf', name: 'Wolf', hp: 95, dmg: 15, range: 1.8, cd: 0.7, armor: 0.05, speed: 8.0, radius: 0.4,
     attack: 'melee', noCap: true, summoned: true, model: 'wolf', color: 0x6a6a6a,
@@ -571,6 +613,26 @@ DATA.enemies = {
                 attack: 'ranged', projectile: 'deathbolt', magic: true, kite: true, summon: { type: 'skeleton', count: 3, every: 10 }, color: 0x5a3a7a, cloth: 0x2a1a3a, weapon: 'staff', robe: true, hood: true, skin: 0xb0b0c0 },
   frostwitch: { key: 'frostwitch', name: 'Frost Witch', hp: 130, dmg: 15, range: 16, cd: 1.8, armor: 0, speed: 4.2, radius: 0.42, reward: 28, unlock: 9, weight: 2,
                 attack: 'ranged', projectile: 'frostbolt', slow: { factor: 0.45, dur: 2.5 }, magic: true, kite: true, slowAura: { radius: 7, factor: 0.3 }, color: 0x8ac0e0, cloth: 0x2a4a6a, weapon: 'staff', robe: true, hat: true, skin: 0xd0e0f0 },
+  warg:       { key: 'warg', name: 'Warg', hp: 120, dmg: 16, range: 2.0, cd: 0.8, armor: 0.05, speed: 8.2, radius: 0.45, reward: 12, unlock: 4, weight: 3,
+                attack: 'melee', model: 'wolf', color: 0x3a3a3a },
+  shieldbearer:{ key: 'shieldbearer', name: 'Shieldbearer', hp: 240, dmg: 12, range: 2.2, cd: 1.2, armor: 0.5, speed: 3.8, radius: 0.48, reward: 18, unlock: 5, weight: 3,
+                attack: 'melee', color: 0x7a7a80, cloth: 0x4a4a52, weapon: 'sword', helmet: true, shield: true, skin: 0x8fa86a },
+  crossbow:   { key: 'crossbow', name: 'Crossbowman', hp: 70, dmg: 15, range: 16, cd: 1.9, armor: 0.05, speed: 4.5, radius: 0.4, reward: 12, unlock: 6, weight: 3,
+                attack: 'ranged', projectile: 'bolt', magic: true, color: 0x5a5a6a, cloth: 0x3a3a4a, weapon: 'bow', helmet: true, skin: 0x8fa86a },
+  sapper:     { key: 'sapper', name: 'Sapper', hp: 65, dmg: 5, range: 1.8, cd: 1, armor: 0, speed: 6.6, radius: 0.4, reward: 14, unlock: 7, weight: 2.5,
+                attack: 'melee', prefersBuildings: true, suicide: { radius: 3.2, buildingDmg: 420, unitDmg: 60 }, color: 0x8a6a3a, cloth: 0x5a4a2a, weapon: 'club', skin: 0x8fa86a },
+  harpy:      { key: 'harpy', name: 'Harpy', hp: 75, dmg: 11, range: 2.0, cd: 0.9, armor: 0, speed: 7.2, radius: 0.42, reward: 14, unlock: 9, weight: 2.5,
+                attack: 'melee', flying: true, altitude: 2.6, wings: true, color: 0x7a5a8a, cloth: 0x4a3a5a, weapon: 'dagger', skin: 0xc9a58a },
+  plaguebearer:{ key: 'plaguebearer', name: 'Plaguebearer', hp: 110, dmg: 10, range: 2.2, cd: 1.1, armor: 0, speed: 4.4, radius: 0.44, reward: 16, unlock: 10, weight: 2.5,
+                attack: 'melee', deathCloud: { radius: 5, dps: 12, dur: 6 }, color: 0x5a7a3a, cloth: 0x3a4a2a, weapon: 'club', skin: 0x9ab070 },
+  troll:      { key: 'troll', name: 'Troll', hp: 520, dmg: 36, range: 2.8, cd: 1.6, armor: 0.1, speed: 3.6, radius: 0.7, reward: 34, unlock: 11, weight: 2,
+                attack: 'melee', large: true, scale: 1.7, regen: 12, color: 0x4a6a4a, cloth: 0x3a3a2a, weapon: 'club', skin: 0x5a7a5a },
+  trebuchet:  { key: 'trebuchet', name: 'Trebuchet', hp: 520, dmg: 60, buildingDmg: 260, range: 34, minRange: 10, cd: 7.0, armor: 0.15, speed: 1.8, radius: 1.2, reward: 70, unlock: 12, weight: 1,
+                attack: 'artillery', projectile: 'boulder', splash: 3.6, large: true, scale: 1.35, prefersBuildings: true, model: 'catapult' },
+  warlock:    { key: 'warlock', name: 'Warlock', hp: 140, dmg: 18, range: 17, cd: 2.2, armor: 0, speed: 4.0, radius: 0.42, reward: 34, unlock: 13, weight: 2,
+                attack: 'ranged', projectile: 'deathbolt', magic: true, kite: true, hex: { dmgMul: 0.5, dur: 5 }, color: 0x6a2a6a, cloth: 0x3a1a3a, weapon: 'staff', robe: true, hat: true, skin: 0xb090b0 },
+  spiderling: { key: 'spiderling', name: 'Spiderling', hp: 45, dmg: 9, range: 1.8, cd: 0.8, armor: 0, speed: 7.0, radius: 0.36, reward: 2, unlock: 99, weight: 0,
+                attack: 'melee', model: 'spider', scale: 0.55, color: 0x3a2a3a },
   skeleton:   { key: 'skeleton', name: 'Skeleton', hp: 40, dmg: 8, range: 2.0, cd: 1.0, armor: 0, speed: 5.2, radius: 0.38, reward: 1, unlock: 99, weight: 0,
                 attack: 'melee', color: 0xe0e0d0, cloth: 0xe0e0d0, weapon: 'sword', skin: 0xe8e8d8, skeleton: true },
   // bosses
@@ -579,11 +641,15 @@ DATA.enemies = {
   lich:       { key: 'lich', name: 'The Lich', boss: true, hp: 3300, dmg: 45, range: 18, cd: 1.4, armor: 0.15, speed: 3.6, radius: 0.7, reward: 520,
                 attack: 'ranged', projectile: 'deathbolt', magic: true, large: true, scale: 1.5, summon: { type: 'skeleton', count: 5, every: 12 }, blink: { every: 14, dist: 12 },
                 color: 0x3a2a5a, cloth: 0x1a1030, weapon: 'staff', robe: true, crown: true, skin: 0xc0c0d0 },
+  spiderqueen:{ key: 'spiderqueen', name: 'Spider Queen', boss: true, hp: 4600, dmg: 55, range: 3.0, cd: 1.5, armor: 0.2, speed: 4.2, radius: 1.6, reward: 700,
+                attack: 'melee', large: true, model: 'spider', scale: 1.6, summon: { type: 'spiderling', count: 6, every: 11 }, webShot: { every: 7, range: 16, slow: 0.7, dur: 3 }, color: 0x2a1a2a },
+  golem:      { key: 'golem', name: 'Iron Golem', boss: true, hp: 6500, dmg: 90, range: 3.4, cd: 2.4, armor: 0.5, speed: 3.2, radius: 1.2, reward: 1000,
+                attack: 'melee', large: true, scale: 2.6, unstoppable: true, slam: { every: 7, radius: 8, dmg: 70 }, color: 0x5a5a66, cloth: 0x3a3a44, weapon: 'club', skin: 0x6a6a76 },
   dragon:     { key: 'dragon', name: 'Ancient Dragon', boss: true, hp: 5200, dmg: 60, range: 4.5, cd: 1.8, armor: 0.25, speed: 6.5, radius: 2.2, reward: 900,
                 attack: 'melee', large: true, flying: true, altitude: 3.2, breath: { every: 9, range: 13, dps: 32, dur: 3 }, model: 'dragon', color: 0x8a1a1a },
 };
 
-DATA.bossSchedule = ['ogre', 'lich', 'dragon'];
+DATA.bossSchedule = ['ogre', 'lich', 'dragon', 'spiderqueen', 'golem'];
 
 // ---------------------------------------------------------------------------
 // Projectiles
@@ -598,6 +664,10 @@ DATA.projectiles = {
   frostbolt: { speed: 32, kind: 'homing', model: 'bolt', color: 0x70d0ff },
   magic:     { speed: 30, kind: 'lob', model: 'fireball', splash: 3.5, burn: { dps: 8, dur: 3 } },
   frost:     { speed: 34, kind: 'homing', model: 'bolt', color: 0x70d0ff, slow: { factor: 0.5, dur: 2.5 } },
+  cannon:    { speed: 26, kind: 'lob', model: 'boulder', splash: 3.2 },
+  poison:    { speed: 34, kind: 'homing', model: 'bolt', color: 0x60ff60, poison: { dps: 12, dur: 4 } },
+  sniper:    { speed: 90, kind: 'homing', model: 'ballista' },
+  web:       { speed: 30, kind: 'homing', model: 'bolt', color: 0xe0e0e0, slow: { factor: 0.7, dur: 3 } },
 };
 
 // ---------------------------------------------------------------------------
@@ -617,6 +687,18 @@ DATA.buildings = {
                    range: 22, dmg: 45, cd: 2.2, projectile: 'magic', desc: 'Lobs exploding fire that splashes in 3.5m and burns.' },
   frost_tower:   { key: 'frost_tower', name: 'Frost Tower', cost: 260, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 18, dmg: 14, cd: 0.9, projectile: 'frost', desc: 'Weak damage but slows targets by 50%.' },
+  cannon_tower:  { key: 'cannon_tower', name: 'Cannon Tower', cost: 380, hp: 1100, w: 2, d: 2, cat: 'tower', tower: true,
+                   range: 24, dmg: 120, cd: 4.0, projectile: 'cannon', minRange: 6, desc: 'Lobs iron shot that splashes in 3m. Cannot hit anything closer than 6m.' },
+  lightning_tower:{ key: 'lightning_tower', name: 'Lightning Tower', cost: 340, hp: 850, w: 2, d: 2, cat: 'tower', tower: true,
+                   range: 18, dmg: 32, cd: 1.5, chain: { count: 4, radius: 6 }, desc: 'Chain lightning that arcs to four enemies and ignores armour.' },
+  poison_tower:  { key: 'poison_tower', name: 'Poison Tower', cost: 240, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
+                   range: 18, dmg: 8, cd: 1.1, projectile: 'poison', desc: 'Darts that poison for 12 damage/s over 4s. Stacks nothing, but never misses.' },
+  watchtower:    { key: 'watchtower', name: 'Watchtower', cost: 300, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
+                   range: 36, dmg: 65, cd: 3.2, projectile: 'sniper', prefersCasters: true, desc: 'Marksmen with a 36m reach who pick off casters and artillery first.' },
+  barricade: { key: 'barricade', name: 'Spiked Barricade', cost: 9, hp: 320, w: 1, d: 1, cat: 'defense', drag: true, spikes: 7,
+              desc: 'Cheap and weak, but every melee blow against it wounds the attacker for 7.' },
+  trap:     { key: 'trap', name: 'Spike Trap', cost: 45, hp: 200, w: 1, d: 1, cat: 'defense', interior: [[0, 0]], trap: { dmg: 70, radius: 1.6, slow: 0.5, rearm: 20 },
+              desc: 'Hidden in the ground. Enemies stepping on it take 70 damage and are slowed. Rearms after 20s.' },
   barracks: { key: 'barracks', name: 'Barracks', cost: 160, hp: 1200, w: 3, d: 3, cat: 'economy', soldierCap: 6,
               desc: '+6 soldier capacity. Recruits muster here.' },
   farm:     { key: 'farm', name: 'Farm', cost: 150, hp: 500, w: 3, d: 3, cat: 'economy', income: 45, costGrowth: 1.3,
@@ -625,15 +707,19 @@ DATA.buildings = {
               desc: '+90 gold at the end of each wave. Each mine you own makes the next one 60% pricier.' },
   blacksmith: { key: 'blacksmith', name: 'Blacksmith', cost: 300, hp: 900, w: 3, d: 3, cat: 'economy', unique: true, soldierDmg: 0.15,
               desc: 'Soldiers deal +15% damage. Unlocks the Weapon and Armor upgrades.' },
-  shrine:   { key: 'shrine', name: 'Healing Shrine', cost: 220, hp: 600, w: 2, d: 2, cat: 'economy', heal: { radius: 10, hps: 6 },
-              desc: 'Heals friendly units within 10m for 6 HP/s.' },
+  shrine:   { key: 'shrine', name: 'Healing Shrine', cost: 220, hp: 600, w: 2, d: 2, cat: 'economy', heal: { radius: 10, hps: 7 },
+              desc: 'During a wave, heals friendly units within 10m for 7 HP/s. Everyone is healed fully between waves anyway.' },
+  market:   { key: 'market', name: 'Market', cost: 350, hp: 700, w: 3, d: 3, cat: 'economy', unique: true, killBonus: 0.25,
+              desc: '+25% gold from kills. One per fortress.' },
+  tavern:   { key: 'tavern', name: 'Tavern', cost: 260, hp: 800, w: 3, d: 3, cat: 'economy', unique: true, soldierCap: 3, soldierSpeed: 0.12,
+              desc: '+3 soldier capacity and soldiers move 12% faster. One per fortress.' },
   icewall:  { key: 'icewall', name: 'Ice Wall', cost: 0, hp: 450, w: 1, d: 1, cat: 'special', temporary: true, hidden: true,
               desc: 'Conjured ice. Melts on its own.' },
   keep:     { key: 'keep', name: 'The Keep', cost: 0, hp: 3200, w: 3, d: 3, cat: 'core', unique: true, keep: true, soldierCap: 8,
               interior: [[1, 1], [1, 2]], desc: 'The throne room. Units inside cannot be shot at from outside.' },
 };
 
-DATA.buildOrder = ['wall', 'gate', 'arrow_tower', 'ballista_tower', 'mage_tower', 'frost_tower', 'barracks', 'farm', 'mine', 'blacksmith', 'shrine'];
+DATA.buildOrder = ['wall', 'barricade', 'gate', 'trap', 'arrow_tower', 'ballista_tower', 'mage_tower', 'frost_tower', 'cannon_tower', 'lightning_tower', 'poison_tower', 'watchtower', 'barracks', 'farm', 'mine', 'blacksmith', 'shrine', 'market', 'tavern'];
 
 DATA.towerUpgrade = { maxLevel: 3, dmg: 1.4, range: 1.1, hp: 1.3, costMul: 0.8 };
 
@@ -648,6 +734,8 @@ DATA.upgrades = {
   hero:     { key: 'hero', name: 'Hero Training', cost: 250, max: 5, desc: 'Heroes gain +15% damage and +15% HP per level.' },
   royal:    { key: 'royal', name: 'Royal Guard', cost: 220, max: 5, desc: 'The King gains +25% HP and +2 HP/s regen per level.' },
   garrison: { key: 'garrison', name: 'Garrison', cost: 120, max: 6, desc: '+3 soldier capacity per level.' },
+  marksman: { key: 'marksman', name: 'Marksmanship', cost: 160, max: 4, desc: 'Archers, crossbowmen and apprentices gain +12% range and +10% damage per level.' },
+  fortune:  { key: 'fortune', name: 'Fortune', cost: 300, max: 3, desc: '+10% gold from every source per level.' },
 };
 DATA.upgradeCostGrowth = 1.55;
 
@@ -655,20 +743,30 @@ DATA.upgradeCostGrowth = 1.55;
 // Waves
 // ---------------------------------------------------------------------------
 DATA.waves = {
-  budget: (n) => 40 + 32 * n + 5 * n * n,
+  budget: (n) => 48 + 38 * n + 6 * n * n,
   clearBonus: (n) => 70 + 35 * n,
-  hpScale: (n) => n <= 8 ? 1 : 1 + (n - 8) * 0.05,
+  hpScale: (n) => n <= 6 ? 1 : 1 + (n - 6) * 0.055,
+  playerScale: (players) => 1 + 0.65 * Math.max(0, players - 1),
   bossEvery: 5,
   maxCount: 130,
 };
 
-DATA.spawnPoints = [
-  { name: 'North', x: 0, z: -70 },      { name: 'North-East', x: 63, z: -63 },
-  { name: 'East', x: 70, z: 0 },        { name: 'South-East', x: 63, z: 63 },
-  { name: 'South', x: 0, z: 70 },       { name: 'South-West', x: -63, z: 63 },
-  { name: 'West', x: -70, z: 0 },       { name: 'North-West', x: -63, z: -63 },
-];
+DATA.spawnPoints = (() => {
+  const R = DATA.SPAWN_RADIUS, D = Math.round(R * 0.9);
+  return [
+    { name: 'North', x: 0, z: -R },      { name: 'North-East', x: D, z: -D },
+    { name: 'East', x: R, z: 0 },        { name: 'South-East', x: D, z: D },
+    { name: 'South', x: 0, z: R },       { name: 'South-West', x: -D, z: D },
+    { name: 'West', x: -R, z: 0 },       { name: 'North-West', x: -D, z: -D },
+  ];
+})();
 
+DATA.mapTypes = {
+  valley:    { label: 'River Valley', desc: 'A river with three fords splits the plain; scattered rocks and woods.', river: true, rocks: [5, 7], forests: [3, 4], lakes: 0, hills: 1, palette: { grass: 0x4f8a3a, grass2: 0x7aa14a, dry: 0x8a9a4a, sky: 0x9cc4e4 } },
+  highlands: { label: 'Highlands', desc: 'Rock ridges and two mountain lakes; enemies funnel through the gaps.', river: false, rocks: [9, 12], forests: [1, 2], lakes: 2, hills: 1.6, palette: { grass: 0x5a8a4a, grass2: 0x8aa060, dry: 0x9a9a6a, sky: 0xa8c8e8 } },
+  darkwood:  { label: 'Darkwood', desc: 'Dense forests everywhere, a slow stream, and few open lanes.', river: true, rocks: [2, 3], forests: [7, 9], lakes: 0, hills: 0.7, palette: { grass: 0x3f6f32, grass2: 0x5a8a40, dry: 0x6a7a3a, sky: 0x8ab0cc } },
+  badlands:  { label: 'Badlands', desc: 'Dry, open ground with ruins and a few crags. Nowhere to hide.', river: false, rocks: [4, 6], forests: [0, 1], lakes: 1, hills: 1.2, palette: { grass: 0x9a8a4a, grass2: 0xb8a060, dry: 0xc0a870, sky: 0xd8c4a0 }, ruins: 14 },
+};
 DATA.siteUrl = 'https://matthewjbarnett.github.io/crownhold/'; // the full game, outside any embedding sandbox
 DATA.startGold = 500;
 DATA.baseSoldierCap = 0; // keep + barracks + garrison supply the cap
@@ -875,6 +973,7 @@ class Grid {
     this.occ = new Array(n * n).fill(null);   // building occupying the cell
     this.flag = new Uint8Array(n * n);        // CELL_FREE / CELL_SOLID / CELL_GATE
     this.shelter = new Uint8Array(n * n);     // 1 = keep interior
+    this.natural = new Uint8Array(n * n);     // water / rock / forest: impassable, unbuildable, unbreakable
     this.integ = new Float64Array(n * n);     // flow-field integration values (enemy -> king)
     this.flowDirty = true;
     this.flowTarget = null;
@@ -970,6 +1069,7 @@ class Grid {
       if (!this.inBounds(c.i, c.j)) return { ok: false, reason: 'Out of bounds', cells: fp.cells };
       const w = this.cellToWorld(c.i, c.j);
       if (!def.temporary && (Math.abs(w.x) > lim || Math.abs(w.z) > lim)) return { ok: false, reason: 'Outside the buildable area', cells: fp.cells };
+      if (this.natural[this.idx(c.i, c.j)]) return { ok: false, reason: this.natural[this.idx(c.i, c.j)] === CELL_WATER ? 'Cannot build on water' : 'Blocked by rock or forest', cells: fp.cells };
       if (this.occ[this.idx(c.i, c.j)]) return { ok: false, reason: 'Occupied', cells: fp.cells };
     }
     if (game) {
@@ -994,7 +1094,7 @@ class Grid {
   remove(b) {
     for (const c of b.cells) {
       const k = this.idx(c.i, c.j);
-      if (this.occ[k] === b) { this.occ[k] = null; this.flag[k] = CELL_FREE; this.shelter[k] = 0; }
+      if (this.occ[k] === b) { this.occ[k] = null; this.flag[k] = this.natural[k] ? (this.natural[k] === CELL_WATER ? CELL_WATER : CELL_ROCK) : CELL_FREE; this.shelter[k] = 0; }
     }
     this.flowDirty = true;
   }
@@ -1024,6 +1124,7 @@ class Grid {
           // no corner cutting past solid cells
           if (flag[j * n + ni] !== CELL_FREE || flag[nj * n + i] !== CELL_FREE) continue;
         }
+        if (flag[nk] === CELL_WATER || flag[nk] === CELL_ROCK) continue;
         let step = (di && dj) ? 1.4142 : 1;
         if (flag[nk] !== CELL_FREE) step += this.wallCost(occ[nk]);
         const nd = d + step;
@@ -1158,6 +1259,325 @@ class Grid {
     out.push(path[path.length - 1]);
     return out;
   }
+}
+
+</script>
+<script>
+'use strict';
+
+// ===========================================================================
+// World generation: a seeded layout with a river and fords, rock outcrops,
+// dense forests and rolling hills. Water and rock cells are impassable for
+// ground units and cannot be built on; every spawn point is guaranteed a path.
+// ===========================================================================
+const CELL_WATER = 3, CELL_ROCK = 4;
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+class WorldMap {
+  constructor(seed, type = 'valley') {
+    this.seed = seed >>> 0;
+    this.type = DATA.mapTypes[type] ? type : 'valley';
+    this.cfg = DATA.mapTypes[this.type];
+    this.n = DATA.GRID; this.cell = DATA.CELL; this.half = this.n / 2;
+    this.kind = new Uint8Array(this.n * this.n);       // natural obstacle per cell: 0 free, CELL_WATER, CELL_ROCK, 5 forest (rock-like)
+    this.hs = this.n + 1;                                // height samples (one per cell corner)
+    this.h = new Float32Array(this.hs * this.hs);
+    this.fords = []; this.river = []; this.rocks = []; this.forests = [];
+    this.generate();
+  }
+  idx(i, j) { return j * this.n + i; }
+  inBounds(i, j) { return i >= 0 && j >= 0 && i < this.n && j < this.n; }
+  kindAt(i, j) { return this.inBounds(i, j) ? this.kind[this.idx(i, j)] : CELL_ROCK; }
+  cellCenter(i, j) { return { x: (i - this.half) * this.cell, z: (j - this.half) * this.cell }; }
+
+  // ---------------------------------------------------------------- terrain height
+  baseHeight(x, z) {
+    const r = Math.max(Math.abs(x), Math.abs(z));
+    const t = U.clamp((r - 58) / 20, 0, 1);
+    const s = t * t * (3 - 2 * t);
+    const n = U.smoothNoise(x * 0.045 + this.seed % 97, z * 0.045 + this.seed % 89) * 0.7 + U.smoothNoise(x * 0.12 + 3, z * 0.12 + 7) * 0.3;
+    return s * n * 7 * (this.cfg ? this.cfg.hills : 1);
+  }
+  heightAt(x, z) {
+    const fx = x / this.cell + this.half, fz = z / this.cell + this.half;
+    const i = U.clamp(Math.floor(fx), 0, this.hs - 2), j = U.clamp(Math.floor(fz), 0, this.hs - 2);
+    const tx = U.clamp(fx - i, 0, 1), tz = U.clamp(fz - j, 0, 1);
+    const h = this.h, w = this.hs;
+    const a = h[j * w + i], b = h[j * w + i + 1], c = h[(j + 1) * w + i], d = h[(j + 1) * w + i + 1];
+    return U.lerp(U.lerp(a, b, tx), U.lerp(c, d, tx), tz);
+  }
+
+  // ---------------------------------------------------------------- layout
+  generate() {
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const rnd = mulberry32(this.seed + attempt * 7919);
+      this.kind.fill(0); this.fords = []; this.river = []; this.rocks = []; this.forests = []; this.lakes = [];
+      const cfg = this.cfg, t = this.type;
+      if (cfg.river) this.layRiver(rnd);
+      const pick = (r) => r[0] + Math.floor(rnd() * (r[1] - r[0] + 1));
+      for (let l = 0; l < (cfg.lakes || 0); l++) this.layBlobs(rnd, 1, CELL_WATER, [2.6, 4.2], 1, this.lakes);
+      if (t === 'highlands') { this.layBlobs(rnd, pick([6, 9]), CELL_ROCK, [4.5, 8], 0.22, this.rocks); this.layBlobs(rnd, pick([3, 5]), CELL_ROCK, [1.6, 2.8], 1, this.rocks); }
+      else if (t === 'badlands') { this.layBlobs(rnd, pick([4, 6]), CELL_ROCK, [3, 5], 0.3, this.rocks); this.layBlobs(rnd, pick([3, 5]), CELL_ROCK, [1.4, 2.4], 1, this.rocks); }
+      else this.layBlobs(rnd, pick(cfg.rocks), CELL_ROCK, [1.5, 3.2], 1, this.rocks);
+      const fr = t === 'darkwood' ? [3.2, 6.2] : (t === 'highlands' ? [2.2, 3.6] : [2.6, 4.6]);
+      this.layBlobs(rnd, pick(cfg.forests), 5, fr, 0.8, this.forests);
+      if (this.connected()) { this.usedSeed = this.seed + attempt * 7919; break; }
+      if (attempt === 29) { this.usedSeed = this.seed + attempt * 7919; this.carveOpen(); }
+    }
+    this.bakeHeights();
+  }
+  layRiver(rnd) {
+    const n = this.n, h = this.half;
+    // enters on one side, leaves on the opposite side, bending around the castle
+    const vertical = rnd() < 0.5;
+    const flip = rnd() < 0.5 ? 1 : -1;
+    const pts = [];
+    const segs = 6;
+    for (let k = 0; k <= segs; k++) {
+      const t = k / segs;
+      let a = (t * 2 - 1) * (h - 1);                       // along axis: -39..39 cells
+      let b = flip * (14 + 6 * Math.sin(t * Math.PI * 1.7)) + (rnd() - 0.5) * 6; // offset side: keeps clear of the keep
+      pts.push(vertical ? { i: h + b, j: h + a } : { i: h + a, j: h + b });
+    }
+    this.river = pts;
+    const width = 1.3;
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const d = this.distToPolyline(i, j, pts);
+      const c = this.cellCenter(i, j);
+      if (d <= width && Math.max(Math.abs(c.x), Math.abs(c.z)) > 12) this.kind[this.idx(i, j)] = CELL_WATER;
+    }
+    // fords: three crossings, each three cells wide
+    for (const t of [0.22, 0.5, 0.78]) {
+      const p = this.pointOnPolyline(pts, t);
+      this.fords.push(p);
+      for (let j = Math.floor(p.j) - 3; j <= Math.floor(p.j) + 3; j++) for (let i = Math.floor(p.i) - 3; i <= Math.floor(p.i) + 3; i++) {
+        if (!this.inBounds(i, j)) continue;
+        if (Math.hypot(i + 0.5 - p.i, j + 0.5 - p.j) <= 2.2 && this.kind[this.idx(i, j)] === CELL_WATER) this.kind[this.idx(i, j)] = 0;
+      }
+    }
+  }
+  distToPolyline(i, j, pts) {
+    let best = Infinity;
+    const px = i + 0.5, pz = j + 0.5;
+    for (let k = 0; k < pts.length - 1; k++) {
+      const a = pts[k], b = pts[k + 1];
+      const vx = b.i - a.i, vz = b.j - a.j, wx = px - a.i, wz = pz - a.j;
+      const t = U.clamp((vx * wx + vz * wz) / (vx * vx + vz * vz || 1), 0, 1);
+      best = Math.min(best, Math.hypot(px - (a.i + vx * t), pz - (a.j + vz * t)));
+    }
+    return best;
+  }
+  pointOnPolyline(pts, t) {
+    const k = Math.min(pts.length - 2, Math.floor(t * (pts.length - 1)));
+    const f = t * (pts.length - 1) - k;
+    return { i: U.lerp(pts[k].i, pts[k + 1].i, f), j: U.lerp(pts[k].j, pts[k + 1].j, f) };
+  }
+  // rounded (or elongated, squash < 1) patches of one kind, kept clear of the castle, the river and the spawn points
+  layBlobs(rnd, count, kind, radiusRange, squash, out) {
+    const h = this.half, lim = DATA.MAP_HALF - 8;
+    let placed = 0, guard = 0;
+    while (placed < count && guard++ < 300) {
+      const ang = rnd() * Math.PI * 2, rad = 26 + rnd() * (lim - 30);
+      const cx = Math.cos(ang) * rad, cz = Math.sin(ang) * rad;
+      if (DATA.spawnPoints.some(sp => U.dist(sp.x, sp.z, cx, cz) < 14)) continue;
+      const r = radiusRange[0] + rnd() * (radiusRange[1] - radiusRange[0]);
+      const rot = rnd() * Math.PI, ca = Math.cos(rot), sa = Math.sin(rot);
+      const rx = r, rz = r * (squash < 1 ? squash + rnd() * 0.15 : 1);
+      const ci = Math.round(cx / this.cell + h), cj = Math.round(cz / this.cell + h);
+      const cells = [];
+      const R = Math.ceil(r) + 1;
+      let blocked = false;
+      for (let j = cj - R; j <= cj + R && !blocked; j++) for (let i = ci - R; i <= ci + R; i++) {
+        if (!this.inBounds(i, j)) continue;
+        const dx = i - ci, dz = j - cj;
+        const ex = dx * ca + dz * sa, ez = -dx * sa + dz * ca;
+        const wob = 0.8 + 0.4 * U.smoothNoise(i * 0.7 + this.seed % 13, j * 0.7 + this.seed % 17);
+        if ((ex * ex) / (rx * rx) + (ez * ez) / (rz * rz) > wob) continue;
+        const c = this.cellCenter(i, j);
+        if (Math.max(Math.abs(c.x), Math.abs(c.z)) < 23 || Math.max(Math.abs(c.x), Math.abs(c.z)) > lim) continue;
+        if (this.kind[this.idx(i, j)]) { blocked = true; break; }
+        cells.push([i, j]);
+      }
+      if (blocked || cells.length < 3) continue;
+      for (const [i, j] of cells) this.kind[this.idx(i, j)] = kind;
+      out.push(cells);
+      placed++;
+    }
+  }
+  // last resort: clear a straight lane from every cut-off spawn point toward the keep
+  carveOpen() {
+    const h = this.half;
+    for (const sp of DATA.spawnPoints) {
+      let i = Math.floor(sp.x / this.cell + h + 0.5), j = Math.floor(sp.z / this.cell + h + 0.5);
+      let guard = 0;
+      while ((i !== h || j !== h) && guard++ < 400) {
+        for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) if (this.inBounds(i + di, j + dj)) this.kind[this.idx(i + di, j + dj)] = 0;
+        if (Math.abs(h - i) > Math.abs(h - j)) i += Math.sign(h - i); else j += Math.sign(h - j);
+      }
+    }
+  }
+  // every spawn point must reach the keep without crossing water or rock (walls are breakable, so they are ignored)
+  connected() {
+    const n = this.n, h = this.half;
+    const seen = new Uint8Array(n * n);
+    const q = [this.idx(h, h)]; seen[this.idx(h, h)] = 1;
+    while (q.length) {
+      const k = q.pop(); const i = k % n, j = (k - i) / n;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const ni = i + di, nj = j + dj;
+        if (!this.inBounds(ni, nj)) continue;
+        const nk = this.idx(ni, nj);
+        if (seen[nk] || this.kind[nk]) continue;
+        seen[nk] = 1; q.push(nk);
+      }
+    }
+    return DATA.spawnPoints.every(sp => {
+      const i = Math.floor(sp.x / this.cell + h + 0.5), j = Math.floor(sp.z / this.cell + h + 0.5);
+      // the spawn cell itself may sit on an obstacle edge; accept any free neighbour
+      for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const a = i + di, b = j + dj; if (this.inBounds(a, b) && seen[this.idx(a, b)]) return true; }
+      return false;
+    });
+  }
+  bakeHeights() {
+    const w = this.hs;
+    for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) {
+      const x = (i - this.half) * this.cell - this.cell / 2, z = (j - this.half) * this.cell - this.cell / 2;
+      let y = this.baseHeight(x, z);
+      // carve the river bed: a corner is lowered when any touching cell is water
+      let water = 0, cnt = 0;
+      for (const [di, dj] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { if (this.inBounds(i + di, j + dj)) { cnt++; if (this.kind[this.idx(i + di, j + dj)] === CELL_WATER) water++; } }
+      if (water) y -= 1.4 * (water / cnt) + 0.3;
+      this.h[j * w + i] = y;
+    }
+  }
+
+  // ---------------------------------------------------------------- apply to the grid and the scene
+  applyToGrid(grid) {
+    for (let k = 0; k < this.n * this.n; k++) {
+      const kind = this.kind[k];
+      if (!kind) continue;
+      grid.flag[k] = kind === CELL_WATER ? CELL_WATER : CELL_ROCK;
+      grid.natural[k] = kind;
+    }
+    grid.flowDirty = true;
+  }
+  buildScene(scene) {
+    const group = new THREE.Group();
+    // ground with heights and painted cells
+    const size = this.n * this.cell, seg = this.n;
+    const geo = new THREE.PlaneGeometry(size + 40, size + 40, seg + 20, seg + 20);
+    geo.rotateX(-Math.PI / 2);
+    const pos = geo.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    const pal = this.cfg.palette;
+    const c = new THREE.Color(), grass = new THREE.Color(pal.grass), grass2 = new THREE.Color(pal.grass2), mud = new THREE.Color(0x6b5a3a), rock = new THREE.Color(0x777770), forest = new THREE.Color(0x2f5a2a), dry = new THREE.Color(pal.dry);
+    for (let k = 0; k < pos.count; k++) {
+      const x = pos.getX(k), z = pos.getZ(k);
+      pos.setY(k, this.heightAt(U.clamp(x, -79, 79), U.clamp(z, -79, 79)));
+      const i = Math.floor(x / this.cell + this.half + 0.5), j = Math.floor(z / this.cell + this.half + 0.5);
+      const kind = this.kindAt(i, j);
+      const nz = U.smoothNoise(x * 0.08 + 50, z * 0.08 + 50) * 0.6 + U.smoothNoise(x * 0.3, z * 0.3) * 0.4;
+      c.copy(grass).lerp(grass2, nz);
+      const r = Math.max(Math.abs(x), Math.abs(z));
+      if (r > DATA.BUILD_RADIUS + 1) c.lerp(dry, 0.25);
+      if (kind === CELL_WATER) c.copy(mud);
+      else if (kind === CELL_ROCK) c.lerp(rock, 0.7);
+      else if (kind === 5) c.lerp(forest, 0.6);
+      else {
+        // banks and rock edges
+        let nearWater = false, nearRock = false;
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const kk = this.kindAt(i + di, j + dj); if (kk === CELL_WATER) nearWater = true; if (kk === CELL_ROCK) nearRock = true; }
+        if (nearWater) c.lerp(mud, 0.45); else if (nearRock) c.lerp(rock, 0.3);
+      }
+      const y = pos.getY(k); if (y > 1) c.lerp(dry, Math.min(0.35, y * 0.06));
+      colors[k * 3] = c.r; colors[k * 3 + 1] = c.g; colors[k * 3 + 2] = c.b;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geo.computeVertexNormals();
+    const ground = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    ground.receiveShadow = true;
+    group.add(ground); this.ground = ground;
+    // water: one big plane just below the plain; it only shows inside the carved bed
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(size + 40, size + 40), new THREE.MeshLambertMaterial({ color: 0x3a7fc0, transparent: true, opacity: 0.78, emissive: 0x0a2a50, emissiveIntensity: 0.4 }));
+    water.rotation.x = -Math.PI / 2; water.position.y = -0.55; water.receiveShadow = true;
+    group.add(water); this.water = water;
+    // fords: wooden planks over the crossings
+    const plank = Models.mat(0x7a5a38);
+    for (const f of this.fords) {
+      const cc = this.cellCenter(f.i - 0.5, f.j - 0.5);
+      const b = new THREE.Mesh(new THREE.BoxGeometry(7, 0.3, 7), plank);
+      b.position.set(cc.x, -0.05, cc.z); b.castShadow = true; b.receiveShadow = true;
+      group.add(b);
+      for (let k = -3; k <= 3; k++) { const rail = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.9, 0.2), plank); rail.position.set(cc.x + k * 1.1, 0.5, cc.z + 3.4); group.add(rail); const rail2 = rail.clone(); rail2.position.z = cc.z - 3.4; group.add(rail2); }
+    }
+    // rocks and forests as instanced meshes
+    const rockCells = [], forestCells = [];
+    for (let j = 0; j < this.n; j++) for (let i = 0; i < this.n; i++) { const k = this.kind[this.idx(i, j)]; if (k === CELL_ROCK) rockCells.push([i, j]); else if (k === 5) forestCells.push([i, j]); }
+    const rnd = mulberry32(this.usedSeed || this.seed);
+    if (rockCells.length) {
+      const rockGeo = new THREE.DodecahedronGeometry(1, 0);
+      const inst = new THREE.InstancedMesh(rockGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), rockCells.length * 2);
+      inst.castShadow = true; inst.receiveShadow = true; inst.frustumCulled = false;
+      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
+      let k = 0;
+      for (const [i, j] of rockCells) {
+        const cc = this.cellCenter(i, j);
+        for (let t = 0; t < 2; t++) {
+          const sx = 0.8 + rnd() * 0.9, sy = 0.9 + rnd() * 1.6, sz = 0.8 + rnd() * 0.9;
+          p.set(cc.x + (rnd() - 0.5) * 1.2, this.heightAt(cc.x, cc.z) + sy * 0.3, cc.z + (rnd() - 0.5) * 1.2);
+          q.setFromEuler(new THREE.Euler(rnd() * 0.6, rnd() * 6, rnd() * 0.6)); s.set(sx, sy, sz);
+          m.compose(p, q, s); inst.setMatrixAt(k, m);
+          col.setHex([0x777770, 0x8a8a80, 0x6a6a64, 0x9a958a][Math.floor(rnd() * 4)]); inst.setColorAt(k, col); k++;
+        }
+      }
+      inst.instanceMatrix.needsUpdate = true; if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
+      group.add(inst);
+    }
+    if (forestCells.length) {
+      const trunkGeo = new THREE.CylinderGeometry(0.16, 0.24, 1.6, 6), leafGeo = new THREE.ConeGeometry(1.3, 3.2, 7);
+      const per = 3;
+      const trunks = new THREE.InstancedMesh(trunkGeo, Models.mat(0x5a3a22), forestCells.length * per);
+      const leaves = new THREE.InstancedMesh(leafGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), forestCells.length * per);
+      trunks.castShadow = true; leaves.castShadow = true; trunks.frustumCulled = false; leaves.frustumCulled = false;
+      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
+      let k = 0;
+      for (const [i, j] of forestCells) {
+        const cc = this.cellCenter(i, j);
+        for (let t = 0; t < per; t++) {
+          const x = cc.x + (rnd() - 0.5) * 1.6, z = cc.z + (rnd() - 0.5) * 1.6, sc = 0.8 + rnd() * 0.7, y = this.heightAt(x, z);
+          q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6); s.set(sc, sc, sc);
+          p.set(x, y + 0.8 * sc, z); m.compose(p, q, s); trunks.setMatrixAt(k, m);
+          p.set(x, y + 0.8 * sc + 2.1 * sc, z); m.compose(p, q, s); leaves.setMatrixAt(k, m);
+          col.setHex([0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x1f4a25][Math.floor(rnd() * 4)]); leaves.setColorAt(k, col); k++;
+        }
+      }
+      trunks.instanceMatrix.needsUpdate = true; leaves.instanceMatrix.needsUpdate = true; if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
+      group.add(trunks); group.add(leaves);
+    }
+    // ruins: a few broken wall stubs for atmosphere (walkable)
+    for (let k = 0; k < (this.cfg.ruins || 6); k++) {
+      let x, z, tries = 0;
+      do { x = (rnd() - 0.5) * 140; z = (rnd() - 0.5) * 140; tries++; } while (tries < 20 && (Math.max(Math.abs(x), Math.abs(z)) < 26 || this.kindAt(Math.floor(x / 2 + this.half + 0.5), Math.floor(z / 2 + this.half + 0.5))));
+      const y = this.heightAt(x, z);
+      const stub = new THREE.Mesh(new THREE.BoxGeometry(2.5 + rnd() * 3, 0.6 + rnd() * 1.6, 0.9), Models.mat(0x8a8578));
+      stub.position.set(x, y + 0.3, z); stub.rotation.y = rnd() * 3; stub.rotation.z = (rnd() - 0.5) * 0.2; stub.castShadow = true; stub.receiveShadow = true;
+      group.add(stub);
+    }
+    scene.add(group);
+    this.group = group;
+    return group;
+  }
+  dispose(scene) { if (this.group) { scene.remove(this.group); this.group.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); }); this.group = null; } }
 }
 
 </script>
@@ -1337,6 +1757,14 @@ const Models = {
       const cape = this.box(0.6, 0.9, 0.06, this.mat(0x7a1030), 0, 0.95, -0.2);
       g.add(cape);
     }
+    if (def.wings) {
+      const wm = this.freshMat(0x5a3a6a); mats.push(wm);
+      for (const s of [-1, 1]) {
+        const pivot = new THREE.Group(); pivot.position.set(s * 0.3, 1.3, -0.15);
+        const wing = this.box(1.3, 0.06, 0.6, wm, s * 0.65, 0.1, 0); wing.rotation.y = s * 0.3; pivot.add(wing);
+        g.add(pivot); parts[s < 0 ? 'wingL' : 'wingR'] = pivot;
+      }
+    }
     g.scale.setScalar(s);
     return { group: g, parts, mats, eyeHeight: 1.62 * s, height: 1.8 * s, mesh: torso };
   },
@@ -1359,6 +1787,53 @@ const Models = {
       g.add(hip); parts[name] = hip;
     }
     return { group: g, parts, mats: [fur], eyeHeight: 0.85, height: 1.0, mesh: body };
+  },
+  rider(def) {
+    // a horse with the humanoid rider on top; horse legs reuse the limb names so the walk cycle just works
+    const g = new THREE.Group();
+    const parts = {};
+    const horse = this.freshMat(0x6a4a2a), dark = this.mat(0x2a1a10);
+    const body = this.box(0.6, 0.6, 1.5, horse, 0, 1.05, 0); g.add(body); parts.body = body;
+    const neck = this.box(0.3, 0.7, 0.35, horse, 0, 1.55, 0.75); neck.rotation.x = -0.5; g.add(neck);
+    g.add(this.box(0.28, 0.3, 0.55, horse, 0, 1.85, 1.05));
+    for (const s of [-1, 1]) g.add(this.box(0.08, 0.16, 0.06, dark, s * 0.1, 2.05, 0.95, false));
+    const tail = this.box(0.1, 0.6, 0.1, dark, 0, 1.0, -0.8); tail.rotation.x = 0.5; g.add(tail);
+    for (const [name, x, z] of [['armL', -0.22, 0.55], ['armR', 0.22, 0.55], ['legL', -0.22, -0.55], ['legR', 0.22, -0.55]]) {
+      const hip = new THREE.Group(); hip.position.set(x, 0.8, z);
+      hip.add(this.box(0.16, 0.8, 0.18, horse, 0, -0.4, 0)); g.add(hip); parts[name] = hip;
+    }
+    const man = this.humanoid(Object.assign({}, def, { scale: 0.85 }), 'player');
+    man.group.position.set(0, 0.85, 0);
+    // rider legs straddle the horse
+    if (man.parts.legL) man.parts.legL.rotation.x = -0.9; if (man.parts.legR) man.parts.legR.rotation.x = -0.9;
+    man.parts.legL = null; man.parts.legR = null;
+    g.add(man.group);
+    parts.riderArmR = man.parts.armR; parts.riderArmL = man.parts.armL; parts.weapon = man.parts.weapon; parts.head = man.parts.head;
+    return { group: g, parts, mats: [horse].concat(man.mats), eyeHeight: 2.45, height: 2.7, mesh: body };
+  },
+  spider(def) {
+    const g = new THREE.Group();
+    const fur = this.freshMat(def.color || 0x3a2a3a), dark = this.mat(0x1a1018);
+    const parts = {};
+    const body = this.sphere(0.55, fur, 0, 0.75, 0.2, 8); g.add(body); parts.body = body;
+    const abd = this.sphere(0.8, fur, 0, 0.85, -0.9, 8); abd.scale.set(1, 0.85, 1.2); g.add(abd);
+    const head = this.sphere(0.32, dark, 0, 0.8, 0.75, 8); g.add(head); parts.head = head;
+    const eye = this.mat(0xff3030, { emissive: 0xff1010, emissiveIntensity: 1 });
+    for (let k = 0; k < 4; k++) g.add(this.box(0.07, 0.07, 0.05, eye, -0.18 + k * 0.12, 0.88 + (k % 2) * 0.08, 1.02, false));
+    for (const s of [-1, 1]) g.add(this.cone(0.06, 0.35, dark, s * 0.12, 0.6, 1.0, 5).rotateX(Math.PI / 2));
+    // four leg pairs: each pair hangs from one pivot so the walk cycle animates them
+    for (let k = 0; k < 4; k++) {
+      const name = ['armL', 'armR', 'legL', 'legR'][k];
+      const side = k % 2 === 0 ? -1 : 1, z = 0.55 - Math.floor(k / 2) * 0.9;
+      const pivot = new THREE.Group(); pivot.position.set(side * 0.4, 0.8, z);
+      for (const zz of [0, -0.45]) {
+        const upper = this.box(0.9, 0.09, 0.09, fur, side * 0.45, 0.25, zz); upper.rotation.z = side * -0.6; pivot.add(upper);
+        const lower = this.box(0.09, 0.9, 0.09, fur, side * 0.95, -0.2, zz); pivot.add(lower);
+      }
+      g.add(pivot); parts[name] = pivot;
+    }
+    const s = def.scale || 1; g.scale.setScalar(s);
+    return { group: g, parts, mats: [fur], eyeHeight: 1.1 * s, height: 1.5 * s, mesh: body, legSwing: 0.35 };
   },
   catapult(def) {
     const g = new THREE.Group();
@@ -1468,6 +1943,74 @@ const Models = {
         { const c = new THREE.Mesh(new THREE.OctahedronGeometry(1.1, 0), this.mat(0x90e0ff, { emissive: 0x40b0ff, emissiveIntensity: 1 })); c.position.y = 7.8; c.castShadow = true; g.add(c); g.userData.orb = c; }
         for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2 + 0.4; const s = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), this.mat(0xc0f0ff, { emissive: 0x60c0ff, emissiveIntensity: 0.6 })); s.position.set(Math.sin(a) * 1.5, 6.7, Math.cos(a) * 1.5); g.add(s); }
         break;
+      case 'cannon_tower': {
+        g.add(this.box(3.6, 4.5, 3.6, st, 0, 2.25, 0));
+        g.add(this.box(4.0, 0.5, 4.0, sd, 0, 4.75, 0));
+        this.merlons(g, 4.0, 4.0, 5.25, 1.15);
+        const t = new THREE.Group(); t.position.y = 5.2;
+        t.add(this.cyl(0.32, 0.4, 2.6, this.mat(0x2a2a2e), 0, 0.6, 0.6, 10).rotateX(Math.PI / 2 - 0.25));
+        t.add(this.box(1.2, 0.5, 1.0, wd, 0, 0.25, -0.2)); t.add(this.cyl(0.35, 0.35, 0.25, wd, -0.6, 0.35, -0.2, 8).rotateZ(Math.PI / 2)); t.add(this.cyl(0.35, 0.35, 0.25, wd, 0.6, 0.35, -0.2, 8).rotateZ(Math.PI / 2));
+        g.add(t); g.userData.turret = t;
+        break;
+      }
+      case 'lightning_tower': {
+        g.add(this.cyl(1.0, 1.4, 7.5, this.mat(0x6a5a4a), 0, 3.75, 0, 8));
+        for (let k = 0; k < 3; k++) g.add(new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.12, 6, 14), this.mat(0xc08a40)).rotateX(Math.PI / 2).translateZ(-(2 + k * 2)));
+        const orb = this.sphere(0.6, this.mat(0xc0e0ff, { emissive: 0x60a0ff, emissiveIntensity: 1.2 }), 0, 8.6, 0, 10); g.add(orb); g.userData.orb = orb;
+        for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2; g.add(this.cyl(0.05, 0.05, 1.6, this.mat(0xc08a40), Math.sin(a) * 0.9, 8.2, Math.cos(a) * 0.9, 5, false).rotateX(0.5 * Math.cos(a)).rotateZ(-0.5 * Math.sin(a))); }
+        break;
+      }
+      case 'poison_tower': {
+        g.add(this.cyl(1.3, 1.6, 5.0, this.mat(0x5a6a4a), 0, 2.5, 0, 8));
+        g.add(this.cyl(1.7, 1.4, 0.6, wd, 0, 5.3, 0, 10));
+        const vat = this.cyl(1.2, 1.0, 1.4, this.mat(0x3a4a3a), 0, 6.2, 0, 10); g.add(vat);
+        const goo = this.cyl(1.1, 1.1, 0.2, this.mat(0x60ff60, { emissive: 0x30c030, emissiveIntensity: 0.9 }), 0, 6.95, 0, 10); g.add(goo); g.userData.orb = goo;
+        for (let k = 0; k < 3; k++) g.add(this.sphere(0.18, this.mat(0x80ff80, { emissive: 0x30c030, emissiveIntensity: 0.8 }), Math.sin(k * 2.1) * 0.6, 7.2 + k * 0.3, Math.cos(k * 2.1) * 0.6, 6));
+        break;
+      }
+      case 'watchtower': {
+        for (const [x, z] of [[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5]]) g.add(this.box(0.3, 10, 0.3, wd, x, 5, z));
+        for (let y = 2.5; y < 9; y += 3) { g.add(this.box(3.4, 0.15, 0.15, wd, 0, y, -1.5)); g.add(this.box(3.4, 0.15, 0.15, wd, 0, y, 1.5)); g.add(this.box(0.15, 0.15, 3.4, wd, -1.5, y, 0)); g.add(this.box(0.15, 0.15, 3.4, wd, 1.5, y, 0)); }
+        g.add(this.box(3.8, 0.3, 3.8, wd, 0, 10, 0));
+        for (const [x, z] of [[-1.7, 0], [1.7, 0], [0, -1.7], [0, 1.7]]) g.add(this.box(x ? 0.15 : 3.8, 1.0, z ? 0.15 : 3.8, wd, x, 10.6, z));
+        { const r = this.cone(3.0, 1.6, this.roof, 0, 12.2, 0, 4); r.rotation.y = Math.PI / 4; g.add(r); }
+        this.flag(g, 0, 12.8, 0, 0x3060c0);
+        break;
+      }
+      case 'barricade': {
+        for (const s of [-1, 1]) { const b = this.box(0.25, 2.4, 0.25, wd, 0, 0.9, s * 0.35); b.rotation.x = s * 0.7; g.add(b); const sp = this.cone(0.12, 0.5, this.mat(0xcfd6dd), 0, 2.15, s * 1.0, 5); sp.rotation.x = s * 0.7; g.add(sp); }
+        g.add(this.box(2.0, 0.25, 0.25, wd, 0, 1.1, 0));
+        for (let k = -1; k <= 1; k++) { const sp = this.cone(0.1, 0.6, this.mat(0xcfd6dd), k * 0.7, 0.35, 0.6, 5); sp.rotation.x = -1.2; g.add(sp); }
+        break;
+      }
+      case 'trap': {
+        const plate = new THREE.Group();
+        plate.add(this.box(1.7, 0.12, 1.7, this.mat(0x5a5248), 0, 0.06, 0));
+        for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) plate.add(this.cone(0.1, 0.7, this.mat(0xcfd6dd), a * 0.5, 0.45, b * 0.5, 5));
+        g.add(plate); g.userData.plate = plate;
+        break;
+      }
+      case 'market': {
+        g.add(this.box(5.0, 0.4, 5.0, this.plaster, 0, 0.2, 0));
+        for (const [x, z] of [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]]) g.add(this.box(0.25, 3.2, 0.25, wd, x, 1.6, z));
+        { const awn = this.box(5.4, 0.2, 5.4, this.mat(0xc04040), 0, 3.3, 0); g.add(awn); }
+        for (let k = 0; k < 5; k++) g.add(this.box(1.0, 0.1, 5.4, this.mat(k % 2 ? 0xf0e0c0 : 0xc04040), -2.0 + k * 1.0, 3.42, 0, false));
+        g.add(this.box(3.6, 0.9, 1.2, wd, 0, 0.85, 1.4));
+        for (let k = 0; k < 4; k++) g.add(this.sphere(0.25, this.mat([0xd04030, 0xe0b040, 0x60a040, 0xe08030][k]), -1.2 + k * 0.8, 1.45, 1.4, 6));
+        g.add(this.box(1.2, 1.0, 1.2, wd, -1.4, 0.9, -1.2)); g.add(this.box(1.2, 1.0, 1.2, wd, 1.2, 0.9, -1.4));
+        break;
+      }
+      case 'tavern': {
+        g.add(this.box(5.2, 3.4, 4.8, this.plaster, 0, 1.7, 0));
+        g.add(this.box(5.4, 1.2, 5.0, wd, 0, 0.6, 0));
+        { const r = this.cone(4.2, 2.2, this.mat(0x5a3a2a), 0, 4.5, 0, 4); r.rotation.y = Math.PI / 4; g.add(r); }
+        g.add(this.box(0.7, 2.0, 0.7, st, 1.6, 5.2, -1.2));
+        g.add(this.box(1.1, 2.0, 0.3, wd, 0, 1.0, 2.45));
+        for (const x of [-1.7, 1.7]) g.add(this.box(0.9, 0.8, 0.2, this.mat(0xffd070, { emissive: 0xa06010, emissiveIntensity: 0.6 }), x, 2.0, 2.45, false));
+        g.add(this.box(0.1, 1.4, 0.1, wd, 2.9, 3.0, 2.2, false)); g.add(this.box(1.2, 0.8, 0.08, this.mat(0x8a5a2a), 2.9, 3.4, 2.7, false));
+        g.add(this.cyl(0.35, 0.35, 0.7, wd, -2.6, 0.35, 2.6, 8)); g.add(this.cyl(0.35, 0.35, 0.7, wd, 2.2, 0.35, -2.7, 8));
+        break;
+      }
       case 'barracks':
         g.add(this.box(5.4, 3.2, 5.4, this.plaster, 0, 1.6, 0));
         g.add(this.box(5.6, 1.0, 5.6, wd, 0, 0.5, 0));
@@ -1712,7 +2255,8 @@ class Unit {
     this.isSoldier = team === 'player' && !this.isHero && !this.isKing;
     this.isBoss = !!def.boss; this.large = !!def.large; this.flying = !!def.flying;
     this.radius = def.radius || 0.45;
-    this.pos = new THREE.Vector3(x, this.flying ? def.altitude : 0, z);
+    this.owner = opts.owner || null;
+    this.pos = new THREE.Vector3(x, (this.flying ? def.altitude : 0) + game.groundY(x, z), z);
     this.yaw = opts.yaw || 0;
     this.attackKind = def.attack || 'melee';
     this.hpMul = opts.hpMul || 1;
@@ -1743,10 +2287,13 @@ class Unit {
     let m;
     if (def.model === 'catapult') m = Models.catapult(def);
     else if (def.model === 'wolf') m = Models.wolf(def);
+    else if (def.model === 'rider') m = Models.rider(def);
+    else if (def.model === 'spider') m = Models.spider(def);
     else if (def.model === 'dragon') m = Models.dragon(def);
     else m = Models.humanoid(def, this.team);
     this.group = m.group; this.parts = m.parts; this.mats = m.mats;
-    this.eyeHeight = m.eyeHeight; this.height = m.height; this.pickMesh = m.mesh;
+    this.eyeHeight = m.eyeHeight; this.height = m.height; this.pickMesh = m.mesh; this.legSwing = m.legSwing || 0.7;
+    if (def.scale && (def.model === 'catapult' || def.model === 'wolf')) { this.group.scale.setScalar(def.scale); this.eyeHeight *= def.scale; this.height *= def.scale; }
     this.group.position.copy(this.pos);
     this.group.rotation.y = this.yaw;
     this.group.userData.unit = this;
@@ -1783,6 +2330,7 @@ class Unit {
     this.buffs.push(b);
   }
   applySlow(factor, dur) {
+    if (this.def.unstoppable) return;
     const until = this.game.time + dur;
     if (!this.slow || this.slow.until < this.game.time || factor >= this.slow.factor) this.slow = { factor, until };
     else this.slow.until = Math.max(this.slow.until, until);
@@ -1792,7 +2340,8 @@ class Unit {
     if (!this.burn || this.burn.until < this.game.time) this.burn = { dps, until, source };
     else { this.burn.dps = Math.max(this.burn.dps, dps); this.burn.until = Math.max(this.burn.until, until); }
   }
-  stun(dur) { this.stunUntil = Math.max(this.stunUntil, this.game.time + dur); }
+  stun(dur) { if (this.def.unstoppable) return; this.stunUntil = Math.max(this.stunUntil, this.game.time + dur); }
+  applyPoison(dps, dur, source) { this.applyBurn(dps, dur, source); this.burn.poison = true; }
 
   distTo(t) { return Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z); }
   // edge-to-edge distance to a target (unit or building)
@@ -1816,14 +2365,19 @@ class Unit {
     const r = this.collisionRadius, team = this.team;
     let blocked = null;
     const hit = (x, z, sx, sz) => g.buildingAtWorld(x + sx * r, z + sz * r) || g.buildingAtWorld(x + sx * r, z + sz * r + r * 0.7) || g.buildingAtWorld(x + sx * r, z + sz * r - r * 0.7) || g.buildingAtWorld(x + sx * r + r * 0.7, z + sz * r) || g.buildingAtWorld(x + sx * r - r * 0.7, z + sz * r);
+    const slide = Math.min(0.25, Math.abs(dx) + Math.abs(dz) + 0.08);
     if (dx) {
       const nx = this.pos.x + dx;
       if (g.circleFree(nx, this.pos.z, r, team)) this.pos.x = nx;
+      else if (g.circleFree(nx, this.pos.z + slide, r, team)) { this.pos.x = nx; this.pos.z += slide; }   // slip past a corner
+      else if (g.circleFree(nx, this.pos.z - slide, r, team)) { this.pos.x = nx; this.pos.z -= slide; }
       else blocked = hit(nx, this.pos.z, Math.sign(dx), 0) || blocked;
     }
     if (dz) {
       const nz = this.pos.z + dz;
       if (g.circleFree(this.pos.x, nz, r, team)) this.pos.z = nz;
+      else if (g.circleFree(this.pos.x + slide, nz, r, team)) { this.pos.z = nz; this.pos.x += slide; }
+      else if (g.circleFree(this.pos.x - slide, nz, r, team)) { this.pos.z = nz; this.pos.x -= slide; }
       else blocked = hit(this.pos.x, nz, 0, Math.sign(dz)) || blocked;
     }
     return blocked;
@@ -1937,7 +2491,7 @@ class Unit {
       game.fireProjectile({
         from: this, target, key: def.projectile, dmg, team: this.team,
         splash: def.splash || pdef.splash || 0, buildingDmg: def.buildingDmg ? def.buildingDmg * this.dmgMul : 0,
-        slow: def.slow || pdef.slow || null, burn: pdef.burn || null, magic: !!def.magic, bonusVsLarge: def.bonusVsLarge || 1,
+        slow: def.slow || pdef.slow || null, burn: pdef.burn || null, magic: !!def.magic, bonusVsLarge: def.bonusVsLarge || 1, hex: def.hex || null,
       });
       SFX.play(def.projectile === 'arrow' ? 'bow' : (def.projectile === 'boulder' ? 'catapult' : 'cast'));
       return true;
@@ -1976,6 +2530,12 @@ class Unit {
     this.dead = true; this.hp = 0; this.deathTimer = 0;
     this.target = null; this.command = null; this.path = null;
     this.hpBar.group.visible = false; this.ring.visible = false;
+    if (this.def.deathCloud) {
+      const dc = this.def.deathCloud, other = this.team === 'player' ? 'enemy' : 'player', g = this.game, src = this;
+      g.addZone({ x: this.pos.x, z: this.pos.z, radius: dc.radius, duration: dc.dur, tickEvery: 0.5, color: 0x80c040, opacity: 0.3,
+        onTick: (zone, dt) => { for (const u of g.unitsNear(zone.x, zone.z, zone.radius, other)) if (!u.dead) u.takeDamage(dc.dps * dt, src, { magic: true }); } });
+      g.effects.spawn('explosion', this.pos.x, 1, this.pos.z, { radius: dc.radius, color: 0x80c040 });
+    }
     this.game.onUnitDied(this, source);
     SFX.play(this.isBoss ? 'bossdie' : (this.team === 'enemy' ? 'die' : 'allydie'));
   }
@@ -1989,7 +2549,7 @@ class Unit {
     // status effects
     if (this.burn && this.burn.until > time) {
       this.takeDamage(this.burn.dps * dt, this.burn.source, { magic: true });
-      if (Math.random() < dt * 8) game.effects.spawn('ember', this.pos.x + U.rand(-0.3, 0.3), this.centerY, this.pos.z + U.rand(-0.3, 0.3));
+      if (Math.random() < dt * 8) game.effects.spawn('ember', this.pos.x + U.rand(-0.3, 0.3), this.centerY, this.pos.z + U.rand(-0.3, 0.3), this.burn.poison ? { color: 0x60ff60 } : {});
       if (this.dead) return;
     }
     this.tickFlash(dt);
@@ -2012,10 +2572,11 @@ class Unit {
       this.separate(dt);
       if (!this.flying && !game.grid.circleFree(this.pos.x, this.pos.z, this.collisionRadius, this.team)) this.unstuck(dt);
     }
+    const gy = game.groundY(this.pos.x, this.pos.z);
     if (this.flying) {
-      const want = this.def.altitude;
+      const want = this.def.altitude + gy;
       this.pos.y += (want + Math.sin(time * 1.5) * 0.4 - this.pos.y) * Math.min(1, dt * 2);
-    }
+    } else this.pos.y = gy;
     this.visualTail(dt);
   }
   integrateMovement(dt) {
@@ -2047,6 +2608,7 @@ class Unit {
       this.separate(dt);
       if (!this.flying && !game.grid.circleFree(this.pos.x, this.pos.z, this.collisionRadius, this.team)) this.unstuck(dt);
       if (this.localAtkT > 0) this.localAtkT -= dt;
+      if (!this.flying) this.pos.y = game.groundY(this.pos.x, this.pos.z);
     } else if (this.netAttackAnim > this.attackAnim + 0.35) this.attackAnim = this.netAttackAnim;
   }
   tickFlash(dt) {
@@ -2084,7 +2646,7 @@ class Unit {
       this.hpBar.setDepth(this.game.controls.mode === 'fps');
     }
     this.ring.visible = this.selected || this.hovered;
-    if (this.ring.visible) { this.ring.position.set(this.pos.x, 0.06, this.pos.z); this.ring.material.color.setHex(this.selected ? (this.team === 'player' ? 0x50ff80 : 0xff5050) : 0xffffff); }
+    if (this.ring.visible) { this.ring.position.set(this.pos.x, this.game.groundY(this.pos.x, this.pos.z) + 0.06, this.pos.z); this.ring.material.color.setHex(this.selected ? (this.team === 'player' ? 0x50ff80 : 0xff5050) : 0xffffff); }
   }
 
   onBlocked(building) {
@@ -2107,9 +2669,10 @@ class Unit {
       if (p.arm) p.arm.rotation.x = -0.9 + (this.attackAnim > 0.6 ? (this.attackAnim - 0.6) * 4.5 : 0) * -0.35 - (1 - Math.min(1, this.attackAnim * 1.7)) * 0;
       return;
     }
+    if (p.wingL) { const f = Math.sin(this.game.time * 9 + this.id) * 0.7; p.wingL.rotation.z = f; p.wingR.rotation.z = -f; }
     if (this.moving) {
       this.animT += dt * Math.min(14, this.effSpeed * 2.2);
-      const s = Math.sin(this.animT) * 0.7;
+      const s = Math.sin(this.animT) * this.legSwing;
       if (p.legL) p.legL.rotation.x = s; if (p.legR) p.legR.rotation.x = -s;
       if (p.armL) p.armL.rotation.x = -s * 0.6;
       if (p.armR && this.attackAnim <= 0) p.armR.rotation.x = s * 0.6;
@@ -2119,10 +2682,11 @@ class Unit {
       if (p.armL) p.armL.rotation.x *= 0.8;
       if (p.armR && this.attackAnim <= 0) p.armR.rotation.x *= 0.8;
     }
-    if (this.attackAnim > 0 && p.armR) {
+    const swingArm = p.riderArmR || p.armR;
+    if (this.attackAnim > 0 && swingArm) {
       const a = this.attackAnim;
-      if (this.attackKind === 'melee') p.armR.rotation.x = -Math.sin(a * Math.PI) * 2.2;
-      else p.armR.rotation.x = -1.3 * a;
+      if (this.attackKind === 'melee') swingArm.rotation.x = -Math.sin(a * Math.PI) * 2.2;
+      else swingArm.rotation.x = -1.3 * a;
     }
     if (this.spinT > 0) { this.spinT -= dt; this.yaw += dt * 14; }
     if (this.stunned) { this.group.rotation.z = Math.sin(this.game.time * 20) * 0.08; } else this.group.rotation.z = 0;
@@ -2155,6 +2719,8 @@ class Building {
     let sx = 0, sz = 0;
     for (const c of cells) { const w = game.grid.cellToWorld(c.i, c.j); sx += w.x; sz += w.z; }
     this.pos = new THREE.Vector3(sx / cells.length, 0, sz / cells.length);
+    this.owner = null;
+    this.pos.y = game.groundY(this.pos.x, this.pos.z);
     const fp = (rot % 2 === 0) ? { w: def.w, d: def.d } : { w: def.d, d: def.w };
     this.radius = Math.max(fp.w, fp.d) * DATA.CELL / 2;
     this.height = def.tower ? 7 : (def.keep ? 9 : 3);
@@ -2193,6 +2759,7 @@ class Building {
   build3D() {
     if (this.group) { this.game.scene.remove(this.group); }
     this.group = Models.building(this.def, this.level);
+    this.pos.y = this.game.groundY(this.pos.x, this.pos.z);
     this.group.position.copy(this.pos);
     this.group.rotation.y = this.rot * Math.PI / 2;
     this.group.userData.building = this;
@@ -2215,6 +2782,7 @@ class Building {
 
   takeDamage(amount, source) {
     if (this.dead) return 0;
+    if (this.def.spikes && source instanceof Unit && source.attackKind === 'melee' && !source.dead) source.takeDamage(this.def.spikes, null, { magic: true });
     this.hp -= amount;
     this.flashT = 0.1;
     this.game.grid.flowDirty = true; // wall cost changed
@@ -2253,12 +2821,14 @@ class Building {
     if (this.def.gate) this.updateGate(dt);
     const orb = this.group.userData.orb;
     if (orb) { orb.rotation.y += dt; orb.position.y += Math.sin(game.time * 2 + this.id) * dt * 0.3; }
+    if (this.def.trap) { const plate = this.group.userData.plate; if (plate) plate.position.y += ((this.trapArmed === false ? -0.75 : 0) - plate.position.y) * Math.min(1, dt * 4); }
     if (this.underConstruction || game.replica) return;
     if (this.def.tower) this.updateTower(dt);
-    if (this.def.heal) {
+    if (this.def.heal && game.waves && game.waves.active) {
       const list = game.unitsNear(this.pos.x, this.pos.z, this.def.heal.radius, 'player');
       for (const u of list) if (u.hp < u.maxHp) u.heal(this.def.heal.hps * dt);
     }
+    if (this.def.trap) this.updateTrap(dt);
   }
   // buildings darken and dirty as they lose HP so damage is visible without a bar
   applyDamageTint(f) {
@@ -2284,6 +2854,17 @@ class Building {
     door.position.y += (want - door.position.y) * Math.min(1, dt * 5);
   }
   static get _soot() { if (!Building.__soot) Building.__soot = new THREE.Color(0x26190f); return Building.__soot; }
+  updateTrap(dt) {
+    const t = this.def.trap, game = this.game;
+    if (this.trapArmed === undefined) this.trapArmed = true;
+    if (!this.trapArmed) { this.rearmT -= dt; if (this.rearmT <= 0) this.trapArmed = true; return; }
+    const victims = game.unitsNear(this.pos.x, this.pos.z, t.radius, 'enemy').filter(u => !u.dead && !u.flying);
+    if (!victims.length) return;
+    game.areaDamage(this.pos.x, this.pos.z, t.radius + 0.4, t.dmg, 'player', this, { slow: { factor: t.slow, dur: 2.5 } });
+    game.effects.spawn('ring', this.pos.x, 0.3, this.pos.z, { radius: t.radius + 0.5, color: 0xcfd6dd, dur: 0.4 });
+    SFX.play('heavyhit', 0.7);
+    this.trapArmed = false; this.rearmT = t.rearm;
+  }
   updateTower(dt) {
     const game = this.game;
     this.timer -= dt; this.retargetT -= dt;
@@ -2293,6 +2874,20 @@ class Building {
     }
     const turret = this.group.userData.turret;
     if (this.target && turret) turret.rotation.y = Math.atan2(this.target.pos.x - this.pos.x, this.target.pos.z - this.pos.z) - this.rot * Math.PI / 2;
+    if (this.target && this.timer <= 0 && this.def.chain) {
+      // chain lightning: instant, armour-piercing, arcs to nearby enemies
+      this.timer = this.cd;
+      const hit = [this.target]; let last = this.target;
+      for (let k = 1; k < this.def.chain.count; k++) {
+        let next = null, nd = Infinity;
+        for (const u of game.unitsNear(last.pos.x, last.pos.z, this.def.chain.radius, 'enemy')) { if (u.dead || hit.includes(u)) continue; const d = last.distTo(u); if (d < nd) { nd = d; next = u; } }
+        if (!next) break; hit.push(next); last = next;
+      }
+      let prev = { x: this.pos.x, y: this.height + 1.5, z: this.pos.z };
+      for (const u of hit) { u.takeDamage(this.dmg, this, { magic: true }); game.effects.spawn('bolt', prev.x, prev.y, prev.z, { to: { x: u.pos.x, y: u.centerY, z: u.pos.z } }); game.effects.spawn('hit', u.pos.x, u.centerY, u.pos.z, { color: 0x80c0ff }); prev = { x: u.pos.x, y: u.centerY, z: u.pos.z }; }
+      SFX.play('cast', 0.6);
+      return;
+    }
     if (this.target && this.timer <= 0) {
       this.timer = this.cd;
       const pdef = DATA.projectiles[this.def.projectile];
@@ -2310,8 +2905,10 @@ class Building {
     for (const u of list) {
       if (u.dead) continue;
       let s = this.distTo(u);
+      if (this.def.minRange && s < this.def.minRange) continue;
       if (this.def.bonusVsLarge && u.large) s -= 12;
       if (u.flying) s -= 6;
+      if (this.def.prefersCasters && (u.def.magic || u.def.prefersBuildings || u.isBoss)) s -= 30;
       if (this.def.key === 'frost_tower' && u.slow && u.slow.until > this.game.time) s += 8;
       if (s < bestScore) { bestScore = s; best = u; }
     }
@@ -2330,6 +2927,7 @@ class Projectile {
     this.team = o.team; this.dmg = o.dmg; this.source = o.from;
     this.splash = o.splash || 0; this.buildingDmg = o.buildingDmg || 0;
     this.slow = o.slow; this.burn = o.burn; this.magic = !!o.magic; this.bonusVsLarge = o.bonusVsLarge || 1;
+    this.poison = o.poison || this.pdef.poison || null; this.hex = o.hex || null;
     this.target = o.target || null;
     this.speed = o.speed || this.pdef.speed;
     this.life = 0; this.maxLife = o.maxLife || 6;
@@ -2382,6 +2980,8 @@ class Projectile {
     if (target instanceof Unit) {
       if (this.slow) target.applySlow(this.slow.factor, this.slow.dur);
       if (this.burn) target.applyBurn(this.burn.dps, this.burn.dur, this.source);
+      if (this.poison) target.applyPoison(this.poison.dps, this.poison.dur, this.source);
+      if (this.hex) target.addBuff({ tag: 'hex', dmgMul: this.hex.dmgMul, until: this.game.time + this.hex.dur });
     }
     return dealt;
   }
@@ -2459,16 +3059,19 @@ class Projectile {
           this.kill(); return;
         }
       }
-      if (this.pos.y <= 0.05) {
-        if (this.splash > 0) this.explode(this.pos.x, 0.3, this.pos.z);
+      const gy = this.game.groundY(this.pos.x, this.pos.z);
+      if (this.pos.y <= gy + 0.05) {
+        if (this.splash > 0) this.explode(this.pos.x, gy + 0.3, this.pos.z);
         this.kill(); return;
       }
       if (this.pos.y < 6 && this.team === 'enemy') {
         const b = this.game.grid.buildingAtWorld(this.pos.x, this.pos.z);
         if (b && !b.dead && this.game.grid.isSolidAt(this.game.grid.worldToCell(this.pos.x, this.pos.z).i, this.game.grid.worldToCell(this.pos.x, this.pos.z).j)) { this.applyHit(b); this.kill(); return; }
+        const fl = this.game.grid.worldToCell(this.pos.x, this.pos.z); if (this.game.grid.flagAt(fl.i, fl.j) === CELL_ROCK) { this.kill(); return; }
       } else if (this.pos.y < 3.2 && this.team === 'player') {
         const c = this.game.grid.worldToCell(this.pos.x, this.pos.z);
-        if (this.game.grid.flagAt(c.i, c.j) !== CELL_FREE) { if (this.splash > 0) this.explode(this.pos.x, this.pos.y, this.pos.z); this.kill(); return; }
+        const fl = this.game.grid.flagAt(c.i, c.j);
+        if (fl !== CELL_FREE && fl !== CELL_WATER && this.pos.y < 3.2) { if (this.splash > 0) this.explode(this.pos.x, this.pos.y, this.pos.z); this.kill(); return; }
       }
     }
   }
@@ -2487,11 +3090,12 @@ class Zone {
     this.game = game; this.id = NEXT_ID++; this.color = o.color || 0xffd040; this.x = o.x; this.z = o.z; this.radius = o.radius;
     this.until = game.time + o.duration; this.tickEvery = o.tickEvery || 0.5; this.acc = 0;
     this.onTick = o.onTick; this.dead = false; this.follow = o.follow || null;
+    const gy = game.groundY(this.x, this.z);
     this.mesh = Models.disc(this.radius, o.color || 0xffd040, o.opacity || 0.3);
-    this.mesh.position.set(this.x, 0.08, this.z);
+    this.mesh.position.set(this.x, gy + 0.08, this.z);
     game.scene.add(this.mesh);
     this.ring = Models.ring(this.radius, o.color || 0xffd040, 0.8);
-    this.ring.position.set(this.x, 0.09, this.z);
+    this.ring.position.set(this.x, gy + 0.09, this.z);
     game.scene.add(this.ring);
   }
   update(dt) {
@@ -2520,7 +3124,7 @@ class Effects {
     if (type === 'hit' || type === 'ember' || type === 'flame' || type === 'heal_p') {
       const n = type === 'hit' ? 6 : 1;
       for (let k = 0; k < n; k++) {
-        const color = type === 'heal_p' ? 0x60ff80 : (type === 'flame' ? U.choice([0xff8020, 0xffc040, 0xff4010]) : (o.color || 0xffd090));
+        const color = type === 'heal_p' ? 0x60ff80 : (type === 'flame' ? U.choice([0xff8020, 0xffc040, 0xff4010]) : (o.color || (type === 'ember' ? 0xff8030 : 0xffd090)));
         const m = new THREE.Mesh(this.geoBox, new THREE.MeshBasicMaterial({ color, transparent: true }));
         m.position.set(x, y, z);
         const sp = type === 'hit' ? 4 : 1.5;
@@ -2536,6 +3140,11 @@ class Effects {
       const r = Models.ring(o.radius || 2.5, o.color || 0xff8040, 0.9); r.position.set(x, 0.1, z); r.scale.setScalar(0.2); scene.add(r);
       this.list.push({ mesh: r, life: 0, max: 0.5, growRing: 1 });
       for (let k = 0; k < 8; k++) this.spawn('hit', x, y, z, { color: o.color || 0xffa040 });
+    } else if (type === 'bolt') {
+      const to = o.to; const dx = to.x - x, dy = to.y - y, dz = to.z - z; const len = Math.hypot(dx, dy, dz) || 0.1;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, len), new THREE.MeshBasicMaterial({ color: 0xa0d0ff, transparent: true }));
+      m.position.set(x + dx / 2, y + dy / 2, z + dz / 2); m.lookAt(to.x, to.y, to.z);
+      scene.add(m); this.list.push({ mesh: m, life: 0, max: 0.18, fade: true });
     } else if (type === 'ring') {
       const r = Models.ring(o.radius || 5, o.color || 0xffd040, 0.9); r.position.set(x, 0.1, z); r.scale.setScalar(0.1); scene.add(r);
       this.list.push({ mesh: r, life: 0, max: o.dur || 0.7, growRing: 1 });
@@ -2563,6 +3172,7 @@ class Effects {
       if (e.grow) { e.mesh.scale.setScalar(0.3 + e.grow * p); e.mesh.material.opacity = 0.8 * (1 - p); }
       if (e.growRing) { e.mesh.scale.setScalar(0.2 + p * e.growRing); e.mesh.material.opacity = 0.9 * (1 - p); }
       if (e.rise) { e.mesh.position.y += e.rise * dt; e.mesh.material.opacity = 0.9 * (1 - p); }
+      if (e.fade) e.mesh.material.opacity = 1 - p;
       if (p >= 1) { this.game.scene.remove(e.mesh); e.mesh.material.dispose(); this.list.splice(k, 1); }
     }
   }
@@ -2677,6 +3287,7 @@ Unit.prototype.enemyAct = function (dt) {
   const game = this.game, t = this.target;
   if (t && !t.dead) {
     const gap = this.gapTo(t);
+    if (this.def.suicide && gap <= 1.2) { this.detonate(); return; }
     const minR = this.def.minRange || 0;
     if (minR && this.distTo(t) < minR) {
       // artillery too close: back off a little
@@ -2694,11 +3305,23 @@ Unit.prototype.enemyAct = function (dt) {
       if (this.canAttackNow() && this.facing(t, 0.3)) this.attack(t);
       return;
     }
-    // approach directly (walls in the way are handled by onBlocked)
+    // approach directly (walls in the way are handled by onBlocked); if stuck on rock or water, path around
+    this.stuckCheck = (this.stuckCheck || 0) + dt;
+    if (this.stuckCheck > 1) { this.stuckCheck = 0; const moved = this.lastPos ? U.dist(this.lastPos.x, this.lastPos.z, this.pos.x, this.pos.z) : 9; this.lastPos = { x: this.pos.x, z: this.pos.z }; if (moved < 0.4) this.detourUntil = game.time + 2.5; }
+    if (this.detourUntil > game.time && !this.flying) { this.navigateTo(t.pos.x, t.pos.z, Math.max(0.3, this.range * 0.85 + this.radius + t.radius), dt); return; }
     this.moveDirect(t.pos.x, t.pos.z, Math.max(0, this.range * 0.85 + this.radius + t.radius));
     return;
   }
   this.followFlow(dt);
+};
+
+Unit.prototype.detonate = function () {
+  const s = this.def.suicide, game = this.game;
+  game.areaDamage(this.pos.x, this.pos.z, s.radius, s.unitDmg, 'enemy', this, { buildingDmg: s.buildingDmg, magic: true });
+  game.effects.spawn('explosion', this.pos.x, 1, this.pos.z, { radius: s.radius, color: 0xff8030 });
+  SFX.play('explode');
+  this.def = Object.assign({}, this.def, { reward: 0 }); // no bounty for a bomb that went off
+  this.die(null);
 };
 
 Unit.prototype.followFlow = function (dt) {
@@ -2716,6 +3339,21 @@ Unit.prototype.followFlow = function (dt) {
       this.moveDirect(w.x, w.z, 0.2);
       return;
     }
+  }
+  // stuck against a corner? steer at the very next cell only, and shove clear of whatever we touch
+  this.flowStuckT = (this.flowStuckT || 0) + dt;
+  if (this.flowStuckT > 0.8) {
+    this.flowStuckT = 0;
+    const moved = this.flowLast ? U.dist(this.flowLast.x, this.flowLast.z, this.pos.x, this.pos.z) : 9;
+    this.flowLast = { x: this.pos.x, z: this.pos.z };
+    if (moved < 0.3) this.flowSimpleUntil = game.time + 2.5;
+  }
+  if (this.flowSimpleUntil > game.time) {
+    const push = g.circlePushOut(this.pos.x, this.pos.z, this.collisionRadius + 0.35, this.team);
+    if (push) { const m = Math.hypot(push.x, push.z); if (m > 1e-3) this.tryMove(push.x / m * 3 * dt, push.z / m * 3 * dt); }
+    const w1 = g.cellToWorld(n.i, n.j);
+    this.moveDirect(w1.x, w1.z, 0.15);
+    return;
   }
   // look a few cells ahead and steer at the farthest one we can walk to in a straight line
   let goal = n, cur = n;
@@ -2770,9 +3408,28 @@ Unit.prototype.repairTick = function (b, dt) {
   }
 };
 
+Unit.prototype.medicThink = function () {
+  const game = this.game;
+  this.target = null;
+  const threat = game.unitsNear(this.pos.x, this.pos.z, 6, 'enemy').find(u => !u.dead);
+  this.fleeFrom = threat || null;
+  if (threat) { this.healTarget = null; return; }
+  const c = this.command;
+  if (c && c.type !== 'hold') { this.healTarget = null; return; }
+  let best = null, bs = 0;
+  for (const u of game.unitsNear(this.pos.x, this.pos.z, 30, 'player')) {
+    if (u === this || u.dead || u.def.medic) continue;
+    const miss = 1 - u.hp / u.maxHp; if (miss < 0.05) continue;
+    const s = miss * 100 + (u.isHero || u.isKing ? 25 : 0) - this.distTo(u) * 1.2;
+    if (s > bs) { bs = s; best = u; }
+  }
+  this.healTarget = best;
+};
+
 Unit.prototype.playerThink = function () {
   const game = this.game;
   if (this.def.repair) { this.engineerThink(); return; }
+  if (this.def.medic) { this.medicThink(); return; }
   const cmd = this.command;
   if (cmd) {
     if (cmd.type === 'attack') {
@@ -2824,6 +3481,14 @@ Unit.prototype.playerThink = function () {
 Unit.prototype.playerAct = function (dt) {
   if (this.stunned) return;
   const cmd = this.command, t = this.target;
+  if (this.def.medic) {
+    if (this.fleeFrom && !this.fleeFrom.dead) {
+      let ax = this.pos.x - this.fleeFrom.pos.x, az = this.pos.z - this.fleeFrom.pos.z; const l = Math.hypot(ax, az) || 1;
+      this.navigateTo(this.pos.x + ax / l * 6, this.pos.z + az / l * 6, 0.5, dt); return;
+    }
+    const h = this.healTarget;
+    if (h && !h.dead && !(cmd && cmd.type === 'hold')) { if (this.distTo(h) > 4) this.navigateTo(h.pos.x, h.pos.z, 3.5, dt); else this.faceToward(h.pos.x, h.pos.z, dt); return; }
+  }
   if (this.def.repair) {
     if (this.fleeFrom && !this.fleeFrom.dead) {
       // run away from the threat, biased toward the keep
@@ -2878,6 +3543,9 @@ Unit.prototype.updateSpecials = function (dt) {
     for (const u of game.unitsNear(this.pos.x, this.pos.z, def.healAura.radius, 'enemy')) if (u !== this && u.hp < u.maxHp) u.heal(def.healAura.hps * dt);
     if (Math.random() < dt * 2) game.effects.spawn('heal_p', this.pos.x + U.rand(-1, 1), 1.5, this.pos.z + U.rand(-1, 1));
   }
+  if (def.medic && this.team === 'player') {
+    for (const u of game.unitsNear(this.pos.x, this.pos.z, def.medic.radius, 'player')) if (u !== this && u.hp < u.maxHp) { u.heal(def.medic.hps * dt); if (Math.random() < dt * 1.5) game.effects.spawn('heal_p', u.pos.x + U.rand(-0.4, 0.4), u.centerY, u.pos.z + U.rand(-0.4, 0.4)); }
+  }
   if (def.slowAura) {
     for (const u of game.unitsNear(this.pos.x, this.pos.z, def.slowAura.radius, 'player')) u.applySlow(def.slowAura.factor, 0.4);
   }
@@ -2923,6 +3591,15 @@ Unit.prototype.updateSpecials = function (dt) {
       SFX.play('summon');
     }
     this.specialTimer = def.summon.every;
+  } else if (def.webShot) {
+    const list = game.unitsNear(this.pos.x, this.pos.z, def.webShot.range, 'player').filter(u => !u.dead && !u.sheltered);
+    if (list.length) {
+      const t = list[Math.floor(Math.random() * list.length)];
+      game.fireProjectile({ from: this, target: t, key: 'web', dmg: 10, team: 'enemy', slow: { factor: def.webShot.slow, dur: def.webShot.dur }, magic: true });
+      SFX.play('cast', 0.5);
+      this.specialTimer = def.webShot.every;
+    } else this.specialTimer = 1;
+    if (def.summon) { this.summonTimer = (this.summonTimer || def.summon.every) - def.webShot.every; if (this.summonTimer <= 0) { this.summonTimer = def.summon.every; for (let k = 0; k < def.summon.count; k++) { const a = Math.random() * Math.PI * 2; const sp = game.findSpawnSpot(this.pos.x + Math.sin(a) * 3, this.pos.z + Math.cos(a) * 3); game.spawnEnemy(def.summon.type, sp.x, sp.z, { hpMul: this.hpMul }); game.effects.spawn('blink', sp.x, 0.3, sp.z); } SFX.play('summon'); } }
   } else if (def.slam) {
     const list = game.unitsNear(this.pos.x, this.pos.z, def.slam.radius, 'player');
     if (list.length) {
@@ -3265,9 +3942,9 @@ class WaveManager {
 
   plan(n) {
     const diff = this.game.difficulty;
-    let budget = DATA.waves.budget(n) * diff.budget;
+    let budget = DATA.waves.budget(n) * diff.budget * DATA.waves.playerScale(this.game.playerCount ? this.game.playerCount() : 1);
     const bossKey = (n % DATA.waves.bossEvery === 0) ? DATA.bossSchedule[Math.floor(n / DATA.waves.bossEvery - 1) % DATA.bossSchedule.length] : null;
-    if (bossKey) budget *= 0.55;
+    if (bossKey) budget *= 0.45;
     const available = Object.values(DATA.enemies).filter(e => !e.boss && e.weight > 0 && e.unlock <= n);
     const counts = {};
     let total = 0;
@@ -3344,6 +4021,8 @@ class WaveManager {
       const x = U.clamp(p.sp.x + U.rand(-jx, jx), -DATA.MAP_HALF + 1, DATA.MAP_HALF - 1);
       const z = U.clamp(p.sp.z + U.rand(-jz, jz), -DATA.MAP_HALF + 1, DATA.MAP_HALF - 1);
       const u = this.game.spawnEnemy(p.type, x, z, { hpMul: p.hpMul });
+      if (this.game.grid.flowDirty && this.game.king) { const kc = this.game.grid.worldToCell(this.game.king.pos.x, this.game.king.pos.z); this.game.grid.computeFlow(kc.i, kc.j); }
+      this.game.snapToReachable(u);
       if (p.boss) { this.game.boss = u; this.game.ui.toast(`${u.name} has arrived!`, 'boss'); SFX.play('bossroar'); }
       this.spawnedCount++;
     }
@@ -3584,7 +4263,7 @@ class Controls {
 
   onWheel(e) {
     if (this.mode === 'fps') return;
-    this.camDist = U.clamp(this.camDist * (1 + Math.sign(e.deltaY) * 0.12), 12, 150);
+    this.camDist = U.clamp(this.camDist * (1 + Math.sign(e.deltaY) * 0.12), 12, 230);
   }
 
   // ------------------------------------------------------------------ picking
@@ -3640,6 +4319,7 @@ class Controls {
     this.selected.clear();
     if (this.selectedBuilding) this.selectedBuilding.selected = false;
     this.selectedBuilding = null;
+    if (!this.buildDef) this.game.showRange(null);
     this.game.ui.onSelectionChanged();
   }
   setSelection(units) {
@@ -3670,16 +4350,16 @@ class Controls {
     if (!found.length && !additive) { this.clearSelection(); return; }
     if (additive) for (const u of found) this.addToSelection(u); else this.setSelection(found);
   }
-  selectAllSoldiers() { this.setSelection(this.game.units.filter(u => u.isSoldier && !u.dead && !u.possessed)); }
+  selectAllSoldiers() { const lp = this.game.localPlayer; this.setSelection(this.game.units.filter(u => u.isSoldier && !u.dead && !u.possessed && (!u.owner || u.owner === lp))); }
   selectKing() { if (this.game.king && !this.game.king.dead) { this.setSelection([this.game.king]); this.focusOnSelection(); } }
-  selectHeroes() { const hs = this.game.units.filter(u => u.isHero && !u.dead); if (hs.length) { this.setSelection(hs); this.focusOnSelection(); } }
+  selectHeroes() { const lp = this.game.localPlayer; const hs = this.game.units.filter(u => u.isHero && !u.dead && (!u.owner || u.owner === lp)); if (hs.length) { this.setSelection(hs); this.focusOnSelection(); } }
   focusOnSelection() {
     const list = [...this.selected];
     if (!list.length) return;
     let x = 0, z = 0; for (const u of list) { x += u.pos.x; z += u.pos.z; }
     this.focus.set(x / list.length, 0, z / list.length);
   }
-  selectedUnits() { return [...this.selected].filter(u => !u.dead && u.team === 'player' && !u.possessed); }
+  selectedUnits() { return [...this.selected].filter(u => !u.dead && u.team === 'player' && !u.possessed && (!u.owner || u.owner === this.game.localPlayer)); }
 
   // ------------------------------------------------------------------ commands (RTS)
   issueCommandAt(x, y) {
@@ -3711,13 +4391,14 @@ class Controls {
 
   // ------------------------------------------------------------------ possession
   controlSelected() {
-    const list = [...this.selected].filter(u => !u.dead && u.team === 'player');
-    if (!list.length) { this.game.ui.toast('Select one of your units first (King, hero or soldier)'); return; }
+    const list = [...this.selected].filter(u => !u.dead && u.team === 'player' && (!u.owner || u.owner === this.game.localPlayer));
+    if (!list.length) { this.game.ui.toast('Select one of your own units first (King, hero or soldier)'); return; }
     this.enterControl(list[0]);
   }
   enterControl(unit) {
     if (!unit || unit.dead || unit.team !== 'player') return;
     if (unit.possessedBy && !(this.game.replica && unit.possessedBy === this.game.net.myId)) { this.game.ui.toast('Another player is controlling that unit', 'error'); return; }
+    if (unit.owner && unit.owner !== this.game.localPlayer) { this.game.ui.toast(`${unit.name} belongs to ${this.game.playerName(unit.owner)}`, 'error'); return; }
     if (this.game.replica) this.game.net.send({ t: 'possess', id: unit.id });
     if (this.buildDef) this.cancelBuild();
     // soldiers selected alongside become the squad for first-person commands
@@ -3941,7 +4622,8 @@ class Controls {
 
   // ------------------------------------------------------------------ squad commands (first person)
   squadUnits() {
-    const all = this.game.units.filter(u => u.isSoldier && !u.dead && !u.possessed);
+    const lp = this.game.localPlayer;
+    const all = this.game.units.filter(u => u.isSoldier && !u.dead && !u.possessed && (!u.owner || u.owner === lp));
     if (this.squad) { const s = all.filter(u => this.squad.has(u)); if (s.length) return s; }
     return all;
   }
@@ -3975,6 +4657,7 @@ class Controls {
     this.clearDragGhosts();
     this.buildDef = null; this.dragStart = null;
     this.game.gridHelper.visible = false;
+    this.game.showRange(null);
     this.game.ui.onBuildModeChanged();
   }
   cellUnderMouse() {
@@ -3998,6 +4681,7 @@ class Controls {
     this.ghost.position.set(cx / res.cells.length, 0, cz / res.cells.length);
     this.ghost.rotation.y = this.buildRot * Math.PI / 2;
     this.ghostOk = res.ok && this.game.canAfford(this.game.buildingCost(this.buildDef)) && !(this.buildDef.unique && this.game.hasBuilding(this.buildDef.key));
+    if (this.buildDef.tower) this.game.showRange(this.ghost.position.x, this.ghost.position.z, this.game.towerRangeFor(this.buildDef));
     Models.setGhostValid(this.ghost, this.ghostOk, this.game.waves && this.game.waves.active);
     this.game.ui.showBuildHint(res.ok ? (this.ghostOk ? '' : (this.buildDef.unique && this.game.hasBuilding(this.buildDef.key) ? 'Already built' : 'Not enough gold')) : res.reason);
   }
@@ -4043,7 +4727,7 @@ class Controls {
   }
 
   // ------------------------------------------------------------------ per-frame
-  clampFocus() { this.focus.x = U.clamp(this.focus.x, -85, 85); this.focus.z = U.clamp(this.focus.z, -85, 85); }
+  clampFocus() { const L = DATA.MAP_HALF + 8; this.focus.x = U.clamp(this.focus.x, -L, L); this.focus.z = U.clamp(this.focus.z, -L, L); }
   update(dt, realDt) {
     const cam = this.camera;
     if (this.mode === 'rts') {
@@ -4191,7 +4875,7 @@ class PeerTransport extends Emitter {
   broadcast(msg) { for (const c of this.conns.values()) if (c.open) c.send(msg); }
   peers() { return [...this.conns.keys()]; }
   pump() {}
-  close() { if (this.peer) this.peer.destroy(); }
+  close(id) { if (id) { const c = this.conns.get(id); if (c) c.close(); return; } if (this.peer) this.peer.destroy(); }
 }
 
 // ---------------------------------------------------------------------------
@@ -4204,27 +4888,46 @@ class NetHost {
     this.clients = new Map();
     this.fxQ = []; this.sfxQ = []; this.toastQ = [];
     this.lastB = new Map();
+    this.started = false; this.hostHero = 'knight'; this.difficulty = 'normal'; this.mapType = 'random';
     this.tr.on('open', (id) => this.onJoin(id));
     this.tr.on('close', (id) => this.onLeave(id));
     this.tr.on('message', (id, m) => { try { this.onMessage(id, m); } catch (e) { console.error('net message failed', e); } });
     game.net = this; game.netHost = this;
   }
   get playerCount() { return 1 + this.clients.size; }
-  onJoin(id) { this.clients.set(id, { known: new Set(), knownB: new Set(), name: 'Player', possessed: null }); this.game.ui.dirty = true; }
-  onLeave(id) {
-    const c = this.clients.get(id);
-    if (c && c.possessed) { const u = this.game.unitById(c.possessed); if (u) { u.possessedBy = null; u.remote = null; u.post = { x: u.pos.x, z: u.pos.z }; } }
-    this.clients.delete(id);
-    this.game.ui.toast(`${c ? c.name : 'A player'} left the game`, 'warn');
+  onJoin(id) {
+    if (this.started) { this.tr.send(id, { t: 'toast', msg: 'This game has already started. Ask the host for a new room after this siege.', type: 'error' }); this.tr.send(id, { t: 'refused' }); setTimeout(() => this.tr.close(id), 800); return; }
+    this.clients.set(id, { known: new Set(), knownB: new Set(), name: 'Player', hero: null, possessed: null, inLobby: true });
     this.game.ui.dirty = true;
   }
-  reset() {
-    this.lastB.clear();
-    this.tr.broadcast({ t: 'reset' });
-    for (const [id, c] of this.clients) {
-      c.known.clear(); c.knownB.clear(); c.possessed = null;
-      if (c.hero && DATA.heroes[c.hero]) { const h = this.game.addHero(c.hero, 0, 6); if (h) h.ownerPeer = id; }
-    }
+  onLeave(id) {
+    const c = this.clients.get(id);
+    if (!c) return;
+    const g = this.game;
+    if (c.possessed) { const u = g.unitById(c.possessed); if (u) { u.possessedBy = null; u.remote = null; u.post = { x: u.pos.x, z: u.pos.z }; } }
+    this.clients.delete(id);
+    if (this.started) {
+      for (const u of g.units) if (u.owner === id) u.owner = null;      // their forces become shared
+      for (const b of g.buildings) if (b.owner === id) b.owner = null;
+      g.ui.toast(`${c.name} left the game; their units and buildings are now shared`, 'warn', 6000);
+    } else { g.ui.toast(`${c.name} left the lobby`, 'warn'); this.broadcastLobby(); }
+    g.ui.dirty = true;
+  }
+  roster() { return [{ id: 'host', name: this.game.players.host ? this.game.players.host.name : 'Host', hero: this.hostHero }].concat([...this.clients].filter(([id, c]) => c.hero).map(([id, c]) => ({ id, name: c.name, hero: c.hero }))); }
+  lobbyState() { return { t: 'lobby', code: this.code, players: this.roster(), difficulty: this.difficulty, mapType: this.mapType, started: this.started }; }
+  broadcastLobby() { this.tr.broadcast(this.lobbyState()); this.game.ui.renderLobby(this.lobbyState(), true); }
+  begin(info) {
+    this.started = true; this.lastB.clear();
+    for (const c of this.clients.values()) { c.known.clear(); c.knownB.clear(); c.possessed = null; c.inLobby = false; }
+    this.tr.broadcast(Object.assign({ t: 'start' }, info));
+  }
+  // back to the lobby after a game (same players, new siege)
+  toLobby() {
+    this.started = false;
+    this.game.started = false; this.game.over = false;
+    for (const c of this.clients.values()) c.possessed = null;
+    this.game.ui.showLobby();
+    this.broadcastLobby();
   }
   sendTo(id, m) { this.tr.send(id, m); }
   toast(msg, type, dur) { if (this.toastQ.length < 8) this.toastQ.push([msg, type, dur]); }
@@ -4234,18 +4937,24 @@ class NetHost {
   onMessage(id, m) {
     const c = this.clients.get(id);
     if (!c) return;
+    const g = this.game;
+    if (m.t === 'hello') {
+      c.name = String(m.name || 'Player').slice(0, 16); c.hero = DATA.heroes[m.hero] ? m.hero : 'knight';
+      if (this.started) { this.sendTo(id, { t: 'toast', msg: 'This game has already started', type: 'error' }); return; }
+      g.ui.toast(`${c.name} joined the lobby`, 'good');
+      this.broadcastLobby();
+      return;
+    }
+    if (!this.started) return;
+    g.actor = id;
+    try { this.handleGameMessage(id, c, m); } finally { g.actor = 'host'; }
+  }
+  handleGameMessage(id, c, m) {
     const g = this.game, ctl = g.controls;
     const unit = (uid) => g.unitById(uid);
     const owned = (uid) => { const u = unit(uid); return u && u.possessedBy === id && !u.dead ? u : null; };
-    const orderable = (ids) => ids.map(unit).filter(u => u && !u.dead && u.team === 'player' && !u.possessed && !u.possessedBy);
+    const orderable = (ids) => ids.map(unit).filter(u => u && !u.dead && u.team === 'player' && !u.possessed && !u.possessedBy && (!u.owner || u.owner === id));
     switch (m.t) {
-      case 'hello': {
-        c.name = String(m.name || 'Player').slice(0, 16); c.hero = m.hero;
-        g.ui.toast(`${c.name} joined the defence`, 'good');
-        if (m.hero && DATA.heroes[m.hero]) { const h = g.addHero(m.hero, 0, 6); if (h) { h.ownerPeer = id; g.effects.spawn('ring', h.pos.x, 0.3, h.pos.z, { radius: 3, color: 0xffd040 }); } }
-        g.ui.dirty = true;
-        break;
-      }
       case 'build': if (!g.placeBuilding(m.key, m.i, m.j, m.rot, true)) this.sendTo(id, { t: 'toast', msg: 'Could not build there (blocked, too far, or not enough gold)', type: 'error' }); break;
       case 'buy': g.buyUnit(m.key); break;
       case 'hero': g.buyHero(m.key); break;
@@ -4265,7 +4974,7 @@ class NetHost {
       }
       case 'possess': {
         const u = unit(m.id);
-        if (u && u.team === 'player' && !u.dead && !u.possessed && !u.possessedBy) {
+        if (u && u.team === 'player' && !u.dead && !u.possessed && !u.possessedBy && (!u.owner || u.owner === id)) {
           if (c.possessed) { const old = unit(c.possessed); if (old) { old.possessedBy = null; old.remote = null; } }
           u.possessedBy = id; c.possessed = u.id; u.command = null; u.target = null; u.path = null; u.moveIntent.x = 0; u.moveIntent.z = 0;
           u.remote = { x: u.pos.x, z: u.pos.z, yaw: u.yaw, moving: false };
@@ -4282,16 +4991,18 @@ class NetHost {
 
   update(dt) {
     this.tr.pump();
+    if (!this.started) return;
     this.acc += dt;
     if (this.acc >= this.rate) { this.acc = 0; this.broadcast(); }
   }
+  ownerIdx(o) { return o ? this.game.playerOrder.indexOf(o) : -1; }
   unitRecord(u) {
     const f = (u.moving ? 1 : 0) | (u.dead ? 2 : 0) | (u.stunned ? 4 : 0) | (u.sheltered ? 8 : 0);
-    const r = [u.id, +u.pos.x.toFixed(2), +u.pos.z.toFixed(2), +u.pos.y.toFixed(2), +u.yaw.toFixed(2), Math.round(u.hp), Math.round(u.maxHp), f, +u.attackAnim.toFixed(2), u.possessedBy || (u.possessed ? 'host' : 0)];
-    if (u.abilities.length) r.push(u.abilities.map(a => +Math.max(0, a.timer).toFixed(1)));
+    const r = [u.id, +u.pos.x.toFixed(2), +u.pos.z.toFixed(2), +u.pos.y.toFixed(2), +u.yaw.toFixed(2), Math.round(u.hp), Math.round(u.maxHp), f, +u.attackAnim.toFixed(2), u.possessedBy || (u.possessed ? 'host' : 0), this.ownerIdx(u.owner)];
+    r.push(u.abilities.length ? u.abilities.map(a => +Math.max(0, a.timer).toFixed(1)) : 0);
     return r;
   }
-  buildingState(b) { return [b.id, Math.round(b.hp), Math.round(b.maxHp), b.level, +b.progress.toFixed(2), b.underConstruction ? 1 : 0]; }
+  buildingState(b) { return [b.id, Math.round(b.hp), Math.round(b.maxHp), b.level, +b.progress.toFixed(2), b.underConstruction ? 1 : 0, this.ownerIdx(b.owner)]; }
   broadcast() {
     const g = this.game;
     if (!g.started) return;
@@ -4311,19 +5022,20 @@ class NetHost {
     const zones = g.zones.filter(z => !z.dead).map(z => [z.id, +z.x.toFixed(1), +z.z.toFixed(1), z.radius, z.color]);
     const w = g.waves;
     const base = {
-      t: 'snap', seq: this.seq, time: +g.time.toFixed(3), gold: Math.round(g.gold), paused: g.paused, over: g.over, timeScale: g.timeScale,
+      t: 'snap', seq: this.seq, time: +g.time.toFixed(3), paused: g.paused, over: g.over, timeScale: g.timeScale,
+      players: g.playerOrder.map(id => { const p = g.players[id]; return { id, name: p.name, hero: p.hero, gold: Math.round(p.gold), heroes: p.heroes, heroesBought: p.heroesBought || 0, cap: g.soldierCap(id) }; }),
       wave: { n: w.number, active: w.active, pending: w.pending.length, total: w.total || 0, preview: w.preview ? { n: w.preview.n, d: w.describe(w.preview), dirs: w.preview.dirs } : null },
       king: g.king ? g.king.id : 0, boss: g.boss && !g.boss.dead ? g.boss.id : 0,
-      cap: g.soldierCap(), upgrades: g.upgrades, autoRepair: g.autoRepair, heroes: g.heroesOwned, fallen: g.fallenHeroes, heroesBought: g.heroesBought || 0,
-      players: this.playerCount, code: this.code,
+      upgrades: g.upgrades, autoRepair: g.autoRepair, fallen: g.fallenHeroes.map(f => f.key),
+      code: this.code,
       units: urec, bld, proj, zones, fx: this.fxQ, sfx: this.sfxQ, toasts: this.toastQ,
     };
     this.fxQ = []; this.sfxQ = []; this.toastQ = [];
     for (const [id, c] of this.clients) {
       const spawns = [], bspawns = [], removes = [];
-      for (const u of units) if (!c.known.has(u.id)) { c.known.add(u.id); spawns.push([u.id, u.def.key, u.team, u.isHero ? 1 : 0, u.heroKey || 0, u.hpMul]); }
+      for (const u of units) if (!c.known.has(u.id)) { c.known.add(u.id); spawns.push([u.id, u.def.key, u.team, u.isHero ? 1 : 0, u.heroKey || 0, u.hpMul, this.ownerIdx(u.owner)]); }
       for (const uid of [...c.known]) if (!unitIds.has(uid)) { c.known.delete(uid); removes.push(uid); }
-      for (const b of g.buildings) if (!c.knownB.has(b.id)) { c.knownB.add(b.id); bspawns.push([b.id, b.def.key, b.i, b.j, b.rot, b.level, b.cells.map(cl => [cl.i, cl.j, cl.solid ? 1 : 0]), ...this.buildingState(b).slice(1)]); }
+      for (const b of g.buildings) if (!c.knownB.has(b.id)) { c.knownB.add(b.id); bspawns.push([b.id, b.def.key, b.i, b.j, b.rot, b.level, b.cells.map(cl => [cl.i, cl.j, cl.solid ? 1 : 0]), ...this.buildingState(b).slice(1), this.ownerIdx(b.owner)]); }
       for (const bid of [...c.knownB]) if (!bIds.has(bid)) { c.knownB.delete(bid); removes.push(-bid); }
       this.tr.send(id, Object.assign({ spawns, bspawns, removes }, base));
     }
@@ -4340,7 +5052,7 @@ class NetClient {
     this.snapCount = 0; this.lastRt = 0; this.interval = 0.11; this.posAcc = 0; this.players = 1; this.code = '';
     this.tr.on('message', (from, m) => { try { this.onMessage(m); } catch (e) { console.error('snapshot failed', e); } });
     this.tr.on('close', () => { game.ui.toast('Connection to the host was lost', 'error', 8000); this.lost = true; });
-    game.net = this; game.netClient = this; game.replica = true;
+    game.net = this; game.netClient = this;
   }
   send(m) { this.tr.send(this.hostId, m); }
   onMessage(m) {
@@ -4349,7 +5061,18 @@ class NetClient {
       case 'snap': this.applySnapshot(m); break;
       case 'toast': g.ui.toast(m.msg, m.type || 'info'); break;
       case 'possessOk': break;
-      case 'possessFail': { const u = g.controls.controlled; if (u && u.id === m.id) g.controls.exitControl(); g.ui.toast('Someone else controls that unit', 'error'); break; }
+      case 'possessFail': { const u = g.controls.controlled; if (u && u.id === m.id) g.controls.exitControl(); g.ui.toast('You cannot control that unit', 'error'); break; }
+      case 'lobby': { this.lobby = m; this.code = m.code; this.players = m.players.length; if (g.started) { g.started = false; g.over = false; g.ui.$('gameover').classList.add('hidden'); g.ui.$('hud').classList.add('hidden'); } g.ui.showLobby(); g.ui.renderLobby(m, false); break; }
+      case 'start': {
+        this.units.clear(); this.buildings.clear(); for (const p of this.proj.values()) g.scene.remove(p.mesh); this.proj.clear(); for (const z of this.zones.values()) { g.scene.remove(z.disc); g.scene.remove(z.ring); } this.zones.clear();
+        this.snapCount = 0;
+        g.difficulty = DATA.difficulties[m.difficulty] || DATA.difficulties.normal;
+        g.newReplica(m.seed, m.type, this.myId, m.players);
+        g.ui.hideLobby(); g.ui.onGameStart();
+        g.ui.toast('The siege begins. Your hero and garrison stand at the keep: select them and press C to take control.', 'good', 7000);
+        break;
+      }
+      case 'refused': this.lost = true; g.ui.mpStatus('That game has already started. Ask the host for a new room.', true); g.ui.hideLobby(); g.ui.$('menu').classList.remove('hidden'); break;
       case 'reset': this.resetReplica(); break;
     }
   }
@@ -4374,17 +5097,18 @@ class NetClient {
       if (this.units.has(id)) continue;
       const def = team === 'enemy' ? DATA.enemies[defKey] : (hero ? DATA.heroes[heroKey] : DATA.units[defKey]);
       if (!def) continue;
-      const u = new Unit(g, def, team, 0, 0, { hero: !!hero, heroKey: heroKey || null, hpMul: hpMul || 1 });
+      const u = new Unit(g, def, team, 0, 0, { hero: !!hero, heroKey: heroKey || null, hpMul: hpMul || 1, owner: r[6] >= 0 && g.playerOrder[r[6]] ? g.playerOrder[r[6]] : null });
       u.id = id; u.netPrev = null; u.netCur = null; u.group.visible = false;
       g.units.push(u); this.units.set(id, u);
       if (def.isKing) g.king = u;
     }
     for (const r of s.bspawns || []) {
-      const [id, key, i, j, rot, level, cells, hp, maxHp, progress, uc] = r;
+      const [id, key, i, j, rot, level, cells, hp, maxHp, progress, uc, oidx] = r;
       if (this.buildings.has(id)) continue;
       const def = DATA.buildings[key]; if (!def) continue;
       const b = new Building(g, def, i, j, rot, cells.map(c => ({ i: c[0], j: c[1], solid: !!c[2] })));
       b.id = id; b.level = level; if (level > 1) b.build3D();
+      b.owner = oidx >= 0 && g.playerOrder[oidx] ? g.playerOrder[oidx] : null;
       g.grid.place(b); g.buildings.push(b); this.buildings.set(id, b);
       this.applyBuilding(b, hp, maxHp, progress, uc);
     }
@@ -4404,9 +5128,10 @@ class NetClient {
       u.sheltered = !!(f & 8);
       u.netAttackAnim = r[8];
       u.possessedBy = r[9] || null;
-      if (r[10] && !u.possessed) u.abilities.forEach((a, k) => { a.timer = r[10][k] || 0; });
+      u.owner = r[10] >= 0 && g.playerOrder[r[10]] ? g.playerOrder[r[10]] : null;
+      if (r[11] && !u.possessed) u.abilities.forEach((a, k) => { a.timer = r[11][k] || 0; });
     }
-    for (const r of s.bld || []) { const b = this.buildings.get(r[0]); if (b) this.applyBuilding(b, r[1], r[2], r[3], r[4], r[5]); }
+    for (const r of s.bld || []) { const b = this.buildings.get(r[0]); if (b) { this.applyBuilding(b, r[1], r[2], r[3], r[4], r[5]); if (r[6] !== undefined) b.owner = r[6] >= 0 && g.playerOrder[r[6]] ? g.playerOrder[r[6]] : null; } }
     // projectiles
     const seen = new Set();
     for (const r of s.proj || []) {
@@ -4428,14 +5153,15 @@ class NetClient {
     for (const n of s.sfx || []) SFX.play(n, 0.8);
     for (const t of s.toasts || []) g.ui.toast(t[0], t[1] || 'info', t[2] || 3200);
     // game state
-    g.gold = s.gold; g.paused = s.paused; g.timeScale = s.timeScale;
+    if (s.players) { for (const p of s.players) { const w = g.players[p.id] || (g.players[p.id] = { id: p.id, name: p.name, heroes: [], heroesBought: 0, gold: 0 }); w.name = p.name; w.hero = p.hero; w.gold = p.gold; w.heroes = p.heroes || []; w.heroesBought = p.heroesBought || 0; w.cap = p.cap; } g.playerOrder = s.players.map(p => p.id); const me = g.players[g.localPlayer]; g.replicaCap = me ? me.cap : 0; }
+    g.paused = s.paused; g.timeScale = s.timeScale;
     if (s.over && !g.over) { g.over = true; g.ui.showGameOver(); }
     const w = s.wave;
     g.waves = { number: w.n, active: w.active, pending: { length: w.pending }, total: w.total, preview: w.preview ? { n: w.preview.n, d: w.preview.d, dirs: w.preview.dirs } : { n: w.n + 1, d: { units: [], from: [] } }, describe: (p) => p.d };
     g.king = this.units.get(s.king) || g.king;
     g.boss = s.boss ? this.units.get(s.boss) : null;
-    g.replicaCap = s.cap; g.heroesBought = s.heroesBought || 0; g.upgrades = s.upgrades || {}; g.autoRepair = !!s.autoRepair; g.heroesOwned = s.heroes || []; g.fallenHeroes = s.fallen || [];
-    this.players = s.players; this.code = s.code;
+    g.upgrades = s.upgrades || {}; g.autoRepair = !!s.autoRepair; g.fallenHeroes = (s.fallen || []).map(k => ({ key: k }));
+    this.players = s.players ? s.players.length : this.players; this.code = s.code;
     g.time = s.time;
     g.ui.dirty = true;
     if (this.snapCount === 1) g.ui.onConnected();
@@ -4513,6 +5239,12 @@ class UI {
       el.addEventListener('click', () => { this.selectedHero = h.key; cards.querySelectorAll('.hero-card').forEach(c => c.classList.toggle('on', c.dataset.hero === h.key)); SFX.play('click'); });
       cards.appendChild(el);
     }
+    this.selectedMap = 'random';
+    this.$('mapsel').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+      this.selectedMap = b.dataset.m;
+      this.$('mapsel').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      this.$('mapdesc').textContent = b.dataset.m === 'random' ? 'A different layout every game.' : DATA.mapTypes[b.dataset.m].desc;
+    }));
     this.$('difficulty').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
       this.difficulty = b.dataset.d;
       this.$('difficulty').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
@@ -4523,7 +5255,11 @@ class UI {
     this.$('copycode').addEventListener('click', () => { const g = this.game; const code = g.netHost ? g.netHost.code : (g.netClient ? g.netClient.code : ''); if (code) this.copyText(code, this.$('copycode')); });
     this.$('copylink').addEventListener('click', () => { const g = this.game; const code = g.netHost ? g.netHost.code : (g.netClient ? g.netClient.code : ''); if (code) this.copyText(this.inviteLink(code), this.$('copylink')); });
     { const jc = new URLSearchParams(location.search).get('join'); if (jc) { this.$('joincode').value = jc.toUpperCase().slice(0, 6); this.mpStatus(`Room code ${jc.toUpperCase()} filled in. Pick your hero, enter a name, and press Join.`); } }
-    this.$('restartbtn').addEventListener('click', () => { if (this.game.replica) { location.reload(); return; } this.$('gameover').classList.add('hidden'); this.$('menu').classList.remove('hidden'); this.$('hud').classList.add('hidden'); this.game.started = false; });
+    this.$('lobbystart').addEventListener('click', () => this.game.hostBegin());
+    this.$('lobbyleave').addEventListener('click', () => location.reload());
+    this.$('lobbycopy').addEventListener('click', () => { const code = this.$('lobbycode').textContent; if (code) this.copyText(code, this.$('lobbycopy')); });
+    this.$('lobbylink').addEventListener('click', () => { const code = this.$('lobbycode').textContent; if (code) this.copyText(this.inviteLink(code), this.$('lobbylink')); });
+    this.$('restartbtn').addEventListener('click', () => { if (this.game.netHost) { this.$('gameover').classList.add('hidden'); this.game.netHost.toLobby(); return; } if (this.game.replica) { location.reload(); return; } this.$('gameover').classList.add('hidden'); this.$('menu').classList.remove('hidden'); this.$('hud').classList.add('hidden'); this.game.started = false; });
     // multiplayer lobby
     const nameOf = () => (this.$('mpname').value || '').trim().slice(0, 16) || 'Player';
     this.setupEmbeddedFallbacks();
@@ -4547,12 +5283,23 @@ class UI {
       this.game.startJoin(code, this.selectedHero, nameOf(), (err) => {
         if (err) { this.mpStatus(this.netErrorText(err, 'join'), true); return; }
         this.hideMenu();
-        this.$('connecting').classList.remove('hidden');
       });
     });
     this.$('helpclose').addEventListener('click', () => this.toggleHelp(false));
   }
   hideMenu() { this.$('menu').classList.add('hidden'); }
+  showLobby() { this.$('menu').classList.add('hidden'); this.$('connecting').classList.add('hidden'); this.$('lobby').classList.remove('hidden'); this.$('hud').classList.add('hidden'); const g = this.game; if (g.netHost) this.renderLobby(g.netHost.lobbyState(), true); else if (g.netClient && g.netClient.lobby) this.renderLobby(g.netClient.lobby, false); else this.$('lobbyplayers').innerHTML = '<div class="p"><span class="nm">Connecting…</span></div>'; }
+  hideLobby() { this.$('lobby').classList.add('hidden'); }
+  renderLobby(state, isHost) {
+    const g = this.game;
+    this.$('lobbycode').textContent = state.code || '';
+    const me = isHost ? 'host' : (g.netClient ? g.netClient.myId : null);
+    this.$('lobbyplayers').innerHTML = state.players.map((p, k) => { const h = DATA.heroes[p.hero]; return `<div class="p"><span class="sw" style="background:#${(h ? h.color : 0x888888).toString(16).padStart(6, '0')}"></span><span class="nm">${p.name}</span><span class="hero">${h ? h.name + ', ' + h.title : ''}</span>${p.id === 'host' ? '<span class="tag">host</span>' : ''}${p.id === me ? '<span class="tag">you</span>' : ''}</div>`; }).join('');
+    const mt = state.mapType && DATA.mapTypes[state.mapType] ? DATA.mapTypes[state.mapType].label : 'Random map';
+    this.$('lobbyinfo').textContent = `${mt} · ${DATA.difficulties[state.difficulty] ? DATA.difficulties[state.difficulty].label : 'Normal'} difficulty · ${state.players.length} defender${state.players.length === 1 ? '' : 's'}. Everyone shares the King and the starting castle; each defender has their own gold, hero, soldiers and buildings.`;
+    this.$('lobbystart').classList.toggle('hidden', !isHost);
+    this.$('lobbywait').classList.toggle('hidden', isHost);
+  }
   webrtcSupported() {
     if (/[?&]nowebrtc/.test(location.search)) return false;
     try { if (typeof RTCPeerConnection !== 'function') return false; const pc = new RTCPeerConnection(); pc.createDataChannel('probe'); pc.close(); return true; } catch (e) { return false; }
@@ -4666,7 +5413,7 @@ class UI {
     const pr = this.$('panel-recruit');
     pr.innerHTML = '';
     const c1 = document.createElement('div'); c1.className = 'cat'; c1.textContent = 'Soldiers'; pr.appendChild(c1);
-    for (const key of ['swordsman', 'archer', 'pikeman', 'engineer']) {
+    for (const key of ['swordsman', 'archer', 'pikeman', 'crossbowman', 'cavalry', 'apprentice', 'priest', 'engineer']) {
       const d = DATA.units[key];
       const b = document.createElement('button');
       b.className = 'item'; b.dataset.unit = key;
@@ -4734,7 +5481,7 @@ class UI {
   }
   buildingTip(d) {
     let s = `<b>${d.name}</b> · ${this.game.buildingCost(d)} gold<br>${d.desc}<br><span class="st">HP ${d.hp}`;
-    if (d.tower) s += ` · Damage ${d.dmg} · Range ${d.range}m · every ${d.cd}s`;
+    if (d.tower) s += ` · Damage ${d.dmg} · Range ${this.game.towerRangeFor(d).toFixed(0)}m · every ${d.cd}s`;
     if (d.income) s += ` · +${d.income} gold/wave`;
     if (d.soldierCap) s += ` · +${d.soldierCap} soldier cap`;
     s += ` · ${d.w}×${d.d} cells</span>`;
@@ -4783,7 +5530,8 @@ class UI {
     this.$('autorepairbox').addEventListener('change', (e) => { if (g.replica) { g.net.send({ t: 'autoRepair', on: e.target.checked }); return; } g.autoRepair = e.target.checked; this.toast(g.autoRepair ? 'Auto-repair on: damaged buildings are repaired after each wave' : 'Auto-repair off'); });
     this.$('minimap').addEventListener('mousedown', (e) => {
       const r = this.minimap.getBoundingClientRect();
-      const x = ((e.clientX - r.left) / r.width - 0.5) * 200, z = ((e.clientY - r.top) / r.height - 0.5) * 200;
+      const SPAN = DATA.GRID * DATA.CELL + 20;
+      const x = ((e.clientX - r.left) / r.width - 0.5) * SPAN, z = ((e.clientY - r.top) / r.height - 0.5) * SPAN;
       if (g.controls.mode === 'rts') { g.controls.focus.set(x, 0, z); g.controls.clampFocus(); }
     });
     // stop HUD clicks from reaching the canvas selection logic
@@ -4796,6 +5544,7 @@ class UI {
     const panel = this.$('selpanel');
     const units = [...c.selected].filter(u => !u.dead);
     const b = c.selectedBuilding;
+    if (b && b.def.tower && !c.buildDef) this.game.showRange(b.pos.x, b.pos.z, b.range); else if (!c.buildDef) this.game.showRange(null);
     if (!units.length && !b) { panel.classList.add('hidden'); return; }
     panel.classList.remove('hidden');
     if (b) {
@@ -4816,9 +5565,11 @@ class UI {
     }
     if (units.length === 1) {
       const u = units[0];
-      const own = u.team === 'player';
+      const mine = u.team === 'player' && (!u.owner || u.owner === this.game.localPlayer);
+      const own = mine;
+      const ownerNote = u.team === 'player' && u.owner && u.owner !== this.game.localPlayer ? ` · ${this.game.playerName(u.owner)}'s` : (u.team === 'player' && !u.owner && this.game.playerOrder.length > 1 ? ' · shared' : '');
       const abil = u.abilities.length ? `<div class="abil">${u.abilities.map(a => `<span data-ab="${a.key}"><b>${a.def.key}</b> ${a.def.name}</span>`).join('')}</div>` : '';
-      panel.innerHTML = `<div><div class="nm">${u.name}${u.isHero ? ` · ${u.def.title}` : ''}</div><div class="sub">${u.def.desc || u.def.passive || (u.isKing ? 'If he falls, the game is lost.' : (own ? '' : 'Enemy'))}</div>
+      panel.innerHTML = `<div><div class="nm">${u.name}${u.isHero ? ` · ${u.def.title}` : ''}${ownerNote}</div><div class="sub">${u.def.desc || u.def.passive || (u.isKing ? 'If he falls, the game is lost.' : (u.team === 'player' ? '' : 'Enemy'))}</div>
         <div class="bar"><div class="fill" id="selhp"></div></div>
         <div class="stats" id="selstats"></div>${abil}
         ${own ? `<div class="row"><button class="ctl" data-a="control">Take control <kbd>C</kbd></button><button data-a="hold">Hold <kbd>H</kbd></button><button data-a="follow">Follow hero <kbd>F</kbd></button></div>` : ''}</div>`;
@@ -4947,7 +5698,7 @@ class UI {
     this.tick += dt; this.mapTick += dt;
     if (this.tick < 0.12 && !this.dirty) return;
     this.tick = 0;
-    this.$('gold').textContent = U.fmt(g.gold);
+    this.$('gold').textContent = U.fmt(g.gold) + (g.playerOrder.length > 1 ? ' (yours)' : '');
     this.$('wave').textContent = g.waves.active ? g.waves.number : `${g.waves.number} done`;
     this.$('enemies').textContent = g.waves.active ? `${g.enemiesAlive()} (+${g.waves.pending.length} coming)` : '0';
     this.$('soldiers').textContent = `${g.soldierCount()}/${g.soldierCap()}`;
@@ -4971,7 +5722,7 @@ class UI {
     this.$('autorepairbox').checked = !!g.autoRepair;
     { const rs = this.$('roomstat'), rt = this.$('roomtext');
       if (g.netHost) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netHost.code}</b> · ${g.netHost.playerCount} player${g.netHost.playerCount === 1 ? '' : 's'}`; }
-      else if (g.netClient) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netClient.code || ''}</b> · ${g.netClient.players} players${g.netClient.lost ? ' · <span class="bad">disconnected</span>' : ''}`; }
+      else if (g.netClient) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netClient.code || ''}</b> · ${g.playerOrder.length} players${g.netClient.lost ? ' · <span class="bad">disconnected</span>' : ''}`; }
       else rs.classList.add('hidden'); }
     if (this.dirty) { this.refreshPanels(); this.dirty = false; }
     this.updateSelPanel();
@@ -4990,10 +5741,19 @@ class UI {
   }
   drawMinimap() {
     const g = this.game, ctx = this.mctx, W = this.minimap.width;
-    const s = W / 200; // 200m across
+    const SPAN = DATA.GRID * DATA.CELL + 20, HALF = SPAN / 2;
+    const s = W / SPAN;
     ctx.fillStyle = '#2e5a2a'; ctx.fillRect(0, 0, W, W);
-    ctx.fillStyle = '#3f7a35'; const b = (100 - DATA.BUILD_RADIUS) * s; ctx.fillRect(b, b, W - 2 * b, W - 2 * b);
-    const px = (x) => (x + 100) * s, pz = (z) => (z + 100) * s;
+    ctx.fillStyle = '#3f7a35'; const b = (HALF - DATA.BUILD_RADIUS) * s; ctx.fillRect(b, b, W - 2 * b, W - 2 * b);
+    const px = (x) => (x + HALF) * s, pz = (z) => (z + HALF) * s;
+    if (g.world) {
+      const cs = DATA.CELL * s;
+      for (let j = 0; j < g.world.n; j++) for (let i = 0; i < g.world.n; i++) {
+        const k = g.world.kind[g.world.idx(i, j)]; if (!k) continue;
+        ctx.fillStyle = k === CELL_WATER ? '#3a7fc0' : (k === CELL_ROCK ? '#6a6a64' : '#1f4a25');
+        const c = g.world.cellCenter(i, j); ctx.fillRect(px(c.x - 1), pz(c.z - 1), cs + 0.5, cs + 0.5);
+      }
+    }
     for (const bl of g.buildings) {
       ctx.fillStyle = bl.def.tower ? '#e0c060' : (bl.def.keep ? '#ffd040' : (bl.def.gate ? '#b08040' : (bl.def.temporary ? '#a0e0ff' : (bl.def.cat === 'economy' ? '#80c0ff' : '#bbb'))));
       for (const c of bl.cells) { const w = g.grid.cellToWorld(c.i, c.j); ctx.fillRect(px(w.x - 1), pz(w.z - 1), 2 * s + 0.5, 2 * s + 0.5); }
@@ -5025,7 +5785,9 @@ class Game {
     this.maxFrames = opts.maxFrames || 0; this.frameCount = 0;
     this.started = false; this.over = false; this.paused = false; this.timeScale = 1; this.time = 0;
     this.units = []; this.buildings = []; this.projectiles = []; this.zones = [];
-    this.gold = 0; this.upgrades = {}; this.stats = { kills: 0, goldEarned: 0, buildingsLost: 0, wavesCleared: 0 };
+    this.players = { host: { id: 'host', name: 'You', hero: null, gold: 0, heroes: [], heroesBought: 0 } }; this.playerOrder = ['host'];
+    this.localPlayer = 'host'; this.actor = 'host';
+    this.upgrades = {}; this.stats = { kills: 0, goldEarned: 0, buildingsLost: 0, wavesCleared: 0 };
     this.difficulty = DATA.difficulties.normal;
     this.king = null; this.boss = null; this.heroesOwned = []; this.fallenHeroes = [];
     this.autoRepair = false; this.warnedNoEngineer = false; this.heroesBought = 0;
@@ -5033,6 +5795,7 @@ class Game {
     this.setupRenderer();
     this.setupScene();
     this.grid = new Grid();
+    this.world = null;
     this.effects = new Effects(this);
     this.hash = new SpatialHash(4);
     this.controls = new Controls(this);
@@ -5053,19 +5816,20 @@ class Game {
     r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFShadowMap;
     document.getElementById('game').appendChild(r.domElement);
     this.renderer = r;
-    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.2, 500);
+    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.2, 800);
   }
   setupScene() {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x9cc4e4);
-    scene.fog = new THREE.Fog(0xb8cfe4, 130, 300);
+    scene.fog = new THREE.Fog(0xb8cfe4, DATA.MAP_HALF * 1.7, DATA.MAP_HALF * 4);
     this.scene = scene;
     scene.add(this.camera);
     const hemi = new THREE.HemisphereLight(0xcfe3ff, 0x4a6a35, 0.75); scene.add(hemi);
     const sun = new THREE.DirectionalLight(0xfff1d6, 1.15);
     sun.position.set(60, 90, 30); sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    const sc = sun.shadow.camera; sc.left = -75; sc.right = 75; sc.top = 75; sc.bottom = -75; sc.near = 10; sc.far = 300;
+    const sc = sun.shadow.camera; sc.left = -75; sc.right = 75; sc.top = 75; sc.bottom = -75; sc.near = 10; sc.far = 400;
+    this.shadowExtent = 75;
     sun.shadow.bias = -0.0008;
     scene.add(sun); scene.add(sun.target);
     this.sun = sun;
@@ -5076,10 +5840,9 @@ class Game {
     this.sunUp = new THREE.Vector3().crossVectors(this.sunDir, this.sunRight).normalize();
     this.sunTexel = (sc.right - sc.left) / sun.shadow.mapSize.x;
     const ambient = new THREE.AmbientLight(0xffffff, 0.12); scene.add(ambient);
-    this.ground = Models.ground(); scene.add(this.ground);
     this.decor = new THREE.Group(); scene.add(this.decor);
     this.buildDecor();
-    const gh = new THREE.GridHelper(114, 57, 0x335533, 0x335533);
+    const gh = new THREE.GridHelper(DATA.BUILD_RADIUS * 2 + 2, DATA.BUILD_RADIUS + 1, 0x335533, 0x335533);
     gh.material.transparent = true; gh.material.opacity = 0.35; gh.position.y = 0.04; gh.visible = false;
     scene.add(gh); this.gridHelper = gh;
     // buildable-area outline
@@ -5088,42 +5851,67 @@ class Game {
     scene.add(outline); this.buildOutline = outline;
     // command marker
     this.marker = Models.ring(0.9, 0x50ff80); this.marker.visible = false; scene.add(this.marker); this.markerT = 0;
+    // tower range indicator (selected tower, or a tower being placed)
+    this.rangeRing = new THREE.Group();
+    this.rangeRing.add(Models.disc(1, 0x80c0ff, 0.12)); this.rangeRing.add(Models.ring(1, 0x9ad0ff, 0.7));
+    this.rangeRing.visible = false; scene.add(this.rangeRing);
   }
   buildDecor() {
     // forest border with instanced meshes
-    const N = 420;
+    const N = 700, H = DATA.MAP_HALF;
     const trunkGeo = new THREE.CylinderGeometry(0.22, 0.32, 1.8, 6), leafGeo = new THREE.ConeGeometry(1.6, 3.4, 7);
     const trunks = new THREE.InstancedMesh(trunkGeo, Models.mat(0x5a3a22), N);
     const leaves = new THREE.InstancedMesh(leafGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), N);
     trunks.castShadow = true; leaves.castShadow = true;
+    // instanced meshes are culled by the bounds of a single instance at the origin: never let that hide the forest
+    trunks.frustumCulled = false; leaves.frustumCulled = false;
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
     const col = new THREE.Color();
     for (let k = 0; k < N; k++) {
       let x, z, r;
-      do { x = U.rand(-100, 100); z = U.rand(-100, 100); r = Math.max(Math.abs(x), Math.abs(z)); } while (r < 79 || r > 99);
-      const sc = U.rand(0.8, 1.5);
-      p.set(x, 0.9 * sc, z); s.set(sc, sc, sc); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * 6);
+      do { x = U.rand(-H - 22, H + 22); z = U.rand(-H - 22, H + 22); r = Math.max(Math.abs(x), Math.abs(z)); } while (r < H || r > H + 21);
+      const sc = U.rand(0.8, 1.5), gy = this.groundY(x, z);
+      p.set(x, gy + 0.9 * sc, z); s.set(sc, sc, sc); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * 6);
       m.compose(p, q, s); trunks.setMatrixAt(k, m);
-      p.set(x, 0.9 * sc + 2.3 * sc, z); m.compose(p, q, s); leaves.setMatrixAt(k, m);
+      p.set(x, gy + 0.9 * sc + 2.3 * sc, z); m.compose(p, q, s); leaves.setMatrixAt(k, m);
       col.setHex(U.choice([0x2f6b2f, 0x3a7a35, 0x2a5a30, 0x4a8a3a])); leaves.setColorAt(k, col);
     }
     trunks.instanceMatrix.needsUpdate = true; leaves.instanceMatrix.needsUpdate = true;
     if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
     this.decor.add(trunks); this.decor.add(leaves);
     // scattered rocks and small trees in the approach ring
-    for (let k = 0; k < 70; k++) {
+    for (let k = 0; k < 90; k++) {
       let x, z, r;
-      do { x = U.rand(-78, 78); z = U.rand(-78, 78); r = Math.max(Math.abs(x), Math.abs(z)); } while (r < DATA.BUILD_RADIUS + 3 || r > 77);
+      do { x = U.rand(-H + 1, H - 1); z = U.rand(-H + 1, H - 1); r = Math.max(Math.abs(x), Math.abs(z)); } while (r < DATA.BUILD_RADIUS + 3 || r > H - 2);
       const o = Math.random() < 0.5 ? Models.rock() : Models.tree();
-      o.position.x = x; o.position.z = z; this.decor.add(o);
+      o.position.set(x, this.groundY(x, z), z); this.decor.add(o);
     }
     // a few bushes inside the buildable area edges (purely cosmetic, walkable)
-    for (let k = 0; k < 30; k++) {
-      const x = U.rand(-56, 56), z = U.rand(-56, 56);
+    for (let k = 0; k < 40; k++) {
+      const x = U.rand(-DATA.BUILD_RADIUS, DATA.BUILD_RADIUS), z = U.rand(-DATA.BUILD_RADIUS, DATA.BUILD_RADIUS);
       if (Math.max(Math.abs(x), Math.abs(z)) < 28) continue;
-      const b = Models.sphere(U.rand(0.5, 0.9), Models.mat(U.choice([0x3f7a35, 0x4a8a3a])), x, 0.3, z, 6);
+      const b = Models.sphere(U.rand(0.5, 0.9), Models.mat(U.choice([0x3f7a35, 0x4a8a3a])), x, this.groundY(x, z) + 0.3, z, 6);
       b.scale.y = 0.7; this.decor.add(b);
     }
+  }
+  showRange(x, z, r) {
+    if (!r) { this.rangeRing.visible = false; return; }
+    this.rangeRing.visible = true; this.rangeRing.position.set(x, this.groundY(x, z) + 0.1, z); this.rangeRing.scale.set(r, 1, r);
+  }
+  towerRangeFor(def, level = 1) { return def.range * (1 + 0.08 * (this.upgrades.towers || 0)) * Math.pow(DATA.towerUpgrade.range, level - 1); }
+  groundY(x, z) { return this.world ? this.world.heightAt(x, z) : 0; }
+  // (re)build the world for a seed: terrain, obstacles and the border decoration
+  setWorld(seed, type) {
+    if (this.world) this.world.dispose(this.scene);
+    if (!type || type === 'random' || !DATA.mapTypes[type]) { const keys = Object.keys(DATA.mapTypes); type = keys[seed % keys.length]; }
+    this.world = new WorldMap(seed, type);
+    const pal = DATA.mapTypes[type].palette;
+    this.scene.background.setHex(pal.sky); this.scene.fog.color.setHex(pal.sky);
+    this.worldType = type;
+    this.world.applyToGrid(this.grid);
+    this.world.buildScene(this.scene);
+    this.scene.remove(this.decor); this.decor = new THREE.Group(); this.scene.add(this.decor); this.buildDecor();
+    this.worldSeed = seed;
   }
   onResize() {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -5132,12 +5920,17 @@ class Game {
   }
 
   // ------------------------------------------------------------------ new game
-  newGame(heroKey, difficultyKey) {
+  newGame(heroKey, difficultyKey, opts = {}) {
     this.reset();
+    this.setWorld(opts.seed !== undefined ? opts.seed : (Math.random() * 0xffffffff) >>> 0, opts.mapType || this.ui.selectedMap || 'random');
     this.difficulty = DATA.difficulties[difficultyKey] || DATA.difficulties.normal;
     this.difficultyKey = difficultyKey;
     for (const k of Object.keys(DATA.upgrades)) this.upgrades[k] = 0;
-    this.gold = DATA.startGold;
+    const roster = opts.players || [{ id: 'host', name: this.playerName('host') === 'a player' ? 'You' : (this.players.host ? this.players.host.name : 'You'), hero: heroKey }];
+    this.players = {}; this.playerOrder = [];
+    for (const p of roster) { this.players[p.id] = { id: p.id, name: p.name || 'Player', hero: p.hero || heroKey, gold: DATA.startGold, heroes: [], heroesBought: 0 }; this.playerOrder.push(p.id); }
+    if (!this.players.host) { this.players.host = { id: 'host', name: 'You', hero: heroKey, gold: DATA.startGold, heroes: [], heroesBought: 0 }; this.playerOrder.unshift('host'); }
+    this.localPlayer = 'host'; this.actor = 'host';
     const g = this.grid, h = g.half;
     // keep
     this.placeBuilding('keep', h - 1, h - 1, 0, true, true);
@@ -5146,17 +5939,22 @@ class Game {
     for (const [i, j] of [[lo, lo], [hi - 1, lo], [lo, hi - 1], [hi - 1, hi - 1]]) this.placeBuilding('arrow_tower', i, j, 0, true, true);
     for (let i = lo; i <= hi; i++) for (const j of [lo, hi]) if (!g.buildingAt(i, j)) this.placeBuilding(i === h && j === hi ? 'gate' : 'wall', i, j, 0, true, true);
     for (let j = lo + 1; j < hi; j++) for (const i of [lo, hi]) if (!g.buildingAt(i, j)) this.placeBuilding('wall', i, j, 0, true, true);
-    // the king on his throne, hero at the keep door, a small garrison
+    // the king on his throne (shared); each player brings a hero and a small garrison
     this.king = this.spawnUnit(DATA.units.king, 'player', 0, 0, { yaw: 0 });
     this.king.post = { x: 0, z: 0 };
-    this.addHero(heroKey, 0, 6);
-    this.spawnUnit(DATA.units.swordsman, 'player', -4, 12); this.spawnUnit(DATA.units.swordsman, 'player', 4, 12);
-    this.spawnUnit(DATA.units.archer, 'player', -6, 9); this.spawnUnit(DATA.units.archer, 'player', 6, 9);
-    this.spawnUnit(DATA.units.engineer, 'player', 3, 5);
+    this.playerOrder.forEach((pid, k) => {
+      const p = this.players[pid];
+      const ox = (k - (this.playerOrder.length - 1) / 2) * 9;
+      this.addHero(p.hero || heroKey, ox, 6, pid);
+      for (const [dk, dx, dz] of [['swordsman', -2.5, 12], ['swordsman', 2.5, 12], ['archer', -3.5, 9], ['archer', 3.5, 9], ['engineer', 1, 5]]) {
+        const sp = this.findSpawnSpot(ox + dx, dz);
+        this.spawnUnit(DATA.units[dk], 'player', sp.x, sp.z, { owner: pid });
+      }
+    });
     for (const u of this.units) u.post = { x: u.pos.x, z: u.pos.z };
     this.waves = new WaveManager(this);
     this.started = true; this.over = false; this.paused = false; this.time = 0;
-    if (this.netHost) this.netHost.reset();
+
     this.controls.focus.set(0, 0, 10); this.controls.camYaw = 0; this.controls.camDist = 52;
     this.ui.onGameStart();
     this.ui.toast('Defend the King! Build defences, then press Next Wave (N) when ready. Between waves building is instant; during a wave your Engineer builds and repairs.', 'info', 8000);
@@ -5175,38 +5973,55 @@ class Game {
     this.replica = false;
   }
   // ------------------------------------------------------------------ multiplayer
-  newReplica() {
+  newReplica(seed, type, myId, roster) {
     this.reset();
+    this.setWorld(seed !== undefined ? seed : 1, type || 'valley');
     this.replica = true;
-    this.gold = 0; this.upgrades = {}; this.replicaCap = 0;
+    this.players = {}; this.playerOrder = [];
+    for (const p of roster || [{ id: myId || 'host', name: 'You' }]) { this.players[p.id] = { id: p.id, name: p.name, hero: p.hero, gold: 0, heroes: [], heroesBought: 0 }; this.playerOrder.push(p.id); }
+    this.localPlayer = myId || this.playerOrder[0]; this.actor = this.localPlayer;
+    if (!this.players[this.localPlayer]) { this.players[this.localPlayer] = { id: this.localPlayer, name: 'You', gold: 0, heroes: [], heroesBought: 0 }; this.playerOrder.push(this.localPlayer); }
+    this.upgrades = {}; this.replicaCap = 0;
     this.waves = { number: 0, active: false, pending: { length: 0 }, total: 0, preview: { n: 1, d: { units: [], from: [] } }, describe: (p) => p.d };
     this.started = true; this.over = false; this.paused = false; this.time = 0;
     this.controls.focus.set(0, 0, 10); this.controls.camYaw = 0; this.controls.camDist = 52;
     this.ui.onGameStart();
   }
-  startHost(heroKey, difficultyKey, name, cb) {
-    const tr = new PeerTransport();
+  // host: open a room and wait in the lobby; the game starts for everyone when the host presses Start
+  startHost(heroKey, difficultyKey, name, cb, transport) {
+    const tr = transport || new PeerTransport();
     const code = makeRoomCode();
-    tr.host(code, (err) => {
+    const open = (err) => {
       if (err) { cb(err); return; }
-      this.newGame(heroKey, difficultyKey);
-      this.playerName = name;
-      new NetHost(this, tr, code);
-      this.ui.toast(`Hosting room ${code}. Use the Copy buttons at the top to share the code or an invite link.`, 'good', 9000);
-      this.ui.dirty = true;
+      this.players = { host: { id: 'host', name, hero: heroKey, gold: 0, heroes: [], heroesBought: 0 } }; this.playerOrder = ['host'];
+      this.localPlayer = 'host'; this.actor = 'host';
+      const nh = new NetHost(this, tr, code);
+      nh.hostHero = heroKey; nh.difficulty = difficultyKey; nh.mapType = this.ui.selectedMap || 'random';
+      this.ui.showLobby();
       cb(null, code);
-    });
+    };
+    if (transport) open(null); else tr.host(code, open);
   }
-  startJoin(code, heroKey, name, cb) {
-    const tr = new PeerTransport();
-    tr.join(code, (err, hostId) => {
+  hostBegin() {
+    const nh = this.netHost; if (!nh || nh.started) return;
+    const seed = (Math.random() * 0xffffffff) >>> 0;
+    const roster = nh.roster();
+    this.newGame(nh.hostHero, nh.difficulty, { seed, mapType: nh.mapType, players: roster });
+    nh.begin({ seed, type: this.worldType, difficulty: nh.difficulty, players: roster });
+    this.ui.hideLobby(); this.ui.onGameStart();
+    this.ui.toast(`The siege begins with ${roster.length} defender${roster.length === 1 ? '' : 's'}.`, 'good', 5000);
+  }
+  startJoin(code, heroKey, name, cb, transport) {
+    const tr = transport || new PeerTransport();
+    const open = (err, hostId) => {
       if (err) { cb(err); return; }
-      this.newReplica();
-      this.playerName = name;
-      const nc = new NetClient(this, tr, hostId, tr.peerId);
+      const nc = new NetClient(this, tr, hostId, tr.peerId || 'B');
+      nc.myHero = heroKey; nc.myName = name;
       nc.send({ t: 'hello', name, hero: heroKey });
+      this.ui.showLobby();
       cb(null, code);
-    });
+    };
+    if (transport) open(null, 'A'); else tr.join(code, open);
   }
 
   // ------------------------------------------------------------------ stats
@@ -5218,9 +6033,12 @@ class Game {
     else if (u.isHero) { hpMul = 1 + 0.15 * (up.hero || 0); dmgMul = 1 + 0.15 * (up.hero || 0); }
     else if (u.isSoldier) { dmgMul = (1 + 0.15 * (up.weapons || 0)) * (this.hasActive('blacksmith') ? 1 + DATA.buildings.blacksmith.soldierDmg : 1); armorAdd = 0.08 * (up.armor || 0); }
     const frac = initial ? 1 : u.hp / u.maxHp;
+    let rangeMul = 1, speedMul = 1;
+    if (u.isSoldier && def.attack === 'ranged') { rangeMul = 1 + 0.12 * (up.marksman || 0); dmgMul *= 1 + 0.1 * (up.marksman || 0); }
+    if (u.isSoldier && this.hasActive('tavern')) speedMul = 1 + DATA.buildings.tavern.soldierSpeed;
     u.maxHp = def.hp * hpMul; u.hp = u.maxHp * frac;
     u.dmg = def.dmg * dmgMul; u.dmgMul = dmgMul;
-    u.speed = def.speed; u.range = def.range; u.cd = def.cd;
+    u.speed = def.speed * speedMul; u.range = def.range * rangeMul; u.cd = def.cd;
     u.armor = Math.min(0.75, (def.armor || 0) + armorAdd);
     u.regen = regen;
   }
@@ -5252,14 +6070,27 @@ class Game {
     const def = DATA.enemies[key];
     return this.spawnUnit(def, 'enemy', x, z, opts);
   }
-  addHero(key, x, z) {
+  addHero(key, x, z, owner) {
     const def = DATA.heroes[key];
     if (!def) return null;
+    owner = owner || this.actor;
     const p = this.findSpawnSpot(x, z);
-    const u = this.spawnUnit(def, 'player', p.x, p.z, { hero: true, heroKey: key });
-    u.post = { x: 0, z: 6 };
-    this.heroesOwned.push(key);
+    const u = this.spawnUnit(def, 'player', p.x, p.z, { hero: true, heroKey: key, owner });
+    u.post = { x: p.x, z: p.z };
+    const w = this.players[owner]; if (w) w.heroes.push(key);
     return u;
+  }
+  // move a freshly spawned enemy onto the nearest cell that can actually reach the King
+  snapToReachable(u) {
+    if (!u || u.flying) return;
+    const g = this.grid;
+    const c = g.worldToCell(u.pos.x, u.pos.z);
+    const ok = (i, j) => g.inBounds(i, j) && g.flagAt(i, j) === CELL_FREE && isFinite(g.integ[g.idx(i, j)]);
+    if (ok(c.i, c.j)) return;
+    for (let r = 1; r <= 10; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+      if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
+      if (ok(c.i + di, c.j + dj)) { const w = g.cellToWorld(c.i + di, c.j + dj); u.pos.x = w.x; u.pos.z = w.z; return; }
+    }
   }
   findSpawnSpot(x, z) {
     const g = this.grid;
@@ -5276,26 +6107,38 @@ class Game {
     }
     return { x, z };
   }
-  musterPoint() {
-    const barracks = this.buildings.filter(b => b.def.key === 'barracks' && b.active);
+  musterPoint(pid) {
+    const barracks = this.buildings.filter(b => b.def.key === 'barracks' && b.active && (!b.owner || b.owner === pid));
     if (barracks.length) { const b = barracks[barracks.length - 1]; return { x: b.pos.x, z: b.pos.z + b.radius + 1.5 }; }
     return { x: 0, z: 5 };
   }
 
-  // ------------------------------------------------------------------ economy
-  canAfford(c) { return this.gold >= c; }
-  spend(c) { this.gold -= c; this.ui.dirty = true; }
-  addGold(n) { this.gold += n; this.stats.goldEarned += n; this.ui.dirty = true; }
+  // ------------------------------------------------------------------ economy (one wallet per player)
+  get gold() { const p = this.players[this.localPlayer]; return p ? p.gold : 0; }
+  set gold(v) { const p = this.players[this.localPlayer]; if (p) p.gold = v; }
+  wallet(pid) { return this.players[pid || this.actor] || this.players[this.localPlayer]; }
+  canAfford(c, pid) { const w = this.wallet(pid); return !!w && w.gold >= c; }
+  spend(c, pid) { const w = this.wallet(pid); if (w) w.gold -= c; this.ui.dirty = true; }
+  addGold(n, pid) { const w = this.wallet(pid); if (w) w.gold += n; this.stats.goldEarned += n; this.ui.dirty = true; }
+  addGoldAll(n) { for (const id of this.playerOrder) { const w = this.players[id]; if (w) w.gold += n; } this.stats.goldEarned += n; this.ui.dirty = true; }
+  rewardOwner(owner, n) { if (owner && this.players[owner]) this.addGold(n, owner); else this.addGoldAll(n); }
+  get heroesOwned() { return this.wallet(this.localPlayer).heroes; }
+  set heroesOwned(v) { this.wallet(this.localPlayer).heroes = v; }
+  get heroesBought() { return this.wallet(this.localPlayer).heroesBought || 0; }
+  set heroesBought(v) { this.wallet(this.localPlayer).heroesBought = v; }
+  playerName(id) { const p = this.players[id]; return p ? p.name : 'a player'; }
+  ownsOrShared(o) { return !o.owner || o.owner === this.actor; }
   hasBuilding(key) { return this.buildings.some(b => b.def.key === key && !b.dead); }
   hasActive(key) { return this.buildings.some(b => b.def.key === key && b.active); }
-  soldierCap() {
+  soldierCap(pid) {
+    pid = pid || this.actor;
     if (this.replica) return this.replicaCap || 0;
     let cap = DATA.baseSoldierCap + 3 * (this.upgrades.garrison || 0);
-    for (const b of this.buildings) if (b.def.soldierCap && b.active) cap += b.def.soldierCap;
+    for (const b of this.buildings) if (b.def.soldierCap && b.active && (!b.owner || b.owner === pid)) cap += b.def.soldierCap;
     return cap;
   }
-  soldierCount() { return this.units.filter(u => u.isSoldier && !u.dead && !u.def.noCap).length; }
-  engineerCount() { return this.units.filter(u => u.def.repair && !u.dead).length; }
+  soldierCount(pid) { pid = pid || this.actor; return this.units.filter(u => u.isSoldier && !u.dead && !u.def.noCap && (u.owner || 'host') === pid).length; }
+  engineerCount(pid) { pid = pid || this.actor; return this.units.filter(u => u.def.repair && !u.dead && (u.owner || 'host') === pid).length; }
   upgradeCost(key) { const d = DATA.upgrades[key]; return Math.round(d.cost * Math.pow(DATA.upgradeCostGrowth, this.upgrades[key] || 0)); }
   // buildings with costGrowth get pricier for every one you already own (destroyed ones do not count)
   buildingCost(def) {
@@ -5303,7 +6146,7 @@ class Game {
     const n = this.buildings.filter(b => b.def.key === def.key && !b.dead).length;
     return Math.round(def.cost * Math.pow(def.costGrowth, n));
   }
-  heroCost() { return Math.round(DATA.heroBaseCost * Math.pow(DATA.heroCostGrowth, this.heroesBought || 0)); }
+  heroCost(pid) { return Math.round(DATA.heroBaseCost * Math.pow(DATA.heroCostGrowth, (this.wallet(pid).heroesBought || 0))); }
 
   placeBuilding(key, i, j, rot, quiet = false, free = false) {
     const def = DATA.buildings[key];
@@ -5317,6 +6160,7 @@ class Game {
     if (!free) this.spend(cost);
     const b = new Building(this, def, i, j, rot, res.cells);
     b.paid = free ? def.cost : cost;
+    b.owner = free ? null : this.actor;
     this.grid.place(b);
     this.buildings.push(b);
     if (!free && this.waves && this.waves.active) {
@@ -5327,6 +6171,7 @@ class Game {
     return b;
   }
   sellBuilding(b) {
+    if (b && !this.ownsOrShared(b)) { this.ui.toast(`That belongs to ${this.playerName(b.owner)}`, 'error'); return; }
     if (this.replica) { if (b && !b.def.keep) this.net.send({ t: 'bld', op: 'sell', id: b.id }); return; }
     if (!b || b.dead || b.def.keep) { if (b && b.def.keep) this.ui.toast('You cannot sell the Keep', 'error'); return; }
     const v = b.sellValue();
@@ -5337,6 +6182,7 @@ class Game {
     if (this.controls.selectedBuilding === b) this.controls.clearSelection();
   }
   repairBuilding(b) {
+    if (!this.ownsOrShared(b)) { this.ui.toast(`That belongs to ${this.playerName(b.owner)}`, 'error'); return; }
     if (this.repairsLocked()) { this.ui.toast('During a wave only Engineers can repair. Paid repairs resume when it ends.', 'error'); SFX.play('error'); return; }
     if (this.replica) { this.net.send({ t: 'bld', op: 'repair', id: b.id }); return; }
     const c = b.repairCost();
@@ -5346,14 +6192,14 @@ class Game {
     this.effects.spawn('heal', b.pos.x, 2, b.pos.z, { radius: b.radius });
     SFX.play('build'); this.ui.onSelectionChanged();
   }
-  repairTotal() { let t = 0; for (const b of this.buildings) t += b.repairCost(); return t; }
+  repairTotal() { let t = 0; for (const b of this.buildings) if (this.ownsOrShared(b)) t += b.repairCost(); return t; }
   repairPriority(b) { return b.def.keep ? 5 : (b.def.tower ? 4 : (b.def.gate ? 3 : (b.def.cat === 'economy' ? 2 : 1))); }
   // repairs everything it can afford, most important buildings first
   repairsLocked() { return !!(this.waves && this.waves.active); }
   repairAll(auto = false) {
     if (this.replica) { if (this.repairsLocked()) { this.ui.toast('During a wave only Engineers can repair. Paid repairs resume when it ends.', 'error'); return; } this.net.send({ t: 'repairAll' }); return; }
     if (!auto && this.repairsLocked()) { this.ui.toast('During a wave only Engineers can repair. Paid repairs resume when it ends.', 'error'); SFX.play('error'); return; }
-    const list = this.buildings.filter(b => !b.dead && b.repairCost() > 0).sort((a, b) => this.repairPriority(b) - this.repairPriority(a) || a.repairCost() - b.repairCost());
+    const list = this.buildings.filter(b => !b.dead && b.repairCost() > 0 && this.ownsOrShared(b)).sort((a, b) => this.repairPriority(b) - this.repairPriority(a) || a.repairCost() - b.repairCost());
     if (!list.length) { if (!auto) this.ui.toast('Nothing to repair'); return; }
     let spent = 0, n = 0, skipped = 0;
     for (const b of list) {
@@ -5369,6 +6215,7 @@ class Game {
   }
   upgradeBuilding(b) {
     if (!b.canUpgrade()) return;
+    if (!this.ownsOrShared(b)) { this.ui.toast(`That belongs to ${this.playerName(b.owner)}`, 'error'); return; }
     if (this.replica) { this.net.send({ t: 'bld', op: 'upgrade', id: b.id }); return; }
     const c = b.upgradeCost();
     if (!this.canAfford(c)) { this.ui.toast('Not enough gold', 'error'); SFX.play('error'); return; }
@@ -5395,9 +6242,9 @@ class Game {
     else if (this.soldierCount() >= this.soldierCap()) { this.ui.toast('Soldier capacity reached. Build a Barracks or research Garrison.', 'error'); SFX.play('error'); return; }
     if (!this.canAfford(def.cost)) { this.ui.toast('Not enough gold', 'error'); SFX.play('error'); return; }
     this.spend(def.cost);
-    const m = this.musterPoint();
+    const m = this.musterPoint(this.actor);
     const p = this.findSpawnSpot(m.x, m.z);
-    const u = this.spawnUnit(def, 'player', p.x, p.z);
+    const u = this.spawnUnit(def, 'player', p.x, p.z, { owner: this.actor });
     u.post = { x: p.x, z: p.z };
     this.effects.spawn('ring', p.x, 0.3, p.z, { radius: 1.2, color: 0x80c0ff });
     SFX.play('coin');
@@ -5405,12 +6252,12 @@ class Game {
   }
   buyHero(key) {
     if (this.replica) { this.net.send({ t: 'hero', key }); return; }
-    if (this.heroesOwned.includes(key)) { this.ui.toast('You already have this hero', 'error'); return; }
-    const cost = this.heroCost();
+    if (this.wallet(this.actor).heroes.includes(key)) { this.ui.toast('You already have this hero', 'error'); return; }
+    const cost = this.heroCost(this.actor);
     if (!this.canAfford(cost)) { this.ui.toast(`Not enough gold: ${DATA.heroes[key].name} costs ${cost}`, 'error'); SFX.play('error'); return; }
     this.spend(cost);
-    this.heroesBought = (this.heroesBought || 0) + 1;
-    const u = this.addHero(key, 0, 6);
+    this.wallet(this.actor).heroesBought = (this.wallet(this.actor).heroesBought || 0) + 1;
+    const u = this.addHero(key, 0, 6, this.actor);
     this.effects.spawn('ring', u.pos.x, 0.3, u.pos.z, { radius: 3, color: 0xffd040 });
     this.ui.toast(`${u.name} joins your cause!`);
     SFX.play('levelup');
@@ -5433,7 +6280,7 @@ class Game {
   }
 
   // ------------------------------------------------------------------ commands
-  orderable(units) { return units.filter(u => !u.dead && u.team === 'player' && !u.possessedBy); }
+  orderable(units) { return units.filter(u => !u.dead && u.team === 'player' && !u.possessedBy && this.ownsOrShared(u)); }
   commandMove(units, x, z, type = 'attackmove') {
     if (this.replica) { this.net.send({ t: 'cmd', kind: 'move', ids: units.map(u => u.id), x: +x.toFixed(2), z: +z.toFixed(2), type }); return; }
     units = this.orderable(units);
@@ -5484,6 +6331,7 @@ class Game {
     }
     return best ? { x: best.pos.x, z: best.pos.z, count: bestC, boss } : null;
   }
+  playerCount() { return this.netHost ? this.netHost.playerCount : (this.netClient ? this.netClient.players : 1); }
   enemiesAlive() { let n = 0; for (const u of this.units) if (u.team === 'enemy' && !u.dead) n++; return n; }
   areaDamage(x, z, r, dmg, team, source, o = {}) {
     const other = team === 'player' ? 'enemy' : 'player';
@@ -5512,14 +6360,15 @@ class Game {
   // ------------------------------------------------------------------ events
   onUnitDied(u, source) {
     if (u.team === 'enemy') {
-      const reward = Math.round((u.def.reward || 0) * this.difficulty.gold);
-      if (reward) this.addGold(reward);
+      const mult = this.difficulty.gold * (1 + (this.hasActive('market') ? DATA.buildings.market.killBonus : 0)) * (1 + 0.1 * (this.upgrades.fortune || 0));
+      const reward = Math.round((u.def.reward || 0) * mult);
+      if (reward) this.rewardOwner(source && source.owner !== undefined ? source.owner : null, reward);
       this.stats.kills++;
       this.lastEnemyDeath = this.time;
       if (u.isBoss) { this.boss = null; this.ui.toast(`${u.name} is slain!`, 'boss'); }
     } else {
       if (u.isKing) { this.gameOver(); }
-      else if (u.isHero) { this.fallenHeroes.push(u.heroKey); this.ui.toast(`${u.name} has fallen. They will return after the wave.`, 'error', 5000); }
+      else if (u.isHero) { this.fallenHeroes.push({ key: u.heroKey, owner: u.owner }); this.ui.toast(`${u.name} has fallen. They will return after the wave.`, 'error', 5000); }
     }
     if (this.controls.controlled === u) this.controls.exitControl();
     if (u.selected) { u.selected = false; this.controls.selected.delete(u); this.ui.onSelectionChanged(); }
@@ -5543,20 +6392,21 @@ class Game {
   onWaveCleared(n) {
     let income = 0;
     for (const b of this.buildings) if (b.underConstruction) b.finishConstruction();
-    for (const b of this.buildings) if (b.def.income && b.active) income += b.def.income;
-    const bonus = Math.round(DATA.waves.clearBonus(n) * this.difficulty.gold);
-    this.addGold(bonus + income);
+    for (const b of this.buildings) if (b.def.income && b.active) { income += b.def.income; this.rewardOwner(b.owner, b.def.income); }
+    const bonus = Math.round(DATA.waves.clearBonus(n) * this.difficulty.gold * (1 + 0.1 * (this.upgrades.fortune || 0)));
+    this.addGoldAll(bonus);
     this.stats.wavesCleared = n;
+    for (const u of this.units) if (u.team === 'player' && !u.dead) { u.heal(u.maxHp); u.burn = null; u.slow = null; }
     if (this.autoRepair) setTimeout(() => { if (this.started && !this.over) this.repairAll(true); }, 800);
-    for (const u of this.units) if (u.team === 'player' && !u.dead) u.heal(u.maxHp * 0.3);
-    for (const key of this.fallenHeroes) {
-      const u = this.addHero(key, 0, 6);
-      this.heroesOwned = [...new Set(this.heroesOwned)];
+
+    for (const f of this.fallenHeroes) {
+      const u = this.addHero(f.key, 0, 6, f.owner || 'host');
+      const w = this.wallet(f.owner || 'host'); w.heroes = [...new Set(w.heroes)];
       u.hp = u.maxHp * 0.5;
       this.effects.spawn('heal', u.pos.x, 1, u.pos.z, { radius: 2 });
     }
     this.fallenHeroes = [];
-    this.ui.toast(`Wave ${n} cleared! +${bonus} gold bonus${income ? ` +${income} income` : ''}. Units healed.`, 'good', 6000);
+    this.ui.toast(`Wave ${n} cleared! +${bonus} gold${income ? `, +${income} from farms and mines` : ''}. Everyone healed.`, 'good', 6000);
     SFX.play('wavecleared');
     this.ui.dirty = true;
   }
@@ -5589,6 +6439,7 @@ class Game {
     this.lastT = t;
     this.fpsCounter.frames++; this.fpsCounter.t += realDt;
     if (this.fpsCounter.t >= 1) { this.fpsCounter.fps = this.fpsCounter.frames; this.fpsCounter.frames = 0; this.fpsCounter.t = 0; }
+    if (!this.started && this.net && this.net.tr) this.net.tr.pump();
     if (this.started) {
       const active = !this.paused && !this.over;
       const dt = active ? realDt * this.timeScale : 0;
@@ -5608,6 +6459,12 @@ class Game {
   updateVisualsOnly(realDt) {
     // things that should keep moving while paused: shadows follow camera, command marker fade
     const f = this.controls.mode === 'fps' ? this.controls.controlled.pos : this.controls.focus;
+    const wantExtent = this.controls.mode === 'fps' ? 60 : U.clamp(this.controls.camDist * 1.5, 70, DATA.MAP_HALF + 30);
+    if (Math.abs(wantExtent - this.shadowExtent) > 4) {
+      this.shadowExtent = wantExtent;
+      const sc = this.sun.shadow.camera; sc.left = -wantExtent; sc.right = wantExtent; sc.top = wantExtent; sc.bottom = -wantExtent; sc.updateProjectionMatrix();
+      this.sunTexel = (wantExtent * 2) / this.sun.shadow.mapSize.x;
+    }
     const t = new THREE.Vector3(f.x, 0, f.z);
     const tx = t.dot(this.sunRight), ty = t.dot(this.sunUp);
     const sx = Math.round(tx / this.sunTexel) * this.sunTexel - tx, sy = Math.round(ty / this.sunTexel) * this.sunTexel - ty;
@@ -5786,45 +6643,66 @@ function runSelfTest(game, params) {
     if (params.get('mptest')) {
       const [A, B] = LoopbackTransport.pair();
       const host = game;
-      const hn = new NetHost(host, A, 'TEST');
       const client = new Game({ testMode: true });
-      client.newReplica();
-      const cn = new NetClient(client, B, 'A', 'B');
+      let hostCode = null;
+      host.startHost('knight', 'normal', 'Hosty', (err, code) => { hostCode = code; }, A);
+      const hn = host.netHost;
       hn.onJoin('B');
-      cn.send({ t: 'hello', name: 'Tester', hero: 'ranger' });
+      client.startJoin(hostCode, 'ranger', 'Tester', () => {}, B);
+      const cn = client.netClient;
+      const pump = () => { A.pump(); B.pump(); };
+      pump(); pump();
+      say(`mp: lobby: host sees players=${hn.roster().map(p => p.name + ':' + p.hero).join(',')} started=${hn.started}; client lobby players=${cn.lobby ? cn.lobby.players.length : 'none'}`);
+      // a third player knocking after the start must be refused
+      host.hostBegin(); pump();
+      hn.onJoin('C'); hn.onMessage('C', { t: 'hello', name: 'Late', hero: 'cleric' });
+      say(`mp: started=${hn.started} client started=${client.started} seed host=${host.worldSeed} client=${client.worldSeed} type ${host.worldType}/${client.worldType} late joiner in roster=${hn.roster().some(p => p.name === 'Late')}`);
       const step = (n) => { for (let k = 0; k < n; k++) { host.update(1 / 60); client.controls.update(1 / 60, 1 / 60); cn.frame(1 / 60); } };
       step(60);
-      say(`mp: host units=${host.units.length} client units=${client.units.length}; buildings host=${host.buildings.length} client=${client.buildings.length}; snapshots=${cn.snapCount} bytes=${A.bytes}`);
-      const rangerH = host.units.find(u => u.isHero && u.heroKey === 'ranger'), rangerC = client.units.find(u => u.isHero && u.heroKey === 'ranger');
-      say('mp: ranger on both=' + (!!rangerH && !!rangerC) + ' pos diff=' + (rangerH && rangerC ? rangerH.pos.distanceTo(rangerC.pos).toFixed(2) : 'n/a') + ' king on client=' + !!client.king + ' client gold=' + client.gold);
-      const h = host.grid.half, before = host.buildings.length;
-      client.placeBuilding('wall', h - 14, h - 14, 0); client.buyUnit('archer');
-      const sw = client.units.filter(u => u.isSoldier && u.def.key === 'swordsman'); client.commandMove(sw, 6, 20, 'attackmove');
-      step(30);
-      const hsw = host.units.filter(u => u.isSoldier && u.def.key === 'swordsman');
-      say(`mp: after client orders: host buildings +${host.buildings.length - before}, host archers=${host.units.filter(u => u.def.key === 'archer' && u.team === 'player').length}, swordsman orders=${hsw.map(u => u.command ? u.command.type : 'none').join(',')}, client buildings=${client.buildings.length}`);
-      client.controls.setSelection([rangerC]); client.controls.enterControl(rangerC);
-      step(10);
-      say(`mp: possession: host possessedBy=${rangerH.possessedBy} client possessed=${rangerC.possessed}`);
-      const p0 = rangerH.pos.clone();
-      client.controls.keys = { KeyW: true }; client.controls.fpsYaw = Math.PI;
-      step(90);
-      client.controls.keys = {};
-      say(`mp: host ranger moved ${p0.distanceTo(rangerH.pos).toFixed(2)}m; client at ${rangerC.pos.x.toFixed(1)},${rangerC.pos.z.toFixed(1)} host at ${rangerH.pos.x.toFixed(1)},${rangerH.pos.z.toFixed(1)}`);
-      client.controls.fpsYaw = 0; step(5);
-      client.controls.attackHeld = true; step(4);
-      say(`mp: client shooting: host projectiles=${host.projectiles.length} ranger attackTimer=${rangerH.attackTimer.toFixed(2)}`);
-      step(12); client.controls.attackHeld = false;
-      say(`mp: client proj meshes=${cn.proj.size} (host live=${host.projectiles.length})`);
-      client.controls.useAbility(1); step(8);
-      say(`mp: arrow rain: host zones=${host.zones.length} client zones=${cn.zones.size} client ability timer=${rangerC.abilities[1].timer.toFixed(1)}`);
-      client.controls.exitControl(); step(5);
-      say(`mp: released: host possessedBy=${rangerH.possessedBy}`);
-      client.tryStartWave(); step(600);
-      say(`mp: wave: host active=${host.waves.active} enemies host=${host.enemiesAlive()} client=${client.enemiesAlive()} client wave active=${client.waves.active} kills=${host.stats.kills} client fx=${client.effects.list.length} bytes/snapshot≈${Math.round(A.bytes / Math.max(1, hn.seq))}`);
-      say(`mp: damaged buildings host=${host.buildings.filter(b => b.hp < b.maxHp - 1).length} client=${client.buildings.filter(b => b.hp < b.maxHp - 1).length}; dead units host=${host.units.filter(u => u.dead).length} client=${client.units.filter(u => u.dead).length}`);
-      host.newGame('knight', 'normal'); step(30);
-      say(`mp: after host restart: client units=${client.units.length} host units=${host.units.length} client buildings=${client.buildings.length} host buildings=${host.buildings.length}`);
+      say(`mp: host units=${host.units.length} client units=${client.units.length}; buildings host=${host.buildings.length} client=${client.buildings.length}; snapshots=${cn.snapCount}`);
+      const hostHero = host.units.find(u => u.isHero && u.owner === 'host'), clientHeroH = host.units.find(u => u.isHero && u.owner === 'B');
+      const clientHeroC = client.units.find(u => u.isHero && u.owner === 'B'), hostHeroC = client.units.find(u => u.isHero && u.owner === 'host');
+      say(`mp: heroes: host owns ${hostHero && hostHero.heroKey}, client owns ${clientHeroH && clientHeroH.heroKey}; client sees own=${!!clientHeroC} host's=${!!hostHeroC} king owner=${host.king.owner} gold host=${host.players.host.gold} client=${client.gold} (client wallet on host=${host.players.B.gold})`);
+      // client orders its own soldiers and tries to order the host's
+      const mySw = client.units.filter(u => u.def.key === 'swordsman' && u.owner === 'B'), theirSw = client.units.filter(u => u.def.key === 'swordsman' && u.owner === 'host');
+      client.commandMove(mySw, 6, 20, 'attackmove'); client.commandMove(theirSw, -6, 20, 'attackmove'); step(20);
+      const hMine = host.units.filter(u => u.def.key === 'swordsman' && u.owner === 'B'), hTheirs = host.units.filter(u => u.def.key === 'swordsman' && u.owner === 'host');
+      say(`mp: orders: client's swordsmen commanded=${hMine.map(u => u.command ? u.command.type : 'none').join(',')} host's swordsmen commanded=${hTheirs.map(u => u.command ? u.command.type : 'none').join(',')} (expect attackmove x2 / none x2)`);
+      // possession: own hero ok, host's hero refused, shared king ok
+      client.controls.setSelection([hostHeroC]); client.controls.enterControl(hostHeroC); step(10);
+      say(`mp: possess host's hero: host possessedBy=${hostHero.possessedBy} client mode=${client.controls.mode} (expect null / rts)`);
+      client.controls.setSelection([clientHeroC]); client.controls.enterControl(clientHeroC); step(10);
+      say(`mp: possess own hero: host possessedBy=${clientHeroH.possessedBy} (expect B)`); client.controls.exitControl(); step(5);
+      const kingC = client.units.find(u => u.isKing); client.controls.setSelection([kingC]); client.controls.enterControl(kingC); step(10);
+      say(`mp: possess the shared King: host possessedBy=${host.king.possessedBy} (expect B)`); client.controls.exitControl(); step(5);
+      // spending: client buys an archer and a wall from its own wallet
+      const g0h = host.players.host.gold, g0c = host.players.B.gold;
+      client.buyUnit('archer'); client.placeBuilding('wall', host.grid.half - 14, host.grid.half - 14, 0); step(20);
+      const wall = host.buildings.find(b => b.def.key === 'wall' && b.owner === 'B');
+      say(`mp: client spent: host gold ${g0h}->${host.players.host.gold} (unchanged), client ${g0c}->${host.players.B.gold}; new wall owner=${wall && wall.owner}; client archers=${host.units.filter(u => u.def.key === 'archer' && u.owner === 'B').length}`);
+      // host cannot sell the client's wall
+      host.actor = 'host'; const nb = host.buildings.length; host.sellBuilding(wall); say(`mp: host selling client's wall: buildings ${nb}->${host.buildings.length} (expect unchanged)`);
+      client.tryStartWave(); step(900);
+      say(`mp: wave: host active=${host.waves.active} enemies host=${host.enemiesAlive()} client=${client.enemiesAlive()} kills=${host.stats.kills} gold host=${host.players.host.gold} client=${host.players.B.gold}`);
+      hn.toLobby(); pump(); pump();
+      say(`mp: back to lobby: host started=${host.started} client started=${client.started} lobby players=${cn.lobby ? cn.lobby.players.length : 'n/a'}`);
+    }
+    if (params.get('contenttest')) {
+      const h = game.grid.half;
+      game.gold = 100000;
+      const keys = Object.keys(DATA.buildings).filter(k => !DATA.buildings[k].keep && !DATA.buildings[k].hidden);
+      const placed = [];
+      for (const k of keys) { for (let tries = 0; tries < 80 && !placed.includes(k); tries++) { const i = h - 22 + Math.floor(Math.random() * 44), j = h - 22 + Math.floor(Math.random() * 44); if (game.placeBuilding(k, i, j, 0, true)) placed.push(k); } }
+      say(`content: placed ${placed.length}/${keys.length} building types (${keys.filter(k => !placed.includes(k)).join(',') || 'all'})`);
+      for (const k of Object.keys(DATA.units)) if (DATA.units[k].cost) game.buyUnit(k);
+      say(`content: units bought=${game.units.filter(u => u.isSoldier).length} kinds=${[...new Set(game.units.filter(u => u.isSoldier).map(u => u.def.key))].join(',')}`);
+      game.tryStartWave();
+      for (const k of Object.keys(DATA.enemies)) { const a = Math.random() * Math.PI * 2; const u = game.spawnEnemy(k, Math.sin(a) * 40, Math.cos(a) * 40, { hpMul: 1 }); game.snapToReachable(u); }
+      const before = game.units.filter(u => u.team === 'enemy').length;
+      for (let i = 0; i < 60 * 90; i++) game.update(1 / 60);
+      say(`content: after 90s: enemies ${before} -> ${game.enemiesAlive()} kills=${game.stats.kills} king=${Math.round(game.king.hp)} buildings=${game.buildings.length} gold=${Math.round(game.gold)} errors=${window.__errors.length}`);
+      say(`content: world type=${game.worldType} water=${game.world.kind.filter(k => k === CELL_WATER).length} rock=${game.world.kind.filter(k => k === CELL_ROCK).length} forest=${game.world.kind.filter(k => k === 5).length} fords=${game.world.fords.length}`);
+      for (const t of Object.keys(DATA.mapTypes)) { const w = new WorldMap(12345, t); say(`content: map ${t}: water=${w.kind.filter(k => k === CELL_WATER).length} rock=${w.kind.filter(k => k === CELL_ROCK).length} forest=${w.kind.filter(k => k === 5).length} connected=${w.connected()}`); }
     }
     if (params.get('settingstest')) {
       const c = game.controls;
@@ -5947,6 +6825,19 @@ function runSelfTest(game, params) {
       const hc = []; for (const key of ['ranger', 'pyromancer', 'cleric']) { hc.push(game.heroCost()); game.buyHero(key); }
       say('econ: hero prices paid: ' + hc.join(', ') + ' next=' + game.heroCost() + ' heroes=' + game.heroesOwned.join(','));
       game.gold = 300; say('econ: with 300 gold, can afford a hero=' + game.canAfford(game.heroCost()) + ' mine=' + game.canAfford(game.buildingCost(DATA.buildings.mine)));
+    }
+    if (params.get('probe5')) {
+      const shots = document.createElement('div'); shots.id = 'shots'; shots.style.display = 'none'; document.body.appendChild(shots);
+      game.renderer.setSize(1280, 800); game.camera.aspect = 1.6; game.camera.updateProjectionMatrix();
+      const snap = (name) => { game.controls.update(1 / 60, 1 / 60); game.updateVisualsOnly(1 / 60); game.renderer.render(game.scene, game.camera); const d = document.createElement('div'); d.textContent = name + '|' + game.renderer.domElement.toDataURL('image/png'); shots.appendChild(d); };
+      for (const t of Object.keys(DATA.mapTypes)) { game.setWorld(777, t); game.controls.camDist = 235; game.controls.focus.set(0, 0, 0); game.controls.camPitch = 1.25; game.controls.camYaw = 0; snap('map_' + t); }
+      game.setWorld(777, 'valley');
+      const ford = game.world.fords[1]; const fc = game.world.cellCenter(ford.i - 0.5, ford.j - 0.5);
+      game.controls.camDist = 55; game.controls.focus.set(fc.x, 0, fc.z); game.controls.camPitch = 0.75; snap('valley_ford');
+      const tw = game.buildings.find(b => b.def.tower); game.controls.clearSelection(); game.controls.selectedBuilding = tw; tw.selected = true; game.ui.onSelectionChanged();
+      game.controls.camDist = 42; game.controls.focus.set(tw.pos.x, 0, tw.pos.z); game.controls.camPitch = 0.95; snap('tower_ring');
+      game.controls.clearSelection(); game.controls.camDist = 230; game.controls.focus.set(60, 0, 60); game.controls.camPitch = 0.8; snap('zoomed_out_corner');
+      say('probe5 done');
     }
     if (params.get('probe4')) {
       // render named views straight to PNG data (the headless screenshot path is unreliable)

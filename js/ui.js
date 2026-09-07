@@ -27,6 +27,12 @@ class UI {
       el.addEventListener('click', () => { this.selectedHero = h.key; cards.querySelectorAll('.hero-card').forEach(c => c.classList.toggle('on', c.dataset.hero === h.key)); SFX.play('click'); });
       cards.appendChild(el);
     }
+    this.selectedMap = 'random';
+    this.$('mapsel').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+      this.selectedMap = b.dataset.m;
+      this.$('mapsel').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      this.$('mapdesc').textContent = b.dataset.m === 'random' ? 'A different layout every game.' : DATA.mapTypes[b.dataset.m].desc;
+    }));
     this.$('difficulty').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
       this.difficulty = b.dataset.d;
       this.$('difficulty').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
@@ -37,7 +43,11 @@ class UI {
     this.$('copycode').addEventListener('click', () => { const g = this.game; const code = g.netHost ? g.netHost.code : (g.netClient ? g.netClient.code : ''); if (code) this.copyText(code, this.$('copycode')); });
     this.$('copylink').addEventListener('click', () => { const g = this.game; const code = g.netHost ? g.netHost.code : (g.netClient ? g.netClient.code : ''); if (code) this.copyText(this.inviteLink(code), this.$('copylink')); });
     { const jc = new URLSearchParams(location.search).get('join'); if (jc) { this.$('joincode').value = jc.toUpperCase().slice(0, 6); this.mpStatus(`Room code ${jc.toUpperCase()} filled in. Pick your hero, enter a name, and press Join.`); } }
-    this.$('restartbtn').addEventListener('click', () => { if (this.game.replica) { location.reload(); return; } this.$('gameover').classList.add('hidden'); this.$('menu').classList.remove('hidden'); this.$('hud').classList.add('hidden'); this.game.started = false; });
+    this.$('lobbystart').addEventListener('click', () => this.game.hostBegin());
+    this.$('lobbyleave').addEventListener('click', () => location.reload());
+    this.$('lobbycopy').addEventListener('click', () => { const code = this.$('lobbycode').textContent; if (code) this.copyText(code, this.$('lobbycopy')); });
+    this.$('lobbylink').addEventListener('click', () => { const code = this.$('lobbycode').textContent; if (code) this.copyText(this.inviteLink(code), this.$('lobbylink')); });
+    this.$('restartbtn').addEventListener('click', () => { if (this.game.netHost) { this.$('gameover').classList.add('hidden'); this.game.netHost.toLobby(); return; } if (this.game.replica) { location.reload(); return; } this.$('gameover').classList.add('hidden'); this.$('menu').classList.remove('hidden'); this.$('hud').classList.add('hidden'); this.game.started = false; });
     // multiplayer lobby
     const nameOf = () => (this.$('mpname').value || '').trim().slice(0, 16) || 'Player';
     this.setupEmbeddedFallbacks();
@@ -61,12 +71,23 @@ class UI {
       this.game.startJoin(code, this.selectedHero, nameOf(), (err) => {
         if (err) { this.mpStatus(this.netErrorText(err, 'join'), true); return; }
         this.hideMenu();
-        this.$('connecting').classList.remove('hidden');
       });
     });
     this.$('helpclose').addEventListener('click', () => this.toggleHelp(false));
   }
   hideMenu() { this.$('menu').classList.add('hidden'); }
+  showLobby() { this.$('menu').classList.add('hidden'); this.$('connecting').classList.add('hidden'); this.$('lobby').classList.remove('hidden'); this.$('hud').classList.add('hidden'); const g = this.game; if (g.netHost) this.renderLobby(g.netHost.lobbyState(), true); else if (g.netClient && g.netClient.lobby) this.renderLobby(g.netClient.lobby, false); else this.$('lobbyplayers').innerHTML = '<div class="p"><span class="nm">Connecting…</span></div>'; }
+  hideLobby() { this.$('lobby').classList.add('hidden'); }
+  renderLobby(state, isHost) {
+    const g = this.game;
+    this.$('lobbycode').textContent = state.code || '';
+    const me = isHost ? 'host' : (g.netClient ? g.netClient.myId : null);
+    this.$('lobbyplayers').innerHTML = state.players.map((p, k) => { const h = DATA.heroes[p.hero]; return `<div class="p"><span class="sw" style="background:#${(h ? h.color : 0x888888).toString(16).padStart(6, '0')}"></span><span class="nm">${p.name}</span><span class="hero">${h ? h.name + ', ' + h.title : ''}</span>${p.id === 'host' ? '<span class="tag">host</span>' : ''}${p.id === me ? '<span class="tag">you</span>' : ''}</div>`; }).join('');
+    const mt = state.mapType && DATA.mapTypes[state.mapType] ? DATA.mapTypes[state.mapType].label : 'Random map';
+    this.$('lobbyinfo').textContent = `${mt} · ${DATA.difficulties[state.difficulty] ? DATA.difficulties[state.difficulty].label : 'Normal'} difficulty · ${state.players.length} defender${state.players.length === 1 ? '' : 's'}. Everyone shares the King and the starting castle; each defender has their own gold, hero, soldiers and buildings.`;
+    this.$('lobbystart').classList.toggle('hidden', !isHost);
+    this.$('lobbywait').classList.toggle('hidden', isHost);
+  }
   webrtcSupported() {
     if (/[?&]nowebrtc/.test(location.search)) return false;
     try { if (typeof RTCPeerConnection !== 'function') return false; const pc = new RTCPeerConnection(); pc.createDataChannel('probe'); pc.close(); return true; } catch (e) { return false; }
@@ -180,7 +201,7 @@ class UI {
     const pr = this.$('panel-recruit');
     pr.innerHTML = '';
     const c1 = document.createElement('div'); c1.className = 'cat'; c1.textContent = 'Soldiers'; pr.appendChild(c1);
-    for (const key of ['swordsman', 'archer', 'pikeman', 'engineer']) {
+    for (const key of ['swordsman', 'archer', 'pikeman', 'crossbowman', 'cavalry', 'apprentice', 'priest', 'engineer']) {
       const d = DATA.units[key];
       const b = document.createElement('button');
       b.className = 'item'; b.dataset.unit = key;
@@ -248,7 +269,7 @@ class UI {
   }
   buildingTip(d) {
     let s = `<b>${d.name}</b> · ${this.game.buildingCost(d)} gold<br>${d.desc}<br><span class="st">HP ${d.hp}`;
-    if (d.tower) s += ` · Damage ${d.dmg} · Range ${d.range}m · every ${d.cd}s`;
+    if (d.tower) s += ` · Damage ${d.dmg} · Range ${this.game.towerRangeFor(d).toFixed(0)}m · every ${d.cd}s`;
     if (d.income) s += ` · +${d.income} gold/wave`;
     if (d.soldierCap) s += ` · +${d.soldierCap} soldier cap`;
     s += ` · ${d.w}×${d.d} cells</span>`;
@@ -297,7 +318,8 @@ class UI {
     this.$('autorepairbox').addEventListener('change', (e) => { if (g.replica) { g.net.send({ t: 'autoRepair', on: e.target.checked }); return; } g.autoRepair = e.target.checked; this.toast(g.autoRepair ? 'Auto-repair on: damaged buildings are repaired after each wave' : 'Auto-repair off'); });
     this.$('minimap').addEventListener('mousedown', (e) => {
       const r = this.minimap.getBoundingClientRect();
-      const x = ((e.clientX - r.left) / r.width - 0.5) * 200, z = ((e.clientY - r.top) / r.height - 0.5) * 200;
+      const SPAN = DATA.GRID * DATA.CELL + 20;
+      const x = ((e.clientX - r.left) / r.width - 0.5) * SPAN, z = ((e.clientY - r.top) / r.height - 0.5) * SPAN;
       if (g.controls.mode === 'rts') { g.controls.focus.set(x, 0, z); g.controls.clampFocus(); }
     });
     // stop HUD clicks from reaching the canvas selection logic
@@ -310,6 +332,7 @@ class UI {
     const panel = this.$('selpanel');
     const units = [...c.selected].filter(u => !u.dead);
     const b = c.selectedBuilding;
+    if (b && b.def.tower && !c.buildDef) this.game.showRange(b.pos.x, b.pos.z, b.range); else if (!c.buildDef) this.game.showRange(null);
     if (!units.length && !b) { panel.classList.add('hidden'); return; }
     panel.classList.remove('hidden');
     if (b) {
@@ -330,9 +353,11 @@ class UI {
     }
     if (units.length === 1) {
       const u = units[0];
-      const own = u.team === 'player';
+      const mine = u.team === 'player' && (!u.owner || u.owner === this.game.localPlayer);
+      const own = mine;
+      const ownerNote = u.team === 'player' && u.owner && u.owner !== this.game.localPlayer ? ` · ${this.game.playerName(u.owner)}'s` : (u.team === 'player' && !u.owner && this.game.playerOrder.length > 1 ? ' · shared' : '');
       const abil = u.abilities.length ? `<div class="abil">${u.abilities.map(a => `<span data-ab="${a.key}"><b>${a.def.key}</b> ${a.def.name}</span>`).join('')}</div>` : '';
-      panel.innerHTML = `<div><div class="nm">${u.name}${u.isHero ? ` · ${u.def.title}` : ''}</div><div class="sub">${u.def.desc || u.def.passive || (u.isKing ? 'If he falls, the game is lost.' : (own ? '' : 'Enemy'))}</div>
+      panel.innerHTML = `<div><div class="nm">${u.name}${u.isHero ? ` · ${u.def.title}` : ''}${ownerNote}</div><div class="sub">${u.def.desc || u.def.passive || (u.isKing ? 'If he falls, the game is lost.' : (u.team === 'player' ? '' : 'Enemy'))}</div>
         <div class="bar"><div class="fill" id="selhp"></div></div>
         <div class="stats" id="selstats"></div>${abil}
         ${own ? `<div class="row"><button class="ctl" data-a="control">Take control <kbd>C</kbd></button><button data-a="hold">Hold <kbd>H</kbd></button><button data-a="follow">Follow hero <kbd>F</kbd></button></div>` : ''}</div>`;
@@ -461,7 +486,7 @@ class UI {
     this.tick += dt; this.mapTick += dt;
     if (this.tick < 0.12 && !this.dirty) return;
     this.tick = 0;
-    this.$('gold').textContent = U.fmt(g.gold);
+    this.$('gold').textContent = U.fmt(g.gold) + (g.playerOrder.length > 1 ? ' (yours)' : '');
     this.$('wave').textContent = g.waves.active ? g.waves.number : `${g.waves.number} done`;
     this.$('enemies').textContent = g.waves.active ? `${g.enemiesAlive()} (+${g.waves.pending.length} coming)` : '0';
     this.$('soldiers').textContent = `${g.soldierCount()}/${g.soldierCap()}`;
@@ -485,7 +510,7 @@ class UI {
     this.$('autorepairbox').checked = !!g.autoRepair;
     { const rs = this.$('roomstat'), rt = this.$('roomtext');
       if (g.netHost) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netHost.code}</b> · ${g.netHost.playerCount} player${g.netHost.playerCount === 1 ? '' : 's'}`; }
-      else if (g.netClient) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netClient.code || ''}</b> · ${g.netClient.players} players${g.netClient.lost ? ' · <span class="bad">disconnected</span>' : ''}`; }
+      else if (g.netClient) { rs.classList.remove('hidden'); rt.innerHTML = `Room <b>${g.netClient.code || ''}</b> · ${g.playerOrder.length} players${g.netClient.lost ? ' · <span class="bad">disconnected</span>' : ''}`; }
       else rs.classList.add('hidden'); }
     if (this.dirty) { this.refreshPanels(); this.dirty = false; }
     this.updateSelPanel();
@@ -504,10 +529,19 @@ class UI {
   }
   drawMinimap() {
     const g = this.game, ctx = this.mctx, W = this.minimap.width;
-    const s = W / 200; // 200m across
+    const SPAN = DATA.GRID * DATA.CELL + 20, HALF = SPAN / 2;
+    const s = W / SPAN;
     ctx.fillStyle = '#2e5a2a'; ctx.fillRect(0, 0, W, W);
-    ctx.fillStyle = '#3f7a35'; const b = (100 - DATA.BUILD_RADIUS) * s; ctx.fillRect(b, b, W - 2 * b, W - 2 * b);
-    const px = (x) => (x + 100) * s, pz = (z) => (z + 100) * s;
+    ctx.fillStyle = '#3f7a35'; const b = (HALF - DATA.BUILD_RADIUS) * s; ctx.fillRect(b, b, W - 2 * b, W - 2 * b);
+    const px = (x) => (x + HALF) * s, pz = (z) => (z + HALF) * s;
+    if (g.world) {
+      const cs = DATA.CELL * s;
+      for (let j = 0; j < g.world.n; j++) for (let i = 0; i < g.world.n; i++) {
+        const k = g.world.kind[g.world.idx(i, j)]; if (!k) continue;
+        ctx.fillStyle = k === CELL_WATER ? '#3a7fc0' : (k === CELL_ROCK ? '#6a6a64' : '#1f4a25');
+        const c = g.world.cellCenter(i, j); ctx.fillRect(px(c.x - 1), pz(c.z - 1), cs + 0.5, cs + 0.5);
+      }
+    }
     for (const bl of g.buildings) {
       ctx.fillStyle = bl.def.tower ? '#e0c060' : (bl.def.keep ? '#ffd040' : (bl.def.gate ? '#b08040' : (bl.def.temporary ? '#a0e0ff' : (bl.def.cat === 'economy' ? '#80c0ff' : '#bbb'))));
       for (const c of bl.cells) { const w = g.grid.cellToWorld(c.i, c.j); ctx.fillRect(px(w.x - 1), pz(w.z - 1), 2 * s + 0.5, 2 * s + 0.5); }

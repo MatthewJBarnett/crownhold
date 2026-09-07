@@ -105,6 +105,7 @@ Unit.prototype.enemyAct = function (dt) {
   const game = this.game, t = this.target;
   if (t && !t.dead) {
     const gap = this.gapTo(t);
+    if (this.def.suicide && gap <= 1.2) { this.detonate(); return; }
     const minR = this.def.minRange || 0;
     if (minR && this.distTo(t) < minR) {
       // artillery too close: back off a little
@@ -122,11 +123,23 @@ Unit.prototype.enemyAct = function (dt) {
       if (this.canAttackNow() && this.facing(t, 0.3)) this.attack(t);
       return;
     }
-    // approach directly (walls in the way are handled by onBlocked)
+    // approach directly (walls in the way are handled by onBlocked); if stuck on rock or water, path around
+    this.stuckCheck = (this.stuckCheck || 0) + dt;
+    if (this.stuckCheck > 1) { this.stuckCheck = 0; const moved = this.lastPos ? U.dist(this.lastPos.x, this.lastPos.z, this.pos.x, this.pos.z) : 9; this.lastPos = { x: this.pos.x, z: this.pos.z }; if (moved < 0.4) this.detourUntil = game.time + 2.5; }
+    if (this.detourUntil > game.time && !this.flying) { this.navigateTo(t.pos.x, t.pos.z, Math.max(0.3, this.range * 0.85 + this.radius + t.radius), dt); return; }
     this.moveDirect(t.pos.x, t.pos.z, Math.max(0, this.range * 0.85 + this.radius + t.radius));
     return;
   }
   this.followFlow(dt);
+};
+
+Unit.prototype.detonate = function () {
+  const s = this.def.suicide, game = this.game;
+  game.areaDamage(this.pos.x, this.pos.z, s.radius, s.unitDmg, 'enemy', this, { buildingDmg: s.buildingDmg, magic: true });
+  game.effects.spawn('explosion', this.pos.x, 1, this.pos.z, { radius: s.radius, color: 0xff8030 });
+  SFX.play('explode');
+  this.def = Object.assign({}, this.def, { reward: 0 }); // no bounty for a bomb that went off
+  this.die(null);
 };
 
 Unit.prototype.followFlow = function (dt) {
@@ -144,6 +157,21 @@ Unit.prototype.followFlow = function (dt) {
       this.moveDirect(w.x, w.z, 0.2);
       return;
     }
+  }
+  // stuck against a corner? steer at the very next cell only, and shove clear of whatever we touch
+  this.flowStuckT = (this.flowStuckT || 0) + dt;
+  if (this.flowStuckT > 0.8) {
+    this.flowStuckT = 0;
+    const moved = this.flowLast ? U.dist(this.flowLast.x, this.flowLast.z, this.pos.x, this.pos.z) : 9;
+    this.flowLast = { x: this.pos.x, z: this.pos.z };
+    if (moved < 0.3) this.flowSimpleUntil = game.time + 2.5;
+  }
+  if (this.flowSimpleUntil > game.time) {
+    const push = g.circlePushOut(this.pos.x, this.pos.z, this.collisionRadius + 0.35, this.team);
+    if (push) { const m = Math.hypot(push.x, push.z); if (m > 1e-3) this.tryMove(push.x / m * 3 * dt, push.z / m * 3 * dt); }
+    const w1 = g.cellToWorld(n.i, n.j);
+    this.moveDirect(w1.x, w1.z, 0.15);
+    return;
   }
   // look a few cells ahead and steer at the farthest one we can walk to in a straight line
   let goal = n, cur = n;
@@ -198,9 +226,28 @@ Unit.prototype.repairTick = function (b, dt) {
   }
 };
 
+Unit.prototype.medicThink = function () {
+  const game = this.game;
+  this.target = null;
+  const threat = game.unitsNear(this.pos.x, this.pos.z, 6, 'enemy').find(u => !u.dead);
+  this.fleeFrom = threat || null;
+  if (threat) { this.healTarget = null; return; }
+  const c = this.command;
+  if (c && c.type !== 'hold') { this.healTarget = null; return; }
+  let best = null, bs = 0;
+  for (const u of game.unitsNear(this.pos.x, this.pos.z, 30, 'player')) {
+    if (u === this || u.dead || u.def.medic) continue;
+    const miss = 1 - u.hp / u.maxHp; if (miss < 0.05) continue;
+    const s = miss * 100 + (u.isHero || u.isKing ? 25 : 0) - this.distTo(u) * 1.2;
+    if (s > bs) { bs = s; best = u; }
+  }
+  this.healTarget = best;
+};
+
 Unit.prototype.playerThink = function () {
   const game = this.game;
   if (this.def.repair) { this.engineerThink(); return; }
+  if (this.def.medic) { this.medicThink(); return; }
   const cmd = this.command;
   if (cmd) {
     if (cmd.type === 'attack') {
@@ -252,6 +299,14 @@ Unit.prototype.playerThink = function () {
 Unit.prototype.playerAct = function (dt) {
   if (this.stunned) return;
   const cmd = this.command, t = this.target;
+  if (this.def.medic) {
+    if (this.fleeFrom && !this.fleeFrom.dead) {
+      let ax = this.pos.x - this.fleeFrom.pos.x, az = this.pos.z - this.fleeFrom.pos.z; const l = Math.hypot(ax, az) || 1;
+      this.navigateTo(this.pos.x + ax / l * 6, this.pos.z + az / l * 6, 0.5, dt); return;
+    }
+    const h = this.healTarget;
+    if (h && !h.dead && !(cmd && cmd.type === 'hold')) { if (this.distTo(h) > 4) this.navigateTo(h.pos.x, h.pos.z, 3.5, dt); else this.faceToward(h.pos.x, h.pos.z, dt); return; }
+  }
   if (this.def.repair) {
     if (this.fleeFrom && !this.fleeFrom.dead) {
       // run away from the threat, biased toward the keep
@@ -306,6 +361,9 @@ Unit.prototype.updateSpecials = function (dt) {
     for (const u of game.unitsNear(this.pos.x, this.pos.z, def.healAura.radius, 'enemy')) if (u !== this && u.hp < u.maxHp) u.heal(def.healAura.hps * dt);
     if (Math.random() < dt * 2) game.effects.spawn('heal_p', this.pos.x + U.rand(-1, 1), 1.5, this.pos.z + U.rand(-1, 1));
   }
+  if (def.medic && this.team === 'player') {
+    for (const u of game.unitsNear(this.pos.x, this.pos.z, def.medic.radius, 'player')) if (u !== this && u.hp < u.maxHp) { u.heal(def.medic.hps * dt); if (Math.random() < dt * 1.5) game.effects.spawn('heal_p', u.pos.x + U.rand(-0.4, 0.4), u.centerY, u.pos.z + U.rand(-0.4, 0.4)); }
+  }
   if (def.slowAura) {
     for (const u of game.unitsNear(this.pos.x, this.pos.z, def.slowAura.radius, 'player')) u.applySlow(def.slowAura.factor, 0.4);
   }
@@ -351,6 +409,15 @@ Unit.prototype.updateSpecials = function (dt) {
       SFX.play('summon');
     }
     this.specialTimer = def.summon.every;
+  } else if (def.webShot) {
+    const list = game.unitsNear(this.pos.x, this.pos.z, def.webShot.range, 'player').filter(u => !u.dead && !u.sheltered);
+    if (list.length) {
+      const t = list[Math.floor(Math.random() * list.length)];
+      game.fireProjectile({ from: this, target: t, key: 'web', dmg: 10, team: 'enemy', slow: { factor: def.webShot.slow, dur: def.webShot.dur }, magic: true });
+      SFX.play('cast', 0.5);
+      this.specialTimer = def.webShot.every;
+    } else this.specialTimer = 1;
+    if (def.summon) { this.summonTimer = (this.summonTimer || def.summon.every) - def.webShot.every; if (this.summonTimer <= 0) { this.summonTimer = def.summon.every; for (let k = 0; k < def.summon.count; k++) { const a = Math.random() * Math.PI * 2; const sp = game.findSpawnSpot(this.pos.x + Math.sin(a) * 3, this.pos.z + Math.cos(a) * 3); game.spawnEnemy(def.summon.type, sp.x, sp.z, { hpMul: this.hpMul }); game.effects.spawn('blink', sp.x, 0.3, sp.z); } SFX.play('summon'); } }
   } else if (def.slam) {
     const list = game.unitsNear(this.pos.x, this.pos.z, def.slam.radius, 'player');
     if (list.length) {

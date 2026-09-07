@@ -16,9 +16,9 @@ class WaveManager {
 
   plan(n) {
     const diff = this.game.difficulty;
-    let budget = DATA.waves.budget(n) * diff.budget;
+    let budget = DATA.waves.budget(n) * diff.budget * DATA.waves.playerScale(this.game.playerCount ? this.game.playerCount() : 1);
     const bossKey = (n % DATA.waves.bossEvery === 0) ? DATA.bossSchedule[Math.floor(n / DATA.waves.bossEvery - 1) % DATA.bossSchedule.length] : null;
-    if (bossKey) budget *= 0.55;
+    if (bossKey) budget *= 0.45;
     const available = Object.values(DATA.enemies).filter(e => !e.boss && e.weight > 0 && e.unlock <= n);
     const counts = {};
     let total = 0;
@@ -95,6 +95,8 @@ class WaveManager {
       const x = U.clamp(p.sp.x + U.rand(-jx, jx), -DATA.MAP_HALF + 1, DATA.MAP_HALF - 1);
       const z = U.clamp(p.sp.z + U.rand(-jz, jz), -DATA.MAP_HALF + 1, DATA.MAP_HALF - 1);
       const u = this.game.spawnEnemy(p.type, x, z, { hpMul: p.hpMul });
+      if (this.game.grid.flowDirty && this.game.king) { const kc = this.game.grid.worldToCell(this.game.king.pos.x, this.game.king.pos.z); this.game.grid.computeFlow(kc.i, kc.j); }
+      this.game.snapToReachable(u);
       if (p.boss) { this.game.boss = u; this.game.ui.toast(`${u.name} has arrived!`, 'boss'); SFX.play('bossroar'); }
       this.spawnedCount++;
     }

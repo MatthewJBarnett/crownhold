@@ -67,7 +67,7 @@ class PeerTransport extends Emitter {
   broadcast(msg) { for (const c of this.conns.values()) if (c.open) c.send(msg); }
   peers() { return [...this.conns.keys()]; }
   pump() {}
-  close() { if (this.peer) this.peer.destroy(); }
+  close(id) { if (id) { const c = this.conns.get(id); if (c) c.close(); return; } if (this.peer) this.peer.destroy(); }
 }
 
 // ---------------------------------------------------------------------------
@@ -80,27 +80,46 @@ class NetHost {
     this.clients = new Map();
     this.fxQ = []; this.sfxQ = []; this.toastQ = [];
     this.lastB = new Map();
+    this.started = false; this.hostHero = 'knight'; this.difficulty = 'normal'; this.mapType = 'random';
     this.tr.on('open', (id) => this.onJoin(id));
     this.tr.on('close', (id) => this.onLeave(id));
     this.tr.on('message', (id, m) => { try { this.onMessage(id, m); } catch (e) { console.error('net message failed', e); } });
     game.net = this; game.netHost = this;
   }
   get playerCount() { return 1 + this.clients.size; }
-  onJoin(id) { this.clients.set(id, { known: new Set(), knownB: new Set(), name: 'Player', possessed: null }); this.game.ui.dirty = true; }
-  onLeave(id) {
-    const c = this.clients.get(id);
-    if (c && c.possessed) { const u = this.game.unitById(c.possessed); if (u) { u.possessedBy = null; u.remote = null; u.post = { x: u.pos.x, z: u.pos.z }; } }
-    this.clients.delete(id);
-    this.game.ui.toast(`${c ? c.name : 'A player'} left the game`, 'warn');
+  onJoin(id) {
+    if (this.started) { this.tr.send(id, { t: 'toast', msg: 'This game has already started. Ask the host for a new room after this siege.', type: 'error' }); this.tr.send(id, { t: 'refused' }); setTimeout(() => this.tr.close(id), 800); return; }
+    this.clients.set(id, { known: new Set(), knownB: new Set(), name: 'Player', hero: null, possessed: null, inLobby: true });
     this.game.ui.dirty = true;
   }
-  reset() {
-    this.lastB.clear();
-    this.tr.broadcast({ t: 'reset' });
-    for (const [id, c] of this.clients) {
-      c.known.clear(); c.knownB.clear(); c.possessed = null;
-      if (c.hero && DATA.heroes[c.hero]) { const h = this.game.addHero(c.hero, 0, 6); if (h) h.ownerPeer = id; }
-    }
+  onLeave(id) {
+    const c = this.clients.get(id);
+    if (!c) return;
+    const g = this.game;
+    if (c.possessed) { const u = g.unitById(c.possessed); if (u) { u.possessedBy = null; u.remote = null; u.post = { x: u.pos.x, z: u.pos.z }; } }
+    this.clients.delete(id);
+    if (this.started) {
+      for (const u of g.units) if (u.owner === id) u.owner = null;      // their forces become shared
+      for (const b of g.buildings) if (b.owner === id) b.owner = null;
+      g.ui.toast(`${c.name} left the game; their units and buildings are now shared`, 'warn', 6000);
+    } else { g.ui.toast(`${c.name} left the lobby`, 'warn'); this.broadcastLobby(); }
+    g.ui.dirty = true;
+  }
+  roster() { return [{ id: 'host', name: this.game.players.host ? this.game.players.host.name : 'Host', hero: this.hostHero }].concat([...this.clients].filter(([id, c]) => c.hero).map(([id, c]) => ({ id, name: c.name, hero: c.hero }))); }
+  lobbyState() { return { t: 'lobby', code: this.code, players: this.roster(), difficulty: this.difficulty, mapType: this.mapType, started: this.started }; }
+  broadcastLobby() { this.tr.broadcast(this.lobbyState()); this.game.ui.renderLobby(this.lobbyState(), true); }
+  begin(info) {
+    this.started = true; this.lastB.clear();
+    for (const c of this.clients.values()) { c.known.clear(); c.knownB.clear(); c.possessed = null; c.inLobby = false; }
+    this.tr.broadcast(Object.assign({ t: 'start' }, info));
+  }
+  // back to the lobby after a game (same players, new siege)
+  toLobby() {
+    this.started = false;
+    this.game.started = false; this.game.over = false;
+    for (const c of this.clients.values()) c.possessed = null;
+    this.game.ui.showLobby();
+    this.broadcastLobby();
   }
   sendTo(id, m) { this.tr.send(id, m); }
   toast(msg, type, dur) { if (this.toastQ.length < 8) this.toastQ.push([msg, type, dur]); }
@@ -110,18 +129,24 @@ class NetHost {
   onMessage(id, m) {
     const c = this.clients.get(id);
     if (!c) return;
+    const g = this.game;
+    if (m.t === 'hello') {
+      c.name = String(m.name || 'Player').slice(0, 16); c.hero = DATA.heroes[m.hero] ? m.hero : 'knight';
+      if (this.started) { this.sendTo(id, { t: 'toast', msg: 'This game has already started', type: 'error' }); return; }
+      g.ui.toast(`${c.name} joined the lobby`, 'good');
+      this.broadcastLobby();
+      return;
+    }
+    if (!this.started) return;
+    g.actor = id;
+    try { this.handleGameMessage(id, c, m); } finally { g.actor = 'host'; }
+  }
+  handleGameMessage(id, c, m) {
     const g = this.game, ctl = g.controls;
     const unit = (uid) => g.unitById(uid);
     const owned = (uid) => { const u = unit(uid); return u && u.possessedBy === id && !u.dead ? u : null; };
-    const orderable = (ids) => ids.map(unit).filter(u => u && !u.dead && u.team === 'player' && !u.possessed && !u.possessedBy);
+    const orderable = (ids) => ids.map(unit).filter(u => u && !u.dead && u.team === 'player' && !u.possessed && !u.possessedBy && (!u.owner || u.owner === id));
     switch (m.t) {
-      case 'hello': {
-        c.name = String(m.name || 'Player').slice(0, 16); c.hero = m.hero;
-        g.ui.toast(`${c.name} joined the defence`, 'good');
-        if (m.hero && DATA.heroes[m.hero]) { const h = g.addHero(m.hero, 0, 6); if (h) { h.ownerPeer = id; g.effects.spawn('ring', h.pos.x, 0.3, h.pos.z, { radius: 3, color: 0xffd040 }); } }
-        g.ui.dirty = true;
-        break;
-      }
       case 'build': if (!g.placeBuilding(m.key, m.i, m.j, m.rot, true)) this.sendTo(id, { t: 'toast', msg: 'Could not build there (blocked, too far, or not enough gold)', type: 'error' }); break;
       case 'buy': g.buyUnit(m.key); break;
       case 'hero': g.buyHero(m.key); break;
@@ -141,7 +166,7 @@ class NetHost {
       }
       case 'possess': {
         const u = unit(m.id);
-        if (u && u.team === 'player' && !u.dead && !u.possessed && !u.possessedBy) {
+        if (u && u.team === 'player' && !u.dead && !u.possessed && !u.possessedBy && (!u.owner || u.owner === id)) {
           if (c.possessed) { const old = unit(c.possessed); if (old) { old.possessedBy = null; old.remote = null; } }
           u.possessedBy = id; c.possessed = u.id; u.command = null; u.target = null; u.path = null; u.moveIntent.x = 0; u.moveIntent.z = 0;
           u.remote = { x: u.pos.x, z: u.pos.z, yaw: u.yaw, moving: false };
@@ -158,16 +183,18 @@ class NetHost {
 
   update(dt) {
     this.tr.pump();
+    if (!this.started) return;
     this.acc += dt;
     if (this.acc >= this.rate) { this.acc = 0; this.broadcast(); }
   }
+  ownerIdx(o) { return o ? this.game.playerOrder.indexOf(o) : -1; }
   unitRecord(u) {
     const f = (u.moving ? 1 : 0) | (u.dead ? 2 : 0) | (u.stunned ? 4 : 0) | (u.sheltered ? 8 : 0);
-    const r = [u.id, +u.pos.x.toFixed(2), +u.pos.z.toFixed(2), +u.pos.y.toFixed(2), +u.yaw.toFixed(2), Math.round(u.hp), Math.round(u.maxHp), f, +u.attackAnim.toFixed(2), u.possessedBy || (u.possessed ? 'host' : 0)];
-    if (u.abilities.length) r.push(u.abilities.map(a => +Math.max(0, a.timer).toFixed(1)));
+    const r = [u.id, +u.pos.x.toFixed(2), +u.pos.z.toFixed(2), +u.pos.y.toFixed(2), +u.yaw.toFixed(2), Math.round(u.hp), Math.round(u.maxHp), f, +u.attackAnim.toFixed(2), u.possessedBy || (u.possessed ? 'host' : 0), this.ownerIdx(u.owner)];
+    r.push(u.abilities.length ? u.abilities.map(a => +Math.max(0, a.timer).toFixed(1)) : 0);
     return r;
   }
-  buildingState(b) { return [b.id, Math.round(b.hp), Math.round(b.maxHp), b.level, +b.progress.toFixed(2), b.underConstruction ? 1 : 0]; }
+  buildingState(b) { return [b.id, Math.round(b.hp), Math.round(b.maxHp), b.level, +b.progress.toFixed(2), b.underConstruction ? 1 : 0, this.ownerIdx(b.owner)]; }
   broadcast() {
     const g = this.game;
     if (!g.started) return;
@@ -187,19 +214,20 @@ class NetHost {
     const zones = g.zones.filter(z => !z.dead).map(z => [z.id, +z.x.toFixed(1), +z.z.toFixed(1), z.radius, z.color]);
     const w = g.waves;
     const base = {
-      t: 'snap', seq: this.seq, time: +g.time.toFixed(3), gold: Math.round(g.gold), paused: g.paused, over: g.over, timeScale: g.timeScale,
+      t: 'snap', seq: this.seq, time: +g.time.toFixed(3), paused: g.paused, over: g.over, timeScale: g.timeScale,
+      players: g.playerOrder.map(id => { const p = g.players[id]; return { id, name: p.name, hero: p.hero, gold: Math.round(p.gold), heroes: p.heroes, heroesBought: p.heroesBought || 0, cap: g.soldierCap(id) }; }),
       wave: { n: w.number, active: w.active, pending: w.pending.length, total: w.total || 0, preview: w.preview ? { n: w.preview.n, d: w.describe(w.preview), dirs: w.preview.dirs } : null },
       king: g.king ? g.king.id : 0, boss: g.boss && !g.boss.dead ? g.boss.id : 0,
-      cap: g.soldierCap(), upgrades: g.upgrades, autoRepair: g.autoRepair, heroes: g.heroesOwned, fallen: g.fallenHeroes, heroesBought: g.heroesBought || 0,
-      players: this.playerCount, code: this.code,
+      upgrades: g.upgrades, autoRepair: g.autoRepair, fallen: g.fallenHeroes.map(f => f.key),
+      code: this.code,
       units: urec, bld, proj, zones, fx: this.fxQ, sfx: this.sfxQ, toasts: this.toastQ,
     };
     this.fxQ = []; this.sfxQ = []; this.toastQ = [];
     for (const [id, c] of this.clients) {
       const spawns = [], bspawns = [], removes = [];
-      for (const u of units) if (!c.known.has(u.id)) { c.known.add(u.id); spawns.push([u.id, u.def.key, u.team, u.isHero ? 1 : 0, u.heroKey || 0, u.hpMul]); }
+      for (const u of units) if (!c.known.has(u.id)) { c.known.add(u.id); spawns.push([u.id, u.def.key, u.team, u.isHero ? 1 : 0, u.heroKey || 0, u.hpMul, this.ownerIdx(u.owner)]); }
       for (const uid of [...c.known]) if (!unitIds.has(uid)) { c.known.delete(uid); removes.push(uid); }
-      for (const b of g.buildings) if (!c.knownB.has(b.id)) { c.knownB.add(b.id); bspawns.push([b.id, b.def.key, b.i, b.j, b.rot, b.level, b.cells.map(cl => [cl.i, cl.j, cl.solid ? 1 : 0]), ...this.buildingState(b).slice(1)]); }
+      for (const b of g.buildings) if (!c.knownB.has(b.id)) { c.knownB.add(b.id); bspawns.push([b.id, b.def.key, b.i, b.j, b.rot, b.level, b.cells.map(cl => [cl.i, cl.j, cl.solid ? 1 : 0]), ...this.buildingState(b).slice(1), this.ownerIdx(b.owner)]); }
       for (const bid of [...c.knownB]) if (!bIds.has(bid)) { c.knownB.delete(bid); removes.push(-bid); }
       this.tr.send(id, Object.assign({ spawns, bspawns, removes }, base));
     }
@@ -216,7 +244,7 @@ class NetClient {
     this.snapCount = 0; this.lastRt = 0; this.interval = 0.11; this.posAcc = 0; this.players = 1; this.code = '';
     this.tr.on('message', (from, m) => { try { this.onMessage(m); } catch (e) { console.error('snapshot failed', e); } });
     this.tr.on('close', () => { game.ui.toast('Connection to the host was lost', 'error', 8000); this.lost = true; });
-    game.net = this; game.netClient = this; game.replica = true;
+    game.net = this; game.netClient = this;
   }
   send(m) { this.tr.send(this.hostId, m); }
   onMessage(m) {
@@ -225,7 +253,18 @@ class NetClient {
       case 'snap': this.applySnapshot(m); break;
       case 'toast': g.ui.toast(m.msg, m.type || 'info'); break;
       case 'possessOk': break;
-      case 'possessFail': { const u = g.controls.controlled; if (u && u.id === m.id) g.controls.exitControl(); g.ui.toast('Someone else controls that unit', 'error'); break; }
+      case 'possessFail': { const u = g.controls.controlled; if (u && u.id === m.id) g.controls.exitControl(); g.ui.toast('You cannot control that unit', 'error'); break; }
+      case 'lobby': { this.lobby = m; this.code = m.code; this.players = m.players.length; if (g.started) { g.started = false; g.over = false; g.ui.$('gameover').classList.add('hidden'); g.ui.$('hud').classList.add('hidden'); } g.ui.showLobby(); g.ui.renderLobby(m, false); break; }
+      case 'start': {
+        this.units.clear(); this.buildings.clear(); for (const p of this.proj.values()) g.scene.remove(p.mesh); this.proj.clear(); for (const z of this.zones.values()) { g.scene.remove(z.disc); g.scene.remove(z.ring); } this.zones.clear();
+        this.snapCount = 0;
+        g.difficulty = DATA.difficulties[m.difficulty] || DATA.difficulties.normal;
+        g.newReplica(m.seed, m.type, this.myId, m.players);
+        g.ui.hideLobby(); g.ui.onGameStart();
+        g.ui.toast('The siege begins. Your hero and garrison stand at the keep: select them and press C to take control.', 'good', 7000);
+        break;
+      }
+      case 'refused': this.lost = true; g.ui.mpStatus('That game has already started. Ask the host for a new room.', true); g.ui.hideLobby(); g.ui.$('menu').classList.remove('hidden'); break;
       case 'reset': this.resetReplica(); break;
     }
   }
@@ -250,17 +289,18 @@ class NetClient {
       if (this.units.has(id)) continue;
       const def = team === 'enemy' ? DATA.enemies[defKey] : (hero ? DATA.heroes[heroKey] : DATA.units[defKey]);
       if (!def) continue;
-      const u = new Unit(g, def, team, 0, 0, { hero: !!hero, heroKey: heroKey || null, hpMul: hpMul || 1 });
+      const u = new Unit(g, def, team, 0, 0, { hero: !!hero, heroKey: heroKey || null, hpMul: hpMul || 1, owner: r[6] >= 0 && g.playerOrder[r[6]] ? g.playerOrder[r[6]] : null });
       u.id = id; u.netPrev = null; u.netCur = null; u.group.visible = false;
       g.units.push(u); this.units.set(id, u);
       if (def.isKing) g.king = u;
     }
     for (const r of s.bspawns || []) {
-      const [id, key, i, j, rot, level, cells, hp, maxHp, progress, uc] = r;
+      const [id, key, i, j, rot, level, cells, hp, maxHp, progress, uc, oidx] = r;
       if (this.buildings.has(id)) continue;
       const def = DATA.buildings[key]; if (!def) continue;
       const b = new Building(g, def, i, j, rot, cells.map(c => ({ i: c[0], j: c[1], solid: !!c[2] })));
       b.id = id; b.level = level; if (level > 1) b.build3D();
+      b.owner = oidx >= 0 && g.playerOrder[oidx] ? g.playerOrder[oidx] : null;
       g.grid.place(b); g.buildings.push(b); this.buildings.set(id, b);
       this.applyBuilding(b, hp, maxHp, progress, uc);
     }
@@ -280,9 +320,10 @@ class NetClient {
       u.sheltered = !!(f & 8);
       u.netAttackAnim = r[8];
       u.possessedBy = r[9] || null;
-      if (r[10] && !u.possessed) u.abilities.forEach((a, k) => { a.timer = r[10][k] || 0; });
+      u.owner = r[10] >= 0 && g.playerOrder[r[10]] ? g.playerOrder[r[10]] : null;
+      if (r[11] && !u.possessed) u.abilities.forEach((a, k) => { a.timer = r[11][k] || 0; });
     }
-    for (const r of s.bld || []) { const b = this.buildings.get(r[0]); if (b) this.applyBuilding(b, r[1], r[2], r[3], r[4], r[5]); }
+    for (const r of s.bld || []) { const b = this.buildings.get(r[0]); if (b) { this.applyBuilding(b, r[1], r[2], r[3], r[4], r[5]); if (r[6] !== undefined) b.owner = r[6] >= 0 && g.playerOrder[r[6]] ? g.playerOrder[r[6]] : null; } }
     // projectiles
     const seen = new Set();
     for (const r of s.proj || []) {
@@ -304,14 +345,15 @@ class NetClient {
     for (const n of s.sfx || []) SFX.play(n, 0.8);
     for (const t of s.toasts || []) g.ui.toast(t[0], t[1] || 'info', t[2] || 3200);
     // game state
-    g.gold = s.gold; g.paused = s.paused; g.timeScale = s.timeScale;
+    if (s.players) { for (const p of s.players) { const w = g.players[p.id] || (g.players[p.id] = { id: p.id, name: p.name, heroes: [], heroesBought: 0, gold: 0 }); w.name = p.name; w.hero = p.hero; w.gold = p.gold; w.heroes = p.heroes || []; w.heroesBought = p.heroesBought || 0; w.cap = p.cap; } g.playerOrder = s.players.map(p => p.id); const me = g.players[g.localPlayer]; g.replicaCap = me ? me.cap : 0; }
+    g.paused = s.paused; g.timeScale = s.timeScale;
     if (s.over && !g.over) { g.over = true; g.ui.showGameOver(); }
     const w = s.wave;
     g.waves = { number: w.n, active: w.active, pending: { length: w.pending }, total: w.total, preview: w.preview ? { n: w.preview.n, d: w.preview.d, dirs: w.preview.dirs } : { n: w.n + 1, d: { units: [], from: [] } }, describe: (p) => p.d };
     g.king = this.units.get(s.king) || g.king;
     g.boss = s.boss ? this.units.get(s.boss) : null;
-    g.replicaCap = s.cap; g.heroesBought = s.heroesBought || 0; g.upgrades = s.upgrades || {}; g.autoRepair = !!s.autoRepair; g.heroesOwned = s.heroes || []; g.fallenHeroes = s.fallen || [];
-    this.players = s.players; this.code = s.code;
+    g.upgrades = s.upgrades || {}; g.autoRepair = !!s.autoRepair; g.fallenHeroes = (s.fallen || []).map(k => ({ key: k }));
+    this.players = s.players ? s.players.length : this.players; this.code = s.code;
     g.time = s.time;
     g.ui.dirty = true;
     if (this.snapCount === 1) g.ui.onConnected();
