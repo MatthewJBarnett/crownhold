@@ -6,9 +6,9 @@
 const DATA = {};
 
 DATA.CELL = 2;                                  // metres per grid cell
-DATA.GRID = 110;                                // cells per side (220m map)
+DATA.GRID = 140;                                // cells per side (280m map)
 DATA.MAP_HALF = DATA.GRID * DATA.CELL / 2 - 1;  // hard clamp for unit positions
-DATA.BUILD_RADIUS = 72;                         // max |x|,|z| for building placement (metres)
+DATA.BUILD_RADIUS = 92;                         // max |x|,|z| for building placement (metres)
 DATA.SPAWN_RADIUS = DATA.MAP_HALF - 1;          // enemy spawn ring radius: the very edge of the map
 
 DATA.difficulties = {
@@ -189,43 +189,76 @@ DATA.enemies = {
                 attack: 'melee', color: 0x6b5a4a, cloth: 0x4a3626, weapon: 'axe', skin: 0x8fa86a },
   archer:     { key: 'archer', name: 'Raider Archer', hp: 55, dmg: 9, range: 15, cd: 1.5, armor: 0, speed: 4.8, radius: 0.4, reward: 8, unlock: 2, weight: 6,
                 attack: 'ranged', projectile: 'arrow', color: 0x5a4a3a, cloth: 0x3a3a2a, weapon: 'bow', hood: true, skin: 0x8fa86a },
-  brute:      { key: 'brute', name: 'Brute', hp: 280, dmg: 26, range: 2.6, cd: 1.4, armor: 0.15, speed: 4.0, radius: 0.6, reward: 16, unlock: 3, weight: 4,
+  brute:      { key: 'brute', name: 'Brute', hp: 280, dmg: 26, range: 2.6, cd: 1.4, armor: 0.15, speed: 4.0, radius: 0.6, reward: 16, unlock: 4, weight: 4,
                 attack: 'melee', large: true, scale: 1.35, color: 0x5a4a3a, cloth: 0x3a2a1a, weapon: 'club', skin: 0x6f8a4f },
-  pyromancer: { key: 'pyromancer', name: 'Pyromancer', hp: 95, dmg: 24, range: 16, cd: 2.4, armor: 0, speed: 4.2, radius: 0.42, reward: 20, unlock: 4, weight: 3,
+  pyromancer: { key: 'pyromancer', name: 'Pyromancer', hp: 95, dmg: 24, range: 16, cd: 2.4, armor: 0, speed: 4.2, radius: 0.42, reward: 20, unlock: 5, weight: 3,
                 attack: 'ranged', projectile: 'fireball', splash: 2.6, magic: true, color: 0xb03a1a, cloth: 0x5a1a10, weapon: 'staff', robe: true, hat: true, skin: 0xd9b08c },
-  catapult:   { key: 'catapult', name: 'Catapult', hp: 320, dmg: 45, buildingDmg: 150, range: 26, minRange: 7, cd: 5.0, armor: 0.1, speed: 2.2, radius: 1.0, reward: 45, unlock: 5, weight: 1.5,
+  catapult:   { key: 'catapult', name: 'Catapult', hp: 320, dmg: 45, buildingDmg: 150, range: 26, minRange: 7, cd: 5.0, armor: 0.1, speed: 2.7, radius: 1.0, reward: 45, unlock: 7, weight: 1.5,
                 attack: 'artillery', projectile: 'boulder', splash: 3.2, large: true, prefersBuildings: true, model: 'catapult' },
-  assassin:   { key: 'assassin', name: 'Assassin', hp: 85, dmg: 20, range: 2.0, cd: 0.55, armor: 0, speed: 8.2, radius: 0.4, reward: 15, unlock: 6, weight: 3,
+  assassin:   { key: 'assassin', name: 'Assassin', hp: 85, dmg: 20, range: 2.0, cd: 0.55, armor: 0, speed: 8.2, radius: 0.4, reward: 15, unlock: 8, weight: 3,
                 attack: 'melee', prefersHeroes: true, color: 0x2a2a35, cloth: 0x1a1a22, weapon: 'dagger', hood: true, skin: 0xc9a58a },
-  shaman:     { key: 'shaman', name: 'Shaman', hp: 120, dmg: 8, range: 12, cd: 1.6, armor: 0, speed: 4.2, radius: 0.42, reward: 25, unlock: 7, weight: 2,
+  shaman:     { key: 'shaman', name: 'Shaman', hp: 120, dmg: 8, range: 12, cd: 1.6, armor: 0, speed: 4.2, radius: 0.42, reward: 25, unlock: 9, weight: 2,
                 attack: 'ranged', projectile: 'bolt', magic: true, kite: true, healAura: { radius: 9, hps: 10 }, color: 0x4a7a5a, cloth: 0x2a4a3a, weapon: 'staff', robe: true, skin: 0x8fa86a },
-  necromancer:{ key: 'necromancer', name: 'Necromancer', hp: 150, dmg: 16, range: 16, cd: 2.0, armor: 0, speed: 4.0, radius: 0.42, reward: 32, unlock: 8, weight: 2,
+  necromancer:{ key: 'necromancer', name: 'Necromancer', hp: 150, dmg: 16, range: 16, cd: 2.0, armor: 0, speed: 4.0, radius: 0.42, reward: 32, unlock: 11, weight: 2,
                 attack: 'ranged', projectile: 'deathbolt', magic: true, kite: true, summon: { type: 'skeleton', count: 3, every: 10 }, color: 0x5a3a7a, cloth: 0x2a1a3a, weapon: 'staff', robe: true, hood: true, skin: 0xb0b0c0 },
-  frostwitch: { key: 'frostwitch', name: 'Frost Witch', hp: 130, dmg: 15, range: 16, cd: 1.8, armor: 0, speed: 4.2, radius: 0.42, reward: 28, unlock: 9, weight: 2,
+  frostwitch: { key: 'frostwitch', name: 'Frost Witch', hp: 130, dmg: 15, range: 16, cd: 1.8, armor: 0, speed: 4.2, radius: 0.42, reward: 28, unlock: 12, weight: 2,
                 attack: 'ranged', projectile: 'frostbolt', slow: { factor: 0.45, dur: 2.5 }, magic: true, kite: true, slowAura: { radius: 7, factor: 0.3 }, color: 0x8ac0e0, cloth: 0x2a4a6a, weapon: 'staff', robe: true, hat: true, skin: 0xd0e0f0 },
-  warg:       { key: 'warg', name: 'Warg', hp: 120, dmg: 16, range: 2.0, cd: 0.8, armor: 0.05, speed: 8.2, radius: 0.45, reward: 12, unlock: 4, weight: 3,
+  warg:       { key: 'warg', name: 'Warg', hp: 120, dmg: 16, range: 2.0, cd: 0.8, armor: 0.05, speed: 8.2, radius: 0.45, reward: 12, unlock: 5, weight: 3,
                 attack: 'melee', model: 'wolf', color: 0x3a3a3a },
-  shieldbearer:{ key: 'shieldbearer', name: 'Shieldbearer', hp: 240, dmg: 12, range: 2.2, cd: 1.2, armor: 0.5, speed: 3.8, radius: 0.48, reward: 18, unlock: 5, weight: 3,
+  shieldbearer:{ key: 'shieldbearer', name: 'Shieldbearer', hp: 240, dmg: 12, range: 2.2, cd: 1.2, armor: 0.5, speed: 3.8, radius: 0.48, reward: 18, unlock: 7, weight: 3,
                 attack: 'melee', color: 0x7a7a80, cloth: 0x4a4a52, weapon: 'sword', helmet: true, shield: true, skin: 0x8fa86a },
-  crossbow:   { key: 'crossbow', name: 'Crossbowman', hp: 70, dmg: 15, range: 16, cd: 1.9, armor: 0.05, speed: 4.5, radius: 0.4, reward: 12, unlock: 6, weight: 3,
+  crossbow:   { key: 'crossbow', name: 'Crossbowman', hp: 70, dmg: 15, range: 16, cd: 1.9, armor: 0.05, speed: 4.5, radius: 0.4, reward: 12, unlock: 8, weight: 3,
                 attack: 'ranged', projectile: 'bolt', magic: true, color: 0x5a5a6a, cloth: 0x3a3a4a, weapon: 'bow', helmet: true, skin: 0x8fa86a },
-  sapper:     { key: 'sapper', name: 'Sapper', hp: 65, dmg: 5, range: 1.8, cd: 1, armor: 0, speed: 6.6, radius: 0.4, reward: 14, unlock: 4, weight: 2.5,
+  sapper:     { key: 'sapper', name: 'Sapper', hp: 65, dmg: 5, range: 1.8, cd: 1, armor: 0, speed: 6.6, radius: 0.4, reward: 14, unlock: 5, weight: 2.5,
                 attack: 'melee', prefersBuildings: true, suicide: { radius: 3.2, buildingDmg: 420, unitDmg: 60 }, color: 0x8a6a3a, cloth: 0x5a4a2a, weapon: 'club', skin: 0x8fa86a },
-  harpy:      { key: 'harpy', name: 'Harpy', hp: 75, dmg: 11, range: 2.0, cd: 0.9, armor: 0, speed: 7.2, radius: 0.42, reward: 14, unlock: 9, weight: 2.5,
+  harpy:      { key: 'harpy', name: 'Harpy', hp: 75, dmg: 11, range: 2.0, cd: 0.9, armor: 0, speed: 7.2, radius: 0.42, reward: 14, unlock: 12, weight: 2.5,
                 attack: 'melee', flying: true, altitude: 2.6, wings: true, color: 0x7a5a8a, cloth: 0x4a3a5a, weapon: 'dagger', skin: 0xc9a58a },
-  plaguebearer:{ key: 'plaguebearer', name: 'Plaguebearer', hp: 110, dmg: 10, range: 2.2, cd: 1.1, armor: 0, speed: 4.4, radius: 0.44, reward: 16, unlock: 10, weight: 2.5,
+  plaguebearer:{ key: 'plaguebearer', name: 'Plaguebearer', hp: 110, dmg: 10, range: 2.2, cd: 1.1, armor: 0, speed: 4.4, radius: 0.44, reward: 16, unlock: 14, weight: 2.5,
                 attack: 'melee', deathCloud: { radius: 5, dps: 12, dur: 6 }, color: 0x5a7a3a, cloth: 0x3a4a2a, weapon: 'club', skin: 0x9ab070 },
-  troll:      { key: 'troll', name: 'Troll', hp: 520, dmg: 36, range: 2.8, cd: 1.6, armor: 0.1, speed: 3.6, radius: 0.7, reward: 34, unlock: 11, weight: 2,
+  troll:      { key: 'troll', name: 'Troll', hp: 520, dmg: 36, range: 2.8, cd: 1.6, armor: 0.1, speed: 3.6, radius: 0.7, reward: 34, unlock: 15, weight: 2,
                 attack: 'melee', large: true, scale: 1.7, regen: 12, color: 0x4a6a4a, cloth: 0x3a3a2a, weapon: 'club', skin: 0x5a7a5a },
-  trebuchet:  { key: 'trebuchet', name: 'Trebuchet', hp: 520, dmg: 60, buildingDmg: 260, range: 34, minRange: 10, cd: 7.0, armor: 0.15, speed: 1.8, radius: 1.2, reward: 70, unlock: 12, weight: 1,
+  trebuchet:  { key: 'trebuchet', name: 'Trebuchet', hp: 520, dmg: 60, buildingDmg: 260, range: 34, minRange: 10, cd: 7.0, armor: 0.15, speed: 2.3, radius: 1.2, reward: 70, unlock: 16, weight: 1,
                 attack: 'artillery', projectile: 'boulder', splash: 3.6, large: true, scale: 1.35, prefersBuildings: true, model: 'catapult' },
-  warlock:    { key: 'warlock', name: 'Warlock', hp: 140, dmg: 18, range: 17, cd: 2.2, armor: 0, speed: 4.0, radius: 0.42, reward: 34, unlock: 13, weight: 2,
+  warlock:    { key: 'warlock', name: 'Warlock', hp: 140, dmg: 18, range: 17, cd: 2.2, armor: 0, speed: 4.0, radius: 0.42, reward: 34, unlock: 18, weight: 2,
                 attack: 'ranged', projectile: 'deathbolt', magic: true, kite: true, hex: { dmgMul: 0.5, dur: 5 }, color: 0x6a2a6a, cloth: 0x3a1a3a, weapon: 'staff', robe: true, hat: true, skin: 0xb090b0 },
   spiderling: { key: 'spiderling', name: 'Spiderling', hp: 45, dmg: 9, range: 1.8, cd: 0.8, armor: 0, speed: 7.0, radius: 0.36, reward: 2, unlock: 99, weight: 0,
                 attack: 'melee', model: 'spider', scale: 0.55, color: 0x3a2a3a },
   skeleton:   { key: 'skeleton', name: 'Skeleton', hp: 40, dmg: 8, range: 2.0, cd: 1.0, armor: 0, speed: 5.2, radius: 0.38, reward: 1, unlock: 99, weight: 0,
                 attack: 'melee', color: 0xe0e0d0, cloth: 0xe0e0d0, weapon: 'sword', skin: 0xe8e8d8, skeleton: true },
+  // added later: commanders, siege, swarms, spectres
+  warchief:   { key: 'warchief', name: 'Warchief', hp: 420, dmg: 24, range: 2.6, cd: 1.2, armor: 0.3, speed: 4.6, radius: 0.55, reward: 60, unlock: 8, weight: 1.2,
+                attack: 'melee', large: true, scale: 1.25, warAura: { radius: 11, dmgMul: 1.25, speedMul: 1.15 }, color: 0x8a3a2a, cloth: 0x4a1a1a, weapon: 'axe', helmet: true, plume: true, skin: 0x8fa86a,
+                desc: 'Commander. Enemies within 11m of him hit 25% harder and move 15% faster. Kill him first.' },
+  bomber:     { key: 'bomber', name: 'Goblin Bomber', hp: 60, dmg: 34, range: 14, minRange: 3, cd: 2.6, armor: 0, speed: 5.4, radius: 0.38, reward: 18, unlock: 7, weight: 2.2,
+                attack: 'ranged', projectile: 'bomb', splash: 2.6, color: 0x6a8a3a, cloth: 0x3a4a2a, weapon: 'club', hood: true, skin: 0x8fa86a, scale: 0.85,
+                desc: 'Lobs bombs that splash 2.6m. Fragile: pick them off before they reach your line.' },
+  wraith:     { key: 'wraith', name: 'Wraith', hp: 110, dmg: 18, range: 12, cd: 1.5, armor: 0, speed: 6.4, radius: 0.42, reward: 26, unlock: 11, weight: 1.8,
+                attack: 'ranged', projectile: 'deathbolt', magic: true, flying: true, altitude: 2.2, ethereal: 0.4, color: 0xc0c8ff, cloth: 0x4a4a7a, weapon: 'dagger', hood: true, skin: 0xd0d8ff,
+                desc: 'Drifts over walls. Arrows and blades do only 40% damage; magic hurts it fully.' },
+  stoneguard: { key: 'stoneguard', name: 'Stone Guard', hp: 320, dmg: 22, range: 2.6, cd: 1.5, armor: 0.3, speed: 3.6, radius: 0.55, reward: 30, unlock: 9, weight: 1.6,
+                attack: 'melee', large: true, scale: 1.3, arrowResist: 0.3, color: 0x7a7a72, cloth: 0x5a5a52, weapon: 'club', helmet: true, shield: true, skin: 0x9a9a8a,
+                desc: 'Arrows and bolts glance off it (30% damage). Magic, blades and cannon shot work.' },
+  ram:        { key: 'ram', name: 'Battering Ram', hp: 600, dmg: 40, range: 2.6, cd: 2.2, armor: 0.25, speed: 3.0, radius: 1.1, reward: 55, unlock: 8, weight: 1.2,
+                attack: 'melee', large: true, prefersBuildings: true, buildingMul: 5, model: 'catapult', scale: 1.1, deathBlast: { radius: 4.5, dmg: 90 },
+                desc: 'Ignores your soldiers and smashes walls for five times the damage. Explodes when destroyed.' },
+  rat:        { key: 'rat', name: 'Plague Rat', hp: 28, dmg: 6, range: 1.6, cd: 0.7, armor: 0, speed: 8.4, radius: 0.3, reward: 2, unlock: 11, weight: 6,
+                attack: 'melee', model: 'wolf', scale: 0.55, color: 0x5a4a3a, poisonBite: { dps: 4, dur: 3 },
+                desc: 'Tiny, fast, many. Bites poison.' },
+  rider:      { key: 'rider', name: 'Raider Horseman', hp: 170, dmg: 20, range: 2.6, cd: 1.0, armor: 0.15, speed: 8.6, radius: 0.55, reward: 20, unlock: 7, weight: 2,
+                attack: 'melee', large: true, model: 'rider', color: 0x6a4a3a, cloth: 0x4a2a1a, weapon: 'axe', helmet: true, skin: 0x8fa86a,
+                desc: 'Fast cavalry that outruns your archers and hits the back line.' },
+  hydraling:  { key: 'hydraling', name: 'Hydraling', hp: 90, dmg: 14, range: 2.0, cd: 0.9, armor: 0, speed: 6.4, radius: 0.4, reward: 4, unlock: 99, weight: 0,
+                attack: 'melee', model: 'wolf', scale: 0.8, color: 0x3a7a3a },
   // bosses
+  warbringer: { key: 'warbringer', name: 'Orc Warbringer', boss: true, hp: 3800, dmg: 70, range: 3.2, cd: 1.6, armor: 0.25, speed: 4.4, radius: 1.0, reward: 620,
+                attack: 'melee', large: true, scale: 2.2, cleave: true, warhorn: { every: 18, radius: 30, dur: 8 }, charge: { every: 11, range: 20 },
+                color: 0x7a3a2a, cloth: 0x3a1a1a, weapon: 'axe', helmet: true, plume: true, skin: 0x6f8a4f },
+  hydra:      { key: 'hydra', name: 'The Hydra', boss: true, hp: 5200, dmg: 50, range: 14, cd: 1.6, armor: 0.15, speed: 4.0, radius: 1.5, reward: 780,
+                attack: 'ranged', projectile: 'acid', splash: 3, magic: true, large: true, model: 'dragon', noWings: true, scale: 1.25, regen: 18, split: { count: 2 },
+                color: 0x2a6a3a, cloth: 0x1a3a2a },
+  stormcaller:{ key: 'stormcaller', name: 'The Stormcaller', boss: true, hp: 3100, dmg: 40, range: 20, cd: 1.3, armor: 0.1, speed: 3.8, radius: 0.7, reward: 640,
+                attack: 'ranged', projectile: 'deathbolt', magic: true, large: true, scale: 1.6, lightning: { every: 9, dmg: 320, radius: 3.5, range: 42 }, blink: { every: 16, dist: 12 },
+                color: 0x3a4a7a, cloth: 0x1a2040, weapon: 'staff', robe: true, hat: true, skin: 0xb0c0e0 },
   ogre:       { key: 'ogre', name: 'Ogre Warlord', boss: true, hp: 2300, dmg: 65, range: 3.4, cd: 2.0, armor: 0.2, speed: 3.8, radius: 1.1, reward: 320,
                 attack: 'melee', large: true, scale: 2.4, slam: { every: 8, radius: 7, dmg: 50 }, color: 0x5a6a3a, cloth: 0x3a2a1a, weapon: 'club', skin: 0x7a8a4a },
   lich:       { key: 'lich', name: 'The Lich', boss: true, hp: 3300, dmg: 45, range: 18, cd: 1.4, armor: 0.15, speed: 3.6, radius: 0.7, reward: 520,
@@ -239,7 +272,42 @@ DATA.enemies = {
                 attack: 'melee', large: true, flying: true, altitude: 3.2, breath: { every: 9, range: 13, dps: 32, dur: 3 }, model: 'dragon', color: 0x8a1a1a },
 };
 
-DATA.bossSchedule = ['ogre', 'lich', 'dragon', 'spiderqueen', 'golem'];
+DATA.bossSchedule = ['ogre', 'warbringer', 'lich', 'hydra', 'dragon', 'stormcaller', 'spiderqueen', 'golem'];
+
+// elite affixes: a few enemies per wave come back stronger, marked and worth double
+DATA.affixes = {
+  hasty:     { key: 'hasty', name: 'Hasty', color: 0x60e0ff, speed: 1.4, desc: 'Moves 40% faster.' },
+  armoured:  { key: 'armoured', name: 'Armoured', color: 0xc0c0c0, hp: 1.3, armor: 0.25, desc: '+25% armour, +30% health.' },
+  vampiric:  { key: 'vampiric', name: 'Vampiric', color: 0xff3060, vampiric: 0.35, desc: 'Heals 35% of the damage it deals.' },
+  explosive: { key: 'explosive', name: 'Explosive', color: 0xff8020, blast: { radius: 5, dmg: 70 }, desc: 'Explodes on death for 70 damage in 5m.' },
+  shielded:  { key: 'shielded', name: 'Shielded', color: 0xa080ff, shield: 4, desc: 'A magic shield absorbs its first four hits.' },
+  giant:     { key: 'giant', name: 'Giant', color: 0xffd040, hp: 2.2, dmg: 1.5, scale: 1.35, desc: 'Twice the health, half again the damage.' },
+};
+DATA.eliteChance = (n) => n < 5 ? 0 : Math.min(0.25, 0.03 + n * 0.01);
+
+// wave modifiers: announced with the preview, they change how the whole wave plays
+DATA.waveMods = {
+  night:     { key: 'night', name: 'Night Raid', desc: 'Darkness: your towers see 15% less far; enemy archers see 2m further.', towerRange: 0.85, enemyRange: 2, weight: 3 },
+  fog:       { key: 'fog', name: 'Thick Fog', desc: 'Towers and your archers reach 25% less far. Melee it is.', towerRange: 0.75, unitRange: 0.8, weight: 2 },
+  frenzy:    { key: 'frenzy', name: 'Frenzy', desc: 'Every enemy moves 30% faster.', speed: 1.3, weight: 3 },
+  armoured:  { key: 'armoured', name: 'Iron Tide', desc: 'Every enemy has +15% armour. Magic and crossbows ignore it.', armor: 0.15, weight: 2 },
+  swarm:     { key: 'swarm', name: 'Swarm', desc: 'Half again as many enemies, each with 60% health.', count: 1.6, hp: 0.6, weight: 3 },
+  siege:     { key: 'siege', name: 'Siege', desc: 'Extra catapults and rams. Walls take 50% more damage.', siege: true, wallDmg: 1.5, weight: 2 },
+  plague:    { key: 'plague', name: 'Plague', desc: 'Every enemy that dies leaves a poison cloud for 4s.', plague: true, weight: 2 },
+  goldrush:  { key: 'goldrush', name: 'Gold Rush', desc: 'Every bounty is doubled. Enemies have 20% more health.', bounty: 2, hp: 1.2, weight: 2 },
+};
+
+// contracts: an optional goal for the wave, paid to every defender on success
+DATA.contracts = {
+  walls:    { key: 'walls', name: 'Hold the Line', desc: 'Lose no wall or gate this wave.', reward: (n) => 140 + 22 * n },
+  king:     { key: 'king', name: 'Untouched Crown', desc: 'The King takes no damage this wave.', reward: (n) => 110 + 16 * n },
+  soldiers: { key: 'soldiers', name: 'No One Left Behind', desc: 'Lose no soldiers this wave.', reward: (n) => 150 + 20 * n },
+  speed:    { key: 'speed', name: 'Swift Justice', desc: 'Clear the wave within 75 seconds of the first spawn.', reward: (n) => 180 + 26 * n },
+  hero:     { key: 'hero', name: 'Champion\'s Due', desc: 'A hero lands the killing blow on 8 enemies.', reward: (n) => 150 + 20 * n, need: 8 },
+  casters:  { key: 'casters', name: 'Silence the Chanting', desc: 'Kill 4 casters (shamans, pyromancers, witches, warlocks, necromancers, wraiths).', reward: (n) => 160 + 22 * n, need: 4 },
+};
+DATA.heroXp = (level) => Math.round(90 * Math.pow(level, 1.45));
+DATA.heroMaxLevel = 10;
 
 // ---------------------------------------------------------------------------
 // Projectiles
@@ -258,6 +326,8 @@ DATA.projectiles = {
   poison:    { speed: 34, kind: 'homing', model: 'bolt', color: 0x60ff60, poison: { dps: 12, dur: 4 } },
   sniper:    { speed: 90, kind: 'homing', model: 'ballista' },
   web:       { speed: 30, kind: 'homing', model: 'bolt', color: 0xe0e0e0, slow: { factor: 0.7, dur: 3 } },
+  bomb:      { speed: 20, kind: 'lob', model: 'boulder', splash: 2.6 },
+  acid:      { speed: 24, kind: 'lob', model: 'fireball', color: 0x60ff40, splash: 3, poison: { dps: 10, dur: 4 } },
 };
 
 // ---------------------------------------------------------------------------
@@ -320,11 +390,26 @@ DATA.buildings.sun_altar = { key: 'sun_altar', name: 'Sun Altar', cost: 2400, hp
   desc: 'Focuses sunlight into a beam that burns the strongest enemy within 38m for 160 damage per second, ignoring armour. Never misses, never stops.' };
 DATA.buildings.royal_treasury = { key: 'royal_treasury', name: 'Royal Treasury', cost: 2000, hp: 1600, w: 3, d: 3, cat: 'wonder', unique: true, interest: 0.06, interestCap: 600, bounty: 0.5,
   desc: 'Pays 6% interest on your gold after every wave (up to 600) and raises every bounty your forces collect by 50%.' };
-DATA.units.tamedragon = { key: 'tamedragon', name: 'Tame Dragon', hp: 3200, dmg: 70, range: 7, cd: 1.2, armor: 0.3, speed: 7.5, radius: 1.6, attack: 'ranged', projectile: 'fireball', splash: 3.5, magic: true, flying: true, altitude: 6, large: true, model: 'dragon', scale: 0.9, noCap: true, guardian: true, color: 0x8a2a2a, cloth: 0x5a1a1a,
+DATA.buildings.storm_crown = { key: 'storm_crown', name: 'Crown of Storms', cost: 5000, hp: 1500, w: 2, d: 2, cat: 'wonder', unique: true, tower: true, range: 40, dmg: 150, cd: 3, chain: { count: 10, radius: 9 },
+  desc: 'Chain lightning every 3s that leaps through ten enemies within 40m for 150 each, ignoring armour.' };
+DATA.buildings.phoenix_pyre = { key: 'phoenix_pyre', name: 'Phoenix Pyre', cost: 6500, hp: 1800, w: 2, d: 2, cat: 'wonder', unique: true, phoenix: true,
+  desc: 'Every soldier and hero of yours that falls rises again from the pyre three seconds later, once per wave.' };
+DATA.buildings.world_tree = { key: 'world_tree', name: 'World Tree', cost: 8000, hp: 3000, w: 3, d: 3, cat: 'wonder', unique: true, income: 150, treeAura: { radius: 32, regen: 0.02, towerDmg: 1.25 },
+  desc: 'Your units within 32m regenerate 2% of their health every second, your towers there hit 25% harder, and it yields 150 gold a wave.' };
+DATA.buildings.time_anchor = { key: 'time_anchor', name: 'Time Anchor', cost: 10000, hp: 1800, w: 2, d: 2, cat: 'wonder', unique: true, slowField: { radius: 34, factor: 0.45 }, freeze: { every: 30, radius: 20, dur: 4 },
+  desc: 'Enemies within 34m move and fight 45% slower. Every 30s it freezes everything within 20m for 4s.' };
+DATA.buildings.celestial_gate = { key: 'celestial_gate', name: 'Celestial Gate', cost: 14000, hp: 2400, w: 3, d: 3, cat: 'wonder', unique: true, summonHost: { unit: 'angel', count: 6, every: 40, dur: 40 },
+  desc: 'Every 40s six celestial warriors step through: 650 HP, 70-damage cleaving blades, they fly over walls, and they fight for 40s.' };
+DATA.buildings.doomsday_engine = { key: 'doomsday_engine', name: 'Doomsday Engine', cost: 20000, hp: 3000, w: 3, d: 3, cat: 'wonder', unique: true, doom: { every: 60, dmg: 600, bossDmg: 300 }, burnField: { radius: 40, dps: 25 },
+  desc: 'Every 60s it detonates: every enemy on the map takes 600 damage (bosses 300). Enemies within 40m burn for 25 damage a second all the time.' };
+DATA.buildings.throne_of_ages = { key: 'throne_of_ages', name: 'Throne of Ages', cost: 30000, hp: 5000, w: 3, d: 3, cat: 'wonder', unique: true, throne: { kingHp: 5000, kingRegen: 100, towerDmg: 1.5, soldierDmg: 1.5, income: 2 },
+  desc: 'The King gains 5000 HP and heals 100 a second, your towers and soldiers hit 50% harder, and your farms and mines pay double.' };
+DATA.units.angel = { key: 'angel', name: 'Celestial Warrior', hp: 650, dmg: 70, range: 2.6, cd: 0.8, armor: 0.3, speed: 9, radius: 0.5, attack: 'melee', cleave: true, flying: true, altitude: 1.2, wings: true, noCap: true, summoned: true, color: 0xfff0c0, cloth: 0xffffff, weapon: 'sword', helmet: true, skin: 0xffe8d0 };
+DATA.units.tamedragon = { key: 'tamedragon', name: 'Tame Dragon', hp: 3200, dmg: 70, range: 7, cd: 1.2, armor: 0.3, speed: 7.5, radius: 1.6, attack: 'ranged', projectile: 'fireball', splash: 3.5, magic: true, flying: true, altitude: 6, large: true, model: 'dragon', scale: 0.9, noCap: true, guardian: true, color: 0x8a2a2a, cloth: 0x5a1a1a, breath: { range: 12, dps: 150, dur: 0.2, every: 0 }, noViewWeapon: true,
   desc: 'The roost\'s dragon. Flies over walls and breathes splashing fire.' };
 DATA.units.irongolem = { key: 'irongolem', name: 'Iron Titan', hp: 5500, dmg: 110, range: 3.2, cd: 2.0, armor: 0.5, speed: 3.4, radius: 1.1, attack: 'melee', cleave: true, large: true, scale: 2.2, noCap: true, guardian: true, color: 0x6a6e78, cloth: 0x4a4e58, weapon: 'club', helmet: true, skin: 0x8a8e98,
   desc: 'The forge\'s titan. Slow, armoured, cleaves everything in reach.' };
-DATA.buildOrder = ['wall', 'barricade', 'gate', 'trap', 'arrow_tower', 'ballista_tower', 'mage_tower', 'frost_tower', 'cannon_tower', 'lightning_tower', 'poison_tower', 'watchtower', 'barracks', 'farm', 'mine', 'blacksmith', 'shrine', 'market', 'tavern', 'royal_treasury', 'sun_altar', 'arcane_spire', 'dragon_roost', 'titan_forge'];
+DATA.buildOrder = ['wall', 'barricade', 'gate', 'trap', 'arrow_tower', 'ballista_tower', 'mage_tower', 'frost_tower', 'cannon_tower', 'lightning_tower', 'poison_tower', 'watchtower', 'barracks', 'farm', 'mine', 'blacksmith', 'shrine', 'market', 'tavern', 'royal_treasury', 'sun_altar', 'arcane_spire', 'dragon_roost', 'titan_forge', 'storm_crown', 'phoenix_pyre', 'world_tree', 'time_anchor', 'celestial_gate', 'doomsday_engine', 'throne_of_ages'];
 
 DATA.towerUpgrade = { maxLevel: 3, dmg: 1.4, range: 1.1, hp: 1.3, costMul: 0.8 };
 
@@ -348,9 +433,9 @@ DATA.upgradeCostGrowth = 1.55;
 // Waves
 // ---------------------------------------------------------------------------
 DATA.waves = {
-  budget: (n) => 48 + 38 * n + 6 * n * n,
-  clearBonus: (n) => 70 + 35 * n,
-  hpScale: (n) => n <= 6 ? 1 : 1 + (n - 6) * 0.055,
+  budget: (n) => 48 + 30 * n + 4 * n * n,
+  clearBonus: (n) => 60 + 26 * n,
+  hpScale: (n) => n <= 8 ? 1 : 1 + (n - 8) * 0.045,
   playerScale: (players) => 1 + 0.8 * Math.max(0, players - 1),
   bossEvery: 5,
   maxCount: 130,

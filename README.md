@@ -25,9 +25,11 @@ Three.js and the PeerJS networking library load from cdnjs, so an internet conne
 - Every unit is fully healed when a wave ends. The Healing Shrine only works during a wave.
 - Farms and Gold Mines get pricier with every one you own (30% and 60% per building). Extra heroes start at
   1200 gold and each purchase raises the next price by 50%. Selling refunds 60% of what you actually paid.
-- Enemies arrive only along the map's two or three lanes (ringed on the minimap; the next wave's lanes are red).
-  Each lane starts on the very edge of the map, switchbacks through two solid belts of crag or forest around the
-  castle (doubling back inside each belt), then crosses open ground to the walls. Enemies path to the King and walk a long way round walls before chewing
+- Enemies arrive from the eight edge spawns (ringed on the minimap; the next wave's are red), two per wave at first
+  and more as the siege goes on. Neighbouring spawns share a corridor through the outer belt. The two belts around the
+  castle are rings of mixed terrain, different on every map: moats you cross on a long bridge, forest, crag, chasms
+  and lava. Through solid arcs the corridor switchbacks; over water it is a single bridge. Between the belts the path
+  walks sideways to the inner gate past ponds, groves, boulders, cracks and marsh, so nothing runs straight. Enemies path to the King and walk a long way round walls before chewing
   through them, so walls steer them into tower fire. The Keep shelters units inside from ranged fire. If the King
   falls, the game is over.
 - Beside every lane are two high-ground summits (cliff-ringed squares). Only a tower fits on one: it gets +30% range
@@ -37,7 +39,7 @@ Three.js and the PeerJS networking library load from cdnjs, so an internet conne
 
 ## The world
 
-The map is 220 m across and generated from a seed in one of six styles, chosen on the menu (or by the host):
+The map is 280 m across and generated from a seed in one of six styles, chosen on the menu (or by the host):
 River Valley (a river, a tributary, fords and marsh), Highlands (two rings of rock ridges with passes, and lakes),
 Darkwood (a forest belt with lanes and clearings, a stream), Badlands (radial canyons, crags, ruins), Frozen Marsh
 (snow, frozen lakes and slow bog) and Ashlands (a lava river and molten pools). Water, lava, rock and forest
@@ -46,10 +48,21 @@ gate and speed everyone up. Rivers are crossed on wooden bridges that stand on p
 of gold reward a unit that roams out to them. Every lane is guaranteed a route to the King. Selecting a tower, or
 placing one, shows its range draped over the ground.
 
-Wonders (one of each per defender, ruinously expensive): the Royal Treasury (6% interest per wave and +50% bounties),
-the Sun Altar (a beam that burns the toughest enemy in 38 m for 160/s), the Arcane Spire (a six-meteor storm on the
-thickest crowd every 14 s), the Dragon Roost (a tame dragon, rehatched two waves after it dies) and the Titan Forge (an
-Iron Titan, reforged two waves after it falls).
+Wonders (one of each per defender, ever more expensive, ever stronger): Royal Treasury 2000 (interest, +50% bounties),
+Sun Altar 2400 (a beam on the toughest enemy), Dragon Roost 2600 (a tame dragon), Arcane Spire 3000 (meteor storms),
+Titan Forge 3400 (an iron titan), Crown of Storms 5000 (ten-target chain lightning), Phoenix Pyre 6500 (your fallen
+rise again, once per wave), World Tree 8000 (2%/s regeneration and +25% tower damage within 32 m, 150 gold a wave),
+Time Anchor 10000 (enemies within 34 m are 45% slower; a 4 s freeze every 30 s), Celestial Gate 14000 (six flying
+warriors every 40 s), Doomsday Engine 20000 (600 damage to every enemy on the map every 60 s, a 25/s burn field) and
+the Throne of Ages 30000 (+5000 King HP and 100/s regeneration, towers and soldiers +50%, farms and mines pay double).
+
+Mechanics: from wave 4 most waves carry a modifier announced in the preview (Night Raid, Thick Fog, Frenzy, Iron Tide,
+Swarm, Siege, Plague, Gold Rush) that changes ranges, speed, armour, numbers or bounties, and night and fog change the
+light. From wave 3 most waves offer a contract (hold every wall, keep the King untouched, lose no soldiers, clear it in
+75 s, eight hero kills, four casters) paid to every defender. From wave 5 some enemies are elites with an affix (Hasty,
+Armoured, Vampiric, Explosive, Shielded, Giant), marked with a coloured ring and worth double. Heroes gain experience
+from their kills and level up to 10 (+7% health, +6% damage a level). The King's own guard and the world tree's
+regeneration reward keeping units alive rather than replacing them.
 
 Graphics: rounded units with capes, helmets and shields; stone with relief; grass tufts, round and pine canopies;
 rippling water; drifting snow, embers, pollen or dust depending on the map; sprite fire and torches; explosions that
@@ -57,6 +70,15 @@ sit on the ground instead of sinking into it; soft contact shadows; a sun disc; 
 (Settings: Glow & colour; turn it off on slow machines; it renders through a 24-bit depth target so the water never
 z-fights the terrain). Rock belts are crag blocks that fill their cells exactly and forest belts have undergrowth, so
 nothing you can walk into is walkable: every rock and tree inside the map sits on an obstacle cell.
+
+## Enemies
+
+Twenty-nine kinds. Besides raiders, archers, brutes, casters, artillery and beasts there are Warchiefs (an aura that
+makes everything near them faster and harder-hitting), Goblin Bombers, Wraiths (fly, take 40% from arrows and blades,
+full damage from magic), Stone Guards (arrows glance off), Battering Rams (five times the damage to walls, explode when
+killed), Plague Rats and Raider Horsemen. Bosses every five waves, in order: the Ogre Warlord, the Orc Warbringer (war
+horn and charge), the Lich, the Hydra (sheds heads as it is hurt, regenerates), the Ancient Dragon, the Stormcaller
+(lightning on your towers, blinks), the Spider Queen and the Iron Golem. Repeats come back stronger.
 
 ## Heroes
 

@@ -36,6 +36,7 @@ class Unit {
     this.abilities = (def.abilities || []).map(k => ({ key: k, def: DATA.abilities[k], timer: 0 }));
     this.specialTimer = 4 + Math.random() * 3;
     this.breathing = 0;
+    this.level = 1; this.xp = 0;
     this.sheltered = false;
 
     this.build3D();
@@ -104,6 +105,20 @@ class Unit {
   }
   stun(dur) { if (this.def.unstoppable) return; this.stunUntil = Math.max(this.stunUntil, this.game.time + dur); }
   applyPoison(dps, dur, source) { this.applyBurn(dps, dur, source); this.burn.poison = true; }
+  // heroes grow with their kills: +7% health and +6% damage per level, up to level 10
+  gainXp(n) {
+    if (!this.isHero || this.dead || this.level >= DATA.heroMaxLevel) return;
+    this.xp += n;
+    let need = DATA.heroXp(this.level);
+    while (this.xp >= need && this.level < DATA.heroMaxLevel) {
+      this.xp -= need; this.level++;
+      this.game.applyStats(this, false); this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.25);
+      this.game.effects.spawn('ring', this.pos.x, 0.3, this.pos.z, { radius: 3, color: 0xffe080, dur: 0.8 });
+      this.game.ui.toast(`${this.name} reaches level ${this.level}!`, 'good');
+      need = DATA.heroXp(this.level);
+    }
+    this.game.ui.dirty = true;
+  }
 
   distTo(t) { return Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z); }
   // edge-to-edge distance to a target (unit or building)
@@ -244,8 +259,9 @@ class Unit {
         }
         if (hits === 0) target.takeDamage(this.scaledDmg(dmg, target), this);
       } else {
-        target.takeDamage(this.scaledDmg(dmg, target), this);
-        if (this.def.breath && !this.breathing) { /* dragon bite */ }
+        const dealt = target.takeDamage(this.scaledDmg(dmg, target), this);
+        if (this.affix && this.affix.vampiric && dealt > 0) this.heal(dealt * this.affix.vampiric);
+        if (this.def.poisonBite && target instanceof Unit && dealt > 0) target.applyPoison(this.def.poisonBite.dps, this.def.poisonBite.dur, this);
       }
       SFX.play(this.large ? 'heavyhit' : 'hit');
       return true;
@@ -263,7 +279,8 @@ class Unit {
     return false;
   }
   scaledDmg(dmg, target) {
-    if (target instanceof Building && this.team === 'enemy' && target.def.cat === 'defense') dmg *= 2;
+    if (target instanceof Building && this.team === 'enemy' && target.def.cat === 'defense') dmg *= 2 * (this.game.waveMod && this.game.waveMod.wallDmg ? this.game.waveMod.wallDmg : 1);
+    if (target instanceof Building && this.def.buildingMul) dmg *= this.def.buildingMul;
     if (this.def.bonusVsLarge && target.large) dmg *= this.def.bonusVsLarge;
     if (this.def.backstab && target instanceof Unit) {
       // target facing away from us: its forward vector points away from the attacker
@@ -276,14 +293,23 @@ class Unit {
   takeDamage(amount, source, opts = {}) {
     if (this.immortal) { this.hp = this.maxHp; if (source && source instanceof Unit) this.lastAttacker = source; return 0; }
     if (this.dead || amount <= 0) return 0;
+    if (this.shieldCharges > 0 && source) { this.shieldCharges--; this.flashT = 0.12; this.game.effects.spawn('ring', this.pos.x, 0.3, this.pos.z, { radius: this.radius + 0.6, color: 0xa080ff, dur: 0.3 }); return 0; }
     let a = amount;
     if (!opts.magic) a *= (1 - this.armor);
+    if (this.def.ethereal && !opts.magic) a *= this.def.ethereal;
+    if (this.def.arrowResist && opts.projectile && /arrow|bolt|sniper|ballista/.test(opts.projectile)) a *= this.def.arrowResist;
     for (const b of this.buffs) if (b.until > this.game.time && b.dmgTaken) a *= b.dmgTaken;
     if (this.isBoss && opts.magic) a *= 0.85;
     a = Math.max(0.5, a);
     this.hp -= a;
     this.flashT = 0.12;
     if (source && source instanceof Unit) this.lastAttacker = source;
+    if (this.isKing && a > 0) this.game.contractEvent('kinghit');
+    // the hydra sheds heads as it is hurt
+    if (this.def.split && this.hp > 0) {
+      const stage = Math.floor((1 - this.hp / this.maxHp) * 4);
+      if (stage > (this.splitStage || 0)) { this.splitStage = stage; for (let k = 0; k < this.def.split.count; k++) { const sp = this.game.findSpawnSpot(this.pos.x + U.rand(-3, 3), this.pos.z + U.rand(-3, 3)); const s = this.game.spawnEnemy('hydraling', sp.x, sp.z, { hpMul: this.hpMul }); this.game.effects.spawn('blink', sp.x, 0.3, sp.z); } this.game.ui.toast('The Hydra sheds heads!', 'boss'); }
+    }
     if (this.hp <= 0) this.die(source);
     return a;
   }
@@ -322,6 +348,8 @@ class Unit {
     if (this.attackTimer > 0) this.attackTimer -= dt;
     for (const ab of this.abilities) if (ab.timer > 0) ab.timer -= dt;
     if (this.regen > 0 && this.hp < this.maxHp) this.heal(this.regen * dt);
+    if (this.breathCool > 0) this.breathCool -= dt;
+    if (this.breathHeat > 0 && !(this.possessed && this.game.controls.attackHeld)) this.breathHeat = Math.max(0, this.breathHeat - dt * 0.7);
     if (this.expires && time > this.expires) { this.die(null); return; }
     this.sheltered = !this.flying && game.grid.shelteredWorld(this.pos.x, this.pos.z);
 
@@ -568,7 +596,6 @@ class Building {
     this.group.rotation.y = this.rot * Math.PI / 2;
     this.group.userData.building = this;
     this.game.scene.add(this.group);
-    if (!this.def.keep) { const blob = Models.blob(this.radius * 1.08 + 0.35, 0.14); blob.position.y = 0.04; this.group.add(blob); }
     if (!this.hpBar) {
       const hb = Models.healthBar(Math.max(2.2, this.radius * 1.5), 0.26);
       this.hpBar = hb; hb.group.visible = false;
@@ -658,6 +685,7 @@ class Building {
     else if (this.def.beam) this.updateBeam(dt);
     else if (this.def.tower) this.updateTower(dt);
     if (this.def.guardian) this.tickGuardian(dt);
+    if (this.def.cat === 'wonder') this.tickWonder(dt);
     if (this.def.heal && game.waves && game.waves.active) {
       const list = game.unitsNear(this.pos.x, this.pos.z, this.def.heal.radius, 'player');
       for (const u of list) if (u.hp < u.maxHp) u.heal(this.def.heal.hps * dt);
@@ -718,7 +746,8 @@ class Building {
         if (!next) break; hit.push(next); last = next;
       }
       let prev = { x: this.pos.x, y: this.height + 1.5, z: this.pos.z };
-      for (const u of hit) { u.takeDamage(this.dmg, this, { magic: true }); game.effects.spawn('bolt', prev.x, prev.y, prev.z, { to: { x: u.pos.x, y: u.centerY, z: u.pos.z } }); game.effects.spawn('hit', u.pos.x, u.centerY, u.pos.z, { color: 0x80c0ff }); prev = { x: u.pos.x, y: u.centerY, z: u.pos.z }; }
+      const cdmg = this.dmg * this.boostNow();
+      for (const u of hit) { u.takeDamage(cdmg, this, { magic: true }); game.effects.spawn('bolt', prev.x, prev.y, prev.z, { to: { x: u.pos.x, y: u.centerY, z: u.pos.z } }); game.effects.spawn('hit', u.pos.x, u.centerY, u.pos.z, { color: 0x80c0ff }); prev = { x: u.pos.x, y: u.centerY, z: u.pos.z }; }
       SFX.play('cast', 0.6);
       return;
     }
@@ -726,7 +755,7 @@ class Building {
       this.timer = this.cd;
       const pdef = DATA.projectiles[this.def.projectile];
       game.fireProjectile({
-        from: this, fromY: this.height, target: this.target, key: this.def.projectile, dmg: this.dmg, team: 'player',
+        from: this, fromY: this.height, target: this.target, key: this.def.projectile, dmg: this.dmg * this.boostNow(), team: 'player',
         splash: pdef.splash || 0, slow: pdef.slow || null, burn: pdef.burn || null, magic: this.def.key === 'mage_tower', bonusVsLarge: this.def.bonusVsLarge || 1,
       });
       SFX.play(this.def.projectile === 'arrow' ? 'bow' : (this.def.projectile === 'ballista' ? 'ballista' : 'cast'), 0.5);
@@ -746,7 +775,7 @@ class Building {
     for (let k = 0; k < st.count; k++) {
       const a = k / st.count * Math.PI * 2 + Math.random(), r = k === 0 ? 0 : Math.random() * st.scatter;
       const p = { x: best.pos.x + Math.sin(a) * r, z: best.pos.z + Math.cos(a) * r };
-      const delay = st.delay + k * 0.22, dmg = this.dmg, owner = this;
+      const delay = st.delay + k * 0.22, dmg = this.dmg * this.boostNow(), owner = this;
       game.effects.spawn('ring', p.x, 0.3, p.z, { radius: st.splash, color: 0xc060ff, dur: delay });
       game.fireProjectile({ from: this, key: 'fireball', kind: 'drop', dest: p, delay, dmg, team: 'player', splash: st.splash, magic: true,
         onLand: () => { game.areaDamage(p.x, p.z, st.splash, dmg, 'player', owner, { magic: true, burn: { dps: 12, dur: 3 } }); game.effects.spawn('explosion', p.x, 1, p.z, { radius: st.splash, color: 0xb050ff }); } });
@@ -774,9 +803,49 @@ class Building {
     const from = new THREE.Vector3(this.pos.x, this.pos.y + (lens ? lens.position.y : this.height), this.pos.z), to = new THREE.Vector3(t.pos.x, t.centerY, t.pos.z);
     const len = from.distanceTo(to);
     this.beamMesh.visible = true; this.beamMesh.position.copy(from); this.beamMesh.lookAt(to); this.beamMesh.scale.set(1 + 0.2 * Math.sin(game.time * 30), 1 + 0.2 * Math.sin(game.time * 30), len);
-    t.takeDamage(this.def.beam.dps * dt, this, { magic: true });
+    t.takeDamage(this.def.beam.dps * this.boostNow() * dt, this, { magic: true });
     if (Math.random() < dt * 14) game.effects.spawn('ember', t.pos.x + U.rand(-0.4, 0.4), t.centerY, t.pos.z + U.rand(-0.4, 0.4), { color: 0xffe080 });
     if (t.dead) { game.effects.spawn('explosion', t.pos.x, t.centerY, t.pos.z, { radius: 1.5, color: 0xfff0a0 }); this.target = null; }
+  }
+  // towers hit harder near a World Tree or under a Throne
+  boostNow() {
+    const game = this.game;
+    let m = this.boostUntil > game.time ? this.boostMul : 1;
+    if (game.hasActive('throne_of_ages', this.owner)) m *= DATA.buildings.throne_of_ages.throne.towerDmg;
+    return m;
+  }
+  tickWonder(dt) {
+    const game = this.game, def = this.def;
+    this.wTimer = (this.wTimer === undefined ? 4 : this.wTimer) - dt;
+    if (def.treeAura) {
+      const a = def.treeAura;
+      for (const u of game.unitsNear(this.pos.x, this.pos.z, a.radius, 'player')) if (!u.dead && u.hp < u.maxHp && game.ownsOrSharedBy(u, this.owner)) u.heal(u.maxHp * a.regen * dt);
+      for (const b of game.buildingsNear(this.pos.x, this.pos.z, a.radius)) if (b.def.tower && game.ownsOrSharedBy(b, this.owner)) { b.boostMul = a.towerDmg; b.boostUntil = game.time + 0.5; }
+      const crown = this.group.userData.orb; if (crown) crown.rotation.y += dt * 0.2;
+    }
+    if (def.slowField) for (const u of game.unitsNear(this.pos.x, this.pos.z, def.slowField.radius, 'enemy')) if (!u.dead) { u.applySlow(def.slowField.factor, 0.4); u.addBuff({ tag: 'anchor', attackSpeedMul: 1 - def.slowField.factor, until: game.time + 0.4 }); }
+    if (def.burnField) for (const u of game.unitsNear(this.pos.x, this.pos.z, def.burnField.radius, 'enemy')) if (!u.dead) { u.takeDamage(def.burnField.dps * dt, this, { magic: true }); if (Math.random() < dt * 0.5) game.effects.spawn('ember', u.pos.x, u.centerY, u.pos.z, { color: 0xff3020 }); }
+    const orbs = this.group.userData.orbiters; if (orbs) for (let k = 0; k < orbs.length; k++) { const a = game.time * (0.8 + k * 0.3) + k * 2.1; orbs[k].rotation.set(a * 0.5, a, 0); }
+    if (this.wTimer > 0) return;
+    if (def.freeze) {
+      this.wTimer = def.freeze.every;
+      let n = 0; for (const u of game.unitsNear(this.pos.x, this.pos.z, def.freeze.radius, 'enemy')) if (!u.dead) { u.stunUntil = game.time + def.freeze.dur; n++; }
+      game.effects.spawn('ring', this.pos.x, 0.3, this.pos.z, { radius: def.freeze.radius, color: 0x80e0ff, dur: 1.2 });
+      if (n) game.ui.toast(`The Time Anchor freezes ${n} enemies`, 'good'); SFX.play('cast', 0.7);
+    } else if (def.summonHost) {
+      this.wTimer = def.summonHost.every;
+      if (game.waves.active) {
+        for (let k = 0; k < def.summonHost.count; k++) { const sp = game.findSpawnSpot(this.pos.x + Math.sin(k) * 3, this.pos.z + Math.cos(k) * 3); const u = game.spawnUnit(DATA.units[def.summonHost.unit], 'player', sp.x, sp.z, { owner: this.owner }); u.expires = game.time + def.summonHost.dur; u.post = { x: sp.x, z: sp.z }; game.effects.spawn('blink', sp.x, 0.3, sp.z); }
+        game.effects.spawn('ring', this.pos.x, 0.3, this.pos.z, { radius: 6, color: 0xfff0c0, dur: 1 }); game.ui.toast('Celestial warriors answer the call!', 'good'); SFX.play('summon');
+      } else this.wTimer = 2;
+    } else if (def.doom) {
+      this.wTimer = def.doom.every;
+      if (game.waves.active) {
+        let n = 0; for (const u of game.units) if (u.team === 'enemy' && !u.dead) { u.takeDamage(u.isBoss ? def.doom.bossDmg : def.doom.dmg, this, { magic: true }); n++; }
+        game.effects.spawn('explosion', this.pos.x, 3, this.pos.z, { radius: 14, color: 0xff2020 }); game.effects.spawn('ring', this.pos.x, 0.3, this.pos.z, { radius: 120, color: 0xff4040, dur: 1.6 });
+        game.ui.toast(`The Doomsday Engine detonates: ${n} enemies scorched`, 'boss'); SFX.play('explode');
+      } else this.wTimer = 2;
+    } else this.wTimer = 1;
   }
   // roost / forge: keep one guardian alive; hatch or reforge it a few waves after it falls
   tickGuardian(dt) {
@@ -872,7 +941,8 @@ class Projectile {
     let d = this.dmg * mult;
     if (target.large && this.bonusVsLarge > 1) d *= this.bonusVsLarge;
     if (target instanceof Building) d = this.buildingDmg ? this.buildingDmg * mult : d * (this.magic ? 1 : 0.5);
-    const dealt = target.takeDamage(d, this.source, { magic: this.magic });
+    const dealt = target.takeDamage(d, this.source, { magic: this.magic, projectile: this.key });
+    if (this.source && this.source.affix && this.source.affix.vampiric && dealt > 0 && !this.source.dead) this.source.heal(dealt * this.source.affix.vampiric);
     if (target instanceof Unit) {
       if (this.slow) target.applySlow(this.slow.factor, this.slow.dur);
       if (this.burn) target.applyBurn(this.burn.dps, this.burn.dur, this.source);

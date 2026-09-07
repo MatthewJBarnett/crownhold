@@ -105,55 +105,120 @@ class WorldMap {
   polar(rc, ang, side = 0) { const h = this.half; return { i: h + Math.cos(ang) * rc - Math.sin(ang) * side, j: h + Math.sin(ang) * rc + Math.cos(ang) * side }; }
   layLanes(rnd) {
     const h = this.half, n = this.n;
-    const rocky = ['highlands', 'badlands', 'volcanic', 'frozen'].includes(this.type);
-    // two solid belts: rock or forest by map, the inner one in the other material where it suits the map
-    const outerFill = rocky ? CELL_ROCK : 5;
-    const innerFill = this.type === 'valley' ? CELL_ROCK : (this.type === 'highlands' ? 5 : outerFill);
-    const belts = [[36, 44, outerFill], [22, 28, innerFill]];
+    const MAT = { water: CELL_WATER, crag: CELL_ROCK, forest: 5, chasm: 11, lava: 8 };
+    const palettes = {
+      valley: ['water', 'forest', 'forest', 'crag', 'water'], highlands: ['crag', 'chasm', 'water', 'forest', 'crag'], darkwood: ['forest', 'water', 'forest', 'chasm', 'forest'],
+      badlands: ['crag', 'chasm', 'crag', 'water', 'chasm'], frozen: ['water', 'crag', 'forest', 'chasm', 'water'], volcanic: ['lava', 'crag', 'chasm', 'crag', 'lava'],
+    };
+    const pal = palettes[this.type] || palettes.valley;
+    // two belts, each a ring of arcs in different materials: water you cross on a bridge, forest, crag, chasm, lava
+    const belts = [{ r0: 48, r1: 58 }, { r0: 26, r1: 33 }];
+    for (const belt of belts) {
+      const K = 5 + Math.floor(rnd() * 3), cuts = [];
+      for (let k = 0; k < K; k++) cuts.push(rnd() * Math.PI * 2);
+      cuts.sort((x, y) => x - y);
+      let last = null; const mats = cuts.map(() => { let m; do { m = pal[Math.floor(rnd() * pal.length)]; } while (m === last && pal.length > 1); last = m; return m; });
+      belt.cuts = cuts; belt.mats = mats;
+      belt.matAt = (ang) => { let a = ((ang % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2); let k = 0; for (let q = 0; q < cuts.length; q++) if (cuts[q] <= a) k = q; if (a < cuts[0]) k = cuts.length - 1; return mats[k]; };
+    }
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
       const dx = i - h, dz = j - h, r = Math.hypot(dx, dz);
       const wob = U.smoothNoise(i * 0.3 + this.seed % 11, j * 0.3 + this.seed % 5) * 1.6 - 0.8;
-      for (const [r0, r1, fill] of belts) {
-        if (r < r0 + wob || r > r1 + wob) continue;
+      for (const belt of belts) {
+        if (r < belt.r0 + wob || r > belt.r1 + wob) continue;
         const k = this.idx(i, j), kk = this.kind[k];
         if (kk === CELL_WATER || kk === 8 || kk === 9 || kk === 12) continue;
-        this.kind[k] = fill;
+        const mat = belt.matAt(Math.atan2(dz, dx));
+        if (mat === 'water' && r > belt.r1 - 1.2 + wob) continue;     // a bank on the outside of a moat
+        this.kind[k] = MAT[mat];
       }
     }
-    // lanes: 2 or 3 spawn points, well apart
-    const count = 2 + (rnd() < 0.55 ? 1 : 0);
-    const start = Math.floor(rnd() * 8), step = Math.floor(8 / count);
-    this.laneSpawns = []; this.lanes = []; this.plateaus = []; this.laneCells = new Set();
-    for (let k = 0; k < count; k++) this.laneSpawns.push((start + k * step + (k && rnd() < 0.5 ? 1 : 0)) % 8);
-    this.laneSpawns = [...new Set(this.laneSpawns)];
-    for (const si of this.laneSpawns) {
-      const sp = DATA.spawnPoints[si];
-      const ang = Math.atan2(sp.z, sp.x);
-      const spc = { i: U.clamp(h + sp.x / this.cell, 1, n - 2), j: U.clamp(h + sp.z / this.cell, 1, n - 2) };   // the lane starts at the spawn itself, on the map edge
-      // switchbacks: a tangential leg inside each belt, doubling back before it exits
-      const d1 = rnd() < 0.5 ? -1 : 1, d2 = rnd() < 0.5 ? -1 : 1;
-      const arcA = d1 * (10 + rnd() * 4) / 40, arcB = d2 * (7 + rnd() * 3) / 25;
-      const a1 = ang + arcA, a2 = ang + arcA * 0.2;                 // outer belt: out along arcA, back a little
-      const b0 = a2 + d2 * 0.04, b1 = b0 + arcB, b2 = b0 + arcB * 0.35;
-      const pts = [
-        spc, this.polar(49, ang), this.polar(45.5, ang),
-        this.polar(42.5, ang), this.polar(42.5, a1), this.polar(39.5, a1), this.polar(39.5, a2), this.polar(35.5, a2),
-        this.polar(31.5, (a2 + b0) / 2),
-        this.polar(28.5, b0), this.polar(26.5, b0), this.polar(26.5, b1), this.polar(23.8, b1), this.polar(23.8, b2), this.polar(21, b2), this.polar(15, b2),
-      ];
+    // every edge spawn is a lane; neighbouring spawns share a corridor through the outer belt
+    this.laneSpawns = DATA.spawnPoints.map((s, k) => k);
+    this.lanes = []; this.plateaus = []; this.laneCells = new Set();
+    const shift = rnd() < 0.5 ? 0 : 1;
+    const isWet = (m) => m === 'water' || m === 'lava';
+    const carve = (pts, w, wet) => {
+      const hit = [];
       for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-        if (this.distToPolyline(i, j, pts) <= 1.4) {
-          const c = this.cellCenter(i, j);
-          if (Math.max(Math.abs(c.x), Math.abs(c.z)) > 21) { this.kind[this.idx(i, j)] = 0; this.laneCells.add(this.idx(i, j)); }
-        }
+        if (this.distToPolyline(i, j, pts) > w) continue;
+        const c = this.cellCenter(i, j);
+        if (Math.max(Math.abs(c.x), Math.abs(c.z)) <= 21) continue;
+        const k = this.idx(i, j), kk = this.kind[k];
+        if (kk === 9 || kk === 12) continue;
+        if (wet && (kk === CELL_WATER || kk === 8)) { this.kind[k] = 10; hit.push([i, j]); }
+        else this.kind[k] = 0;
+        this.laneCells.add(k);
       }
-      // a clearing at the spawn
-      const sc = spc;
-      for (let j = Math.floor(sc.j) - 6; j <= sc.j + 6; j++) for (let i = Math.floor(sc.i) - 6; i <= sc.i + 6; i++) if (this.inBounds(i, j) && Math.hypot(i - sc.i, j - sc.j) < 5.5 && this.blocked(this.kind[this.idx(i, j)]) && this.kind[this.idx(i, j)] !== CELL_WATER) this.kind[this.idx(i, j)] = 0;
-      this.lanes.push({ spawn: si, pts, exit: b2 });
-      // high ground: one between the belts beside the lane, one inside the inner belt near its exit
-      for (const off of [-0.16, -0.26, 0.16, 0.26]) if (this.placePlateau(this.polar(32, a2 + d2 * off))) break;
-      for (const off of [0.22, 0.34, -0.22, -0.34]) if (this.placePlateau(this.polar(18.5, b2 + d2 * off))) break;
+      return hit;
+    };
+    // a straight crossing over water or lava becomes a bridge spanning the whole belt
+    const bridgeOver = (cells, ang) => {
+      if (!cells.length) return;
+      let si = 0, sj = 0, rmin = 1e9, rmax = -1e9;
+      for (const [i, j] of cells) { si += i + 0.5; sj += j + 0.5; const r = Math.hypot(i + 0.5 - h, j + 0.5 - h); rmin = Math.min(rmin, r); rmax = Math.max(rmax, r); }
+      const f = { i: si / cells.length, j: sj / cells.length, dir: { i: -Math.sin(ang), j: Math.cos(ang) }, len: (rmax - rmin) * this.cell + 5 };
+      this.fords.push(f);
+    };
+    for (let pair = 0; pair < 4; pair++) {
+      const sA = (pair * 2 + shift) % 8, sB = (pair * 2 + 1 + shift) % 8;
+      const pa = DATA.spawnPoints[sA], pb = DATA.spawnPoints[sB];
+      const A = Math.atan2((pa.z + pb.z) / 2, (pa.x + pb.x) / 2);           // corridor angle through the outer belt
+      const merge = this.polar(62, A);
+      for (const si of [sA, sB]) {
+        const sp = DATA.spawnPoints[si], ang = Math.atan2(sp.z, sp.x);
+        const spc = { i: U.clamp(h + sp.x / this.cell, 1, n - 2), j: U.clamp(h + sp.z / this.cell, 1, n - 2) };
+        carve([spc, this.polar(66, ang), merge], 1.3, false);
+        for (let j = Math.floor(spc.j) - 6; j <= spc.j + 6; j++) for (let i = Math.floor(spc.i) - 6; i <= spc.i + 6; i++) if (this.inBounds(i, j) && Math.hypot(i - spc.i, j - spc.j) < 5.5 && this.blocked(this.kind[this.idx(i, j)]) && this.kind[this.idx(i, j)] !== CELL_WATER) this.kind[this.idx(i, j)] = 0;
+        this.lanes.push({ spawn: si, pair });
+      }
+      // outer belt: a bridge straight across water, or a double switchback through anything solid
+      const s1 = rnd() < 0.5 ? -1 : 1, arc = s1 * (12 + rnd() * 5) / 54;
+      let E;
+      if (isWet(belts[0].matAt(A))) { const hit = carve([merge, this.polar(59.5, A), this.polar(46, A)], 1.0, true); bridgeOver(hit, A); E = A; }
+      else {
+        E = A + arc * 0.2;
+        carve([merge, this.polar(58.5, A), this.polar(56, A), this.polar(56, A + arc), this.polar(52.5, A + arc), this.polar(52.5, A - arc * 0.5), this.polar(49, A - arc * 0.5), this.polar(49, E), this.polar(46, E)], 1.4, false);
+      }
+      // the ring between belts: walk sideways to the inner gate
+      const t = rnd() < 0.5 ? -1 : 1, B = E + t * (0.36 + rnd() * 0.16);
+      carve([this.polar(46, E), this.polar(43, E + (B - E) * 0.33), this.polar(39, E + (B - E) * 0.66), this.polar(35, B)], 1.3, false);
+      // inner belt
+      const s2 = rnd() < 0.5 ? -1 : 1, arc2 = s2 * (8 + rnd() * 3) / 30;
+      let F;
+      if (isWet(belts[1].matAt(B))) { const hit = carve([this.polar(35, B), this.polar(34, B), this.polar(24.5, B)], 1.0, true); bridgeOver(hit, B); F = B; }
+      else {
+        F = B - arc2 * 0.4;
+        carve([this.polar(35, B), this.polar(31, B), this.polar(31, B + arc2), this.polar(28, B + arc2), this.polar(28, F), this.polar(24.5, F)], 1.4, false);
+      }
+      carve([this.polar(24.5, F), this.polar(18, F), this.polar(13, F)], 1.4, false);
+      // high ground beside the corridor exits: one between the belts, one inside the inner belt
+      for (const off of [0.14, 0.24, -0.14, -0.24]) if (this.placePlateau(this.polar(41, E + off))) break;
+      for (const off of [0.2, 0.32, -0.2, -0.32]) if (this.placePlateau(this.polar(21.5, F + off))) break;
+    }
+    // scattered features in the open rings so the crossings wind: ponds, groves, boulders, cracks, marsh
+    const blobKinds = { valley: [CELL_WATER, 5, 7, CELL_ROCK, 5], highlands: [CELL_ROCK, CELL_WATER, 11, 5], darkwood: [5, 7, CELL_WATER, 5], badlands: [CELL_ROCK, 11, 7, CELL_ROCK], frozen: [CELL_WATER, CELL_ROCK, 5, 11], volcanic: [8, CELL_ROCK, 11, CELL_ROCK] }[this.type] || [CELL_ROCK, 5];
+    for (const [r0, r1, count] of [[35, 46, 14], [60, 68, 10]]) {
+      let placed = 0, guard = 0;
+      while (placed < count && guard++ < 200) {
+        const ang = rnd() * Math.PI * 2, rad = r0 + 2 + rnd() * (r1 - r0 - 4);
+        const c = this.polar(rad, ang), R = 1.6 + rnd() * 2.4, sq = 0.6 + rnd() * 0.4, rot = rnd() * Math.PI;
+        const kind = blobKinds[Math.floor(rnd() * blobKinds.length)];
+        const cells = []; let ok = true;
+        for (let j = Math.floor(c.j - R - 1); j <= c.j + R + 1 && ok; j++) for (let i = Math.floor(c.i - R - 1); i <= c.i + R + 1; i++) {
+          if (!this.inBounds(i, j)) { ok = false; break; }
+          const dx = i + 0.5 - c.i, dz = j + 0.5 - c.j, u = dx * Math.cos(rot) + dz * Math.sin(rot), v = -dx * Math.sin(rot) + dz * Math.cos(rot);
+          if ((u * u) / (R * R) + (v * v) / (R * R * sq * sq) > 1) continue;
+          const k = this.idx(i, j);
+          if (this.laneCells.has(k) || this.kind[k] !== 0) { ok = false; break; }
+          for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (this.inBounds(i + di, j + dj) && this.laneCells.has(this.idx(i + di, j + dj))) { ok = false; break; }
+          if (!ok) break;
+          cells.push(k);
+        }
+        if (!ok || cells.length < 3) continue;
+        for (const k of cells) this.kind[k] = kind;
+        placed++;
+      }
     }
   }
   // a 2x2 buildable summit ringed by two cells of cliff: only towers go up there, only ranged enemies reach them
@@ -174,7 +239,7 @@ class WorldMap {
     this.plateaus.push({ i: ci, j: cj });
     return true;
   }
-  blocked(k) { return k === CELL_WATER || k === CELL_ROCK || k === 5 || k === 8 || k === 9 || k === 12; }
+  blocked(k) { return k === CELL_WATER || k === CELL_ROCK || k === 5 || k === 8 || k === 9 || k === 11 || k === 12; }
   // a thinner second stream from a random edge that joins the main river
   layTributary(rnd) {
     if (!this.river.length) return;
@@ -433,14 +498,15 @@ class WorldMap {
       this.h0[j * w + i] = y;
       // carve the river bed: a corner is lowered when any touching cell is water
       let water = 0, cnt = 0;
-      let bridge = 0;
-      for (const [di, dj] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { if (this.inBounds(i + di, j + dj)) { cnt++; const kk = this.kind[this.idx(i + di, j + dj)]; if (kk === CELL_WATER || kk === 8 || kk === 10) water++; if (kk === 10) bridge++; } }
+      let bridge = 0, chasm = 0;
+      for (const [di, dj] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { if (this.inBounds(i + di, j + dj)) { cnt++; const kk = this.kind[this.idx(i + di, j + dj)]; if (kk === CELL_WATER || kk === 8 || kk === 10) water++; if (kk === 10) bridge++; if (kk === 11) chasm++; } }
       let high = 0;
       for (const [di, dj] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) if (this.inBounds(i + di, j + dj)) { const kk = this.kind[this.idx(i + di, j + dj)]; if (kk === 9 || kk === 12) high++; }
       if (high) y += 3.0 * (high === cnt ? 1 : 0.55 * high / cnt);
       this.hWalk[j * w + i] = bridge ? this.h0[j * w + i] + 0.35 : (water && !bridge ? y - 1.4 * (water / cnt) - 0.3 : y);
       if (water) y -= 1.4 * (water / cnt) + 0.3;
       else { let marsh = 0; for (const [di, dj] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) if (this.inBounds(i + di, j + dj) && this.kind[this.idx(i + di, j + dj)] === 7) marsh++; if (marsh) y -= 0.25 * (marsh / cnt); }
+      if (chasm && !water) { const d = 4.0 * (chasm / cnt) + 0.4; y -= d; this.h0[j * w + i] -= d; }   // the trench floor stays above the water plane
       this.h[j * w + i] = y;
       if (!bridge && !water) this.hWalk[j * w + i] = y;
     }
@@ -455,6 +521,7 @@ class WorldMap {
       if (!kind || kind === 6) continue;
       if (kind === 7) { grid.natural[k] = 7; continue; }           // marsh: walkable, slow, unbuildable
       if (kind === 10) { grid.natural[k] = 10; continue; }         // bridge: walkable water, unbuildable
+      if (kind === 11) { grid.flag[k] = CELL_ROCK; grid.natural[k] = 11; continue; }   // chasm
       if (kind === 9 || kind === 12) { grid.flag[k] = CELL_ROCK; grid.natural[k] = kind; continue; }  // high ground: impassable; towers may sit on the summit
       grid.flag[k] = (kind === CELL_WATER || kind === 8) ? CELL_WATER : CELL_ROCK;
       grid.natural[k] = kind;
@@ -488,6 +555,7 @@ class WorldMap {
       else if (kind === 7) c.lerp(marsh, 0.8);
       else if (kind === 9) c.lerp(rock, 0.35).lerp(dry, 0.2);
       else if (kind === 12) c.lerp(rock, 0.85);
+      else if (kind === 11) c.lerp(new THREE.Color(0x14121a), 0.85);
       else {
         // banks, rock edges, road shoulders
         let nearWater = false, nearRock = false, nearRoad = false;
@@ -539,18 +607,19 @@ class WorldMap {
       const cc = this.cellCenter(f.i - 0.5, f.j - 0.5);
       const dir = f.dir || { i: 1, j: 0 };
       const nx = -dir.j, nz = dir.i;               // crossing direction (perpendicular to the flow)
-      const len = 12, wid = 4.4;
+      const len = f.len || 12, wid = 4.4;
       const deckY = this.heightAt(cc.x, cc.z, this.hWalk);
       const g = new THREE.Group();
       g.position.set(cc.x, deckY, cc.z); g.rotation.y = Math.atan2(-nz, nx);
       const deck = new THREE.Mesh(new THREE.BoxGeometry(len, 0.3, wid), plank); deck.castShadow = true; deck.receiveShadow = true; g.add(deck);
-      for (let k = 0; k < 12; k++) { const slat = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.06, wid), plankDark); slat.position.set(-len / 2 + 0.5 + k, 0.18, 0); g.add(slat); }
+      for (let k = 0; k < Math.floor(len); k++) { const slat = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.06, wid), plankDark); slat.position.set(-len / 2 + 0.5 + k, 0.18, 0); g.add(slat); }
       for (const side of [-1, 1]) {
         const beam = new THREE.Mesh(new THREE.BoxGeometry(len, 0.12, 0.14), plank); beam.position.set(0, 0.95, side * wid * 0.5); beam.castShadow = true; g.add(beam);
-        for (let k = -5; k <= 5; k += 2) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.0, 0.18), plank); post.position.set(k, 0.5, side * wid * 0.5); g.add(post); }
+        for (let k = -Math.floor(len / 2) + 1; k <= len / 2 - 1; k += 2) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.0, 0.18), plank); post.position.set(k, 0.5, side * wid * 0.5); g.add(post); }
       }
       // piers: reach from the deck down to whatever is below (bank or river bed)
-      for (const ox of [-len * 0.4, -len * 0.14, len * 0.14, len * 0.4]) for (const oz of [-wid * 0.36, wid * 0.36]) {
+      const piers = []; for (let ox = -len * 0.4; ox <= len * 0.4 + 0.01; ox += Math.max(2.5, len * 0.8 / Math.max(1, Math.round(len / 3.2)))) piers.push(ox);
+      for (const ox of piers) for (const oz of [-wid * 0.36, wid * 0.36]) {
         const wx = cc.x + nx * ox + dir.i * oz, wz = cc.z + nz * ox + dir.j * oz;
         const bottom = Math.min(this.heightAt(wx, wz), this.heightAt(wx, wz, this.h0) - 1.6);
         const hgt = Math.max(0.4, deckY - bottom + 0.2);

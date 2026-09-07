@@ -433,6 +433,7 @@ class Controls {
   }
   attachViewWeapon(unit) {
     this.detachViewWeapon();
+    if (unit.def.noViewWeapon) return;   // a dragon has no hands
     const kind = unit.def.weapon || 'sword';
     this.viewWeapon = Models.viewWeapon(kind);
     this.camera.add(this.viewWeapon);
@@ -548,6 +549,17 @@ class Controls {
         if (d < bd) { bd = d; best = b; }
       }
       if (best) { u.repairTick(best, aim ? 0.25 : dt); if (u.attackAnim >= 1 && !aim) this.animateViewWeapon(0.8); return; }
+    }
+    if (u.def.breath && u.team === 'player') {
+      // a dragon breathes fire where it looks: hold to keep breathing, with a short rest after a long breath
+      u.breathHeat = (u.breathHeat || 0);
+      if (u.breathCool > 0) return;
+      u.yaw = Math.atan2(fx, fz);
+      u.breathing = Math.max(u.breathing || 0, 0.2);
+      u.breathHeat += aim ? 0.25 : dt;
+      if (u.breathHeat > 3) { u.breathHeat = 0; u.breathCool = 2.5; game.ui.toast('The dragon draws breath', 'warn', 1500); }
+      if (!u.breathSfx || game.time > u.breathSfx) { SFX.play('breath'); u.breathSfx = game.time + 1.2; }
+      return;
     }
     if (!u.canAttackNow()) return;
     if (u.attackKind === 'melee') {

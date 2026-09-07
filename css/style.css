@@ -133,6 +133,8 @@ button.mini { padding: 3px 8px; font-size: 11px; }
 #wavepreview { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.45; color: var(--muted); }
 #wavepreview b { color: var(--text); }
 #wavepreview .boss { color: #ff9a80; font-weight: 700; }
+#wavepreview .mod { color: #ffd890; }
+#wavepreview .contract { color: #9fe0ff; }
 #repairall { width: 100%; padding: 9px 8px; font-weight: 600; border-color: rgba(255,179,71,0.5); color: #ffd090; }
 #repairall:hover { background: rgba(120,80,30,0.6); }
 #repairall .cost { color: var(--gold); margin-left: 6px; }

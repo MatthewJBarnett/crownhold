@@ -190,6 +190,21 @@ class Game {
     this.scene.remove(this.decor); this.decor = new THREE.Group(); this.scene.add(this.decor); this.buildDecor();
     this.worldSeed = seed;
   }
+  tickRevives() {
+    for (let k = this.revives.length - 1; k >= 0; k--) {
+      const r = this.revives[k]; if (r.at > this.time) continue;
+      this.revives.splice(k, 1);
+      if (r.pyre.dead || this.over) continue;
+      if (r.hero && this.heroInPlay(r.heroKey)) continue;
+      const sp = this.findSpawnSpot(r.pyre.pos.x + 2, r.pyre.pos.z + 2);
+      const u = this.spawnUnit(r.def, 'player', sp.x, sp.z, { owner: r.owner, hero: r.hero, heroKey: r.heroKey });
+      u.rebornWave = r.wave; u.level = r.level || 1; u.xp = r.xp || 0; this.applyStats(u, true);
+      if (r.hero) { const w = this.wallet(r.owner || 'host'); if (!w.heroes.includes(r.heroKey)) w.heroes.push(r.heroKey); }
+      this.effects.spawn('explosion', sp.x, 1, sp.z, { radius: 3, color: 0xffa020 }); for (let q = 0; q < 12; q++) this.effects.spawn('flame', sp.x + U.rand(-1, 1), 0.5, sp.z + U.rand(-1, 1));
+      this.ui.toast(`${u.name} rises from the Phoenix Pyre!`, 'good'); SFX.play('summon');
+      this.ui.dirty = true;
+    }
+  }
   // drifting motes that suit the map: snow, embers, pollen, dust
   buildParticles(type) {
     if (this.motes) { this.scene.remove(this.motes); this.motes.geometry.dispose(); this.motes.material.dispose(); this.motes = null; }
@@ -354,17 +369,19 @@ class Game {
   applyStats(u, initial) {
     const def = u.def, up = this.upgradesFor(u.owner), diff = this.difficulty, pid = u.owner || 'host';
     let hpMul = 1, dmgMul = 1, armorAdd = 0, regen = def.regen || 0;
-    if (u.team === 'enemy') { hpMul = u.hpMul; dmgMul = diff.dmg; }
-    else if (u.isKing) { hpMul = 1 + 0.25 * (up.royal || 0); regen += 2 * (up.royal || 0); }
-    else if (u.isHero) { hpMul = 1 + 0.15 * (up.hero || 0); dmgMul = 1 + 0.15 * (up.hero || 0); }
-    else if (u.isSoldier) { dmgMul = (1 + 0.15 * (up.weapons || 0)) * (this.hasActive('blacksmith', pid) ? 1 + DATA.buildings.blacksmith.soldierDmg : 1); armorAdd = 0.08 * (up.armor || 0); }
+    if (u.team === 'enemy') { hpMul = u.hpMul * (u.affix && u.affix.hp ? u.affix.hp : 1); dmgMul = diff.dmg * (u.affix && u.affix.dmg ? u.affix.dmg : 1); armorAdd = (u.affix && u.affix.armor ? u.affix.armor : 0) + (u.modArmor || 0); }
+    else if (u.isKing) { hpMul = 1 + 0.25 * (up.royal || 0); regen += 2 * (up.royal || 0); if (this.hasActive('throne_of_ages')) { hpMul += DATA.buildings.throne_of_ages.throne.kingHp / def.hp; regen += DATA.buildings.throne_of_ages.throne.kingRegen; } }
+    else if (u.isHero) { const lv = (u.level || 1) - 1; hpMul = (1 + 0.15 * (up.hero || 0)) * (1 + 0.07 * lv); dmgMul = (1 + 0.15 * (up.hero || 0)) * (1 + 0.06 * lv); }
+    else if (u.isSoldier) { dmgMul = (1 + 0.15 * (up.weapons || 0)) * (this.hasActive('blacksmith', pid) ? 1 + DATA.buildings.blacksmith.soldierDmg : 1) * (this.hasActive('throne_of_ages', pid) ? DATA.buildings.throne_of_ages.throne.soldierDmg : 1); armorAdd = 0.08 * (up.armor || 0); }
     const frac = initial ? 1 : u.hp / u.maxHp;
     let rangeMul = 1, speedMul = 1;
     if (u.isSoldier && def.attack === 'ranged') { rangeMul = 1 + 0.12 * (up.marksman || 0); dmgMul *= 1 + 0.1 * (up.marksman || 0); }
     if (u.isSoldier && this.hasActive('tavern', pid)) speedMul = 1 + DATA.buildings.tavern.soldierSpeed;
+    if (u.team === 'enemy') { speedMul *= (u.affix && u.affix.speed ? u.affix.speed : 1) * (u.modSpeed || 1); }
+    if (u.team === 'player' && def.attack === 'ranged' && this.waveMod && this.waveMod.unitRange) rangeMul *= this.waveMod.unitRange;
     u.maxHp = def.hp * hpMul; u.hp = u.maxHp * frac;
     u.dmg = def.dmg * dmgMul; u.dmgMul = dmgMul;
-    u.speed = def.speed * speedMul; u.range = def.range * rangeMul; u.cd = def.cd;
+    u.speed = def.speed * speedMul; u.range = def.range * rangeMul + (u.team === 'enemy' && def.attack === 'ranged' ? (u.modRange || 0) : 0); u.cd = def.cd;
     u.armor = Math.min(0.75, (def.armor || 0) + armorAdd);
     u.regen = regen;
   }
@@ -377,7 +394,7 @@ class Game {
     b.maxHp = def.hp * hpMul; b.hp = b.maxHp * frac;
     if (def.tower) {
       b.dmg = def.dmg * (1 + 0.2 * (up.towers || 0)) * Math.pow(DATA.towerUpgrade.dmg, b.level - 1) * (b.high ? 1.15 : 1);
-      b.range = def.range * (1 + 0.08 * (up.towers || 0)) * Math.pow(DATA.towerUpgrade.range, b.level - 1) * (b.high ? 1.3 : 1);
+      b.range = def.range * (1 + 0.08 * (up.towers || 0)) * Math.pow(DATA.towerUpgrade.range, b.level - 1) * (b.high ? 1.3 : 1) * (this.waveMod && this.waveMod.towerRange ? this.waveMod.towerRange : 1);
       b.cd = def.cd;
     }
   }
@@ -448,7 +465,60 @@ class Game {
   spend(c, pid) { const w = this.wallet(pid); if (w) w.gold -= c; this.ui.dirty = true; }
   addGold(n, pid) { const w = this.wallet(pid); if (w) w.gold += n; this.stats.goldEarned += n; this.ui.dirty = true; }
   addGoldAll(n) { for (const id of this.playerOrder) { const w = this.players[id]; if (w) w.gold += n; } this.stats.goldEarned += n; this.ui.dirty = true; }
-  killMult(pid) { return this.difficulty.gold * (1 + (this.hasActive('market', pid) ? DATA.buildings.market.killBonus : 0) + (this.hasActive('royal_treasury', pid) ? DATA.buildings.royal_treasury.bounty : 0)) * (1 + 0.1 * (this.upgradesFor(pid).fortune || 0)); }
+  killMult(pid) { return this.difficulty.gold * (this.waveMod && this.waveMod.bounty ? this.waveMod.bounty : 1) * (1 + (this.hasActive('market', pid) ? DATA.buildings.market.killBonus : 0) + (this.hasActive('royal_treasury', pid) ? DATA.buildings.royal_treasury.bounty : 0)) * (1 + 0.1 * (this.upgradesFor(pid).fortune || 0)); }
+  // ---- wave modifiers
+  setWaveMod(mod) {
+    this.waveMod = mod || null;
+    for (const b of this.buildings) if (b.def.tower) this.applyBuildingStats(b, false);
+    for (const u of this.units) if (u.team === 'player' && !u.dead) this.applyStats(u, false);
+    const night = mod && mod.key === 'night', fog = mod && mod.key === 'fog';
+    if (this.sun) { this.sun.intensity = night ? 0.55 : 1.45; this.sun.color.setHex(night ? 0x9ab0ff : 0xfff0d0); }
+    if (this.hemi) this.hemi.intensity = night ? 0.35 : 0.85;
+    if (this.scene && this.scene.fog) { this.scene.fog.near = fog ? 40 : DATA.MAP_HALF * 3.2; this.scene.fog.far = fog ? 230 : DATA.MAP_HALF * 9; this.scene.fog.color.setHex(night ? 0x202838 : (fog ? 0xc8ccd0 : 0xb8cfe4)); }
+    if (this.scene) this.scene.background = new THREE.Color(night ? 0x1a2030 : (fog ? 0xc8ccd0 : 0x9cc4e4));
+    if (this.sky) { const mt = DATA.mapTypes[this.worldType]; if (mt) Models.tintSky(this.sky, night ? 0x1c2436 : (fog ? 0xc8ccd0 : mt.palette.sky), night ? 0x080c18 : (fog ? 0xb8bcc4 : (mt.zenith || 0x3f7fd0))); }
+    if (this.sunDisc) this.sunDisc.visible = !night && !fog;
+    this.ui.dirty = true;
+  }
+  applyWaveModTo(u) {
+    const m = this.waveMod; if (!m || u.team !== 'enemy') return;
+    if (m.speed) u.modSpeed = m.speed;
+    if (m.armor) u.modArmor = m.armor;
+    if (m.enemyRange) u.modRange = m.enemyRange;
+    if (m.plague) u.plagueOnDeath = true;
+    this.applyStats(u, false);
+  }
+  // ---- elites
+  makeElite(u, key) {
+    const a = DATA.affixes[key]; if (!a || u.affix) return;
+    u.affix = a; u.name = `${a.name} ${u.def.name}`;
+    if (a.shield) u.shieldCharges = a.shield;
+    if (a.scale) { u.group.scale.multiplyScalar(a.scale); u.height *= a.scale; u.eyeHeight *= a.scale; u.radius *= 1.15; }
+    const ring = new THREE.Mesh(new THREE.RingGeometry(u.radius + 0.25, u.radius + 0.5, 22), new THREE.MeshBasicMaterial({ color: a.color, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.06; ring.renderOrder = 3; u.group.add(ring);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: Models.softDot(), color: a.color, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending })); glow.scale.setScalar(u.height * 0.9); glow.position.y = u.height * 0.55; u.group.add(glow);
+    this.applyStats(u, true);
+  }
+  // ---- contracts
+  startContract(c) {
+    this.contract = c ? { key: c.key, need: c.need, reward: c.reward, progress: 0, failed: false, startT: this.time } : null;
+    this.ui.dirty = true;
+  }
+  contractEvent(kind, extra) {
+    const c = this.contract; if (!c || c.failed) return;
+    if ((kind === 'wall' && c.key === 'walls') || (kind === 'kinghit' && c.key === 'king') || (kind === 'soldier' && c.key === 'soldiers')) { c.failed = true; this.ui.toast(`Contract failed: ${DATA.contracts[c.key].name}`, 'error'); }
+    if (kind === 'herokill' && c.key === 'hero') c.progress++;
+    if (kind === 'casterkill' && c.key === 'casters') c.progress++;
+  }
+  settleContract(n) {
+    const c = this.contract; if (!c) return; this.contract = null;
+    const def = DATA.contracts[c.key];
+    let ok = !c.failed;
+    if (c.key === 'speed') ok = (this.time - c.startT) <= 75;
+    if (c.need) ok = ok && c.progress >= c.need;
+    if (ok) { for (const id of this.playerOrder) this.addGold(c.reward, id); this.ui.toast(`Contract fulfilled: ${def.name}. +${c.reward} gold to every defender.`, 'good', 6000); }
+    else this.ui.toast(`Contract missed: ${def.name}.`, 'warn', 4000);
+  }
   rewardOwner(owner, base) {
     const ids = owner && this.players[owner] ? [owner] : this.playerOrder;
     for (const id of ids) this.addGold(Math.round(base * this.killMult(id)), id);
@@ -477,6 +547,7 @@ class Game {
   ownerLabel(o) { return !o.owner ? 'Shared' : (o.owner === this.localPlayer ? 'Yours' : `${this.playerName(o.owner)}'s`); }
   cssColor(hex) { return '#' + hex.toString(16).padStart(6, '0'); }
   ownsOrShared(o) { return !o.owner || o.owner === this.actor; }
+  ownsOrSharedBy(o, pid) { return !o.owner || !pid || o.owner === pid; }
   hasBuilding(key, pid) { return this.buildings.some(b => b.def.key === key && !b.dead && (pid === undefined || !b.owner || b.owner === pid)); }
   hasActive(key, pid) { return this.buildings.some(b => b.def.key === key && b.active && (pid === undefined || !b.owner || b.owner === pid)); }
   soldierCap(pid) {
@@ -511,6 +582,7 @@ class Game {
     b.high = res.cells.every(c => this.grid.natural[this.grid.idx(c.i, c.j)] === 9);
     if (b.high) this.applyBuildingStats(b, true);
     b.paid = free ? 0 : cost;
+    if (def.throne) this.refreshStats();
     b.owner = free ? null : this.actor;
     this.grid.place(b);
     this.buildings.push(b);
@@ -713,11 +785,25 @@ class Game {
   // ------------------------------------------------------------------ events
   onUnitDied(u, source) {
     if (u.team === 'enemy') {
-      if (u.def.reward) this.rewardOwner(source && source.owner !== undefined ? source.owner : null, u.def.reward);
+      if (u.def.reward) this.rewardOwner(source && source.owner !== undefined ? source.owner : null, u.def.reward * (u.affix ? 2 : 1));
       this.stats.kills++;
       this.lastEnemyDeath = this.time;
       if (u.isBoss) { this.boss = null; this.ui.toast(`${u.name} is slain!`, 'boss'); }
+      // hero experience and contract progress
+      const killer = source instanceof Unit ? source : (source && source.source instanceof Unit ? source.source : null);
+      if (killer && killer.isHero && killer.team === 'player' && killer.gainXp) { killer.gainXp(Math.round((u.def.reward || 2) * 2.2)); this.contractEvent('herokill'); }
+      if (u.def.magic && u.def.attack === 'ranged') this.contractEvent('casterkill');
+      // things that go off when they die
+      if (u.affix && u.affix.blast) { this.areaDamage(u.pos.x, u.pos.z, u.affix.blast.radius, u.affix.blast.dmg, 'enemy', u, { magic: true }); for (const b of this.buildingsNear(u.pos.x, u.pos.z, u.affix.blast.radius)) b.takeDamage(u.affix.blast.dmg, u); this.effects.spawn('explosion', u.pos.x, u.centerY, u.pos.z, { radius: u.affix.blast.radius, color: 0xff8020 }); SFX.play('explode', 0.7); }
+      if (u.def.deathBlast) { this.areaDamage(u.pos.x, u.pos.z, u.def.deathBlast.radius, u.def.deathBlast.dmg, 'enemy', u, { magic: true }); for (const b of this.buildingsNear(u.pos.x, u.pos.z, u.def.deathBlast.radius)) b.takeDamage(u.def.deathBlast.dmg, u); this.effects.spawn('explosion', u.pos.x, 1, u.pos.z, { radius: u.def.deathBlast.radius, color: 0xffa040 }); SFX.play('explode', 0.8); }
+      if (u.plagueOnDeath && !u.def.summoned) this.addZone({ x: u.pos.x, z: u.pos.z, radius: 2.6, duration: 4, color: 0x60ff60, team: 'enemy', onTick: (zone, dt) => { for (const p of this.unitsNear(zone.x, zone.z, zone.radius, 'player')) if (!p.dead) p.takeDamage(9 * dt, null, { magic: true }); } });
     } else {
+      if (u.isSoldier && !u.def.summoned && !u.def.guardian) this.contractEvent('soldier');
+      // the phoenix pyre brings the fallen back, once per wave each
+      if (!u.isKing && !u.def.summoned && !u.def.guardian && !u.testChampion && u.rebornWave !== this.waves.number) {
+        const pyre = this.buildings.find(b => b.def.phoenix && b.active && this.ownsOrSharedBy(b, u.owner));
+        if (pyre) { this.revives = this.revives || []; this.revives.push({ def: u.def, owner: u.owner, hero: u.isHero, heroKey: u.heroKey, level: u.level, xp: u.xp, at: this.time + 3, wave: this.waves.number, pyre }); }
+      }
       if (u.isKing) { this.gameOver(); }
       else if (u.isHero) { const w = this.wallet(u.owner || 'host'); w.heroes = w.heroes.filter(k => k !== u.heroKey); this.ui.toast(`${u.name} has fallen. Buy them back from the Recruit tab if you want them again.`, 'error', 6000); }
     }
@@ -731,19 +817,22 @@ class Game {
     const k = this.buildings.indexOf(b); if (k >= 0) this.buildings.splice(k, 1);
     this.stats.buildingsLost++;
     this.effects.spawn('explosion', b.pos.x, 1, b.pos.z, { radius: b.radius + 1, color: 0x8a8070 });
+    if (b.def.key === 'wall' || b.def.gate) this.contractEvent('wall');
     if (b.def.keep) this.ui.toast('The Keep has fallen! The King is exposed!', 'error', 6000);
     else if (b.def.tower || b.def.cat === 'economy' || b.def.cat === 'wonder') this.ui.toast(`${b.name} destroyed!`, 'error');
     if (this.controls.selectedBuilding === b) this.controls.clearSelection();
     if (this.controls.hoveredBuilding === b) this.controls.hoveredBuilding = null;
     for (const u of this.units) if (u.repairTarget === b) u.repairTarget = null;
-    if (b.def.soldierCap || b.def.key === 'blacksmith') this.refreshStats();
+    if (b.def.soldierCap || b.def.key === 'blacksmith' || b.def.throne) this.refreshStats();
     SFX.play('explode', 0.8);
     this.ui.dirty = true;
   }
   onWaveCleared(n) {
+    this.settleContract(n);
+    this.setWaveMod(null);
     let income = 0;
     for (const b of this.buildings) if (b.underConstruction) b.finishConstruction();
-    for (const b of this.buildings) if (b.def.income && b.active) { income += b.def.income; const ids = b.owner ? [b.owner] : this.playerOrder; for (const id of ids) this.addGold(Math.round(b.def.income * (1 + 0.1 * (this.upgradesFor(id).fortune || 0))), id); }
+    for (const b of this.buildings) if (b.def.income && b.active) { income += b.def.income; const ids = b.owner ? [b.owner] : this.playerOrder; for (const id of ids) this.addGold(Math.round(b.def.income * (1 + 0.1 * (this.upgradesFor(id).fortune || 0)) * (this.hasActive('throne_of_ages', id) ? DATA.buildings.throne_of_ages.throne.income : 1)), id); }
     let interest = 0;
     for (const b of this.buildings) if (b.def.interest && b.active) { const ids = b.owner ? [b.owner] : this.playerOrder; for (const id of ids) { const g = Math.min(b.def.interestCap, Math.round((this.players[id] ? this.players[id].gold : 0) * b.def.interest)); if (g > 0) { this.addGold(g, id); interest += g; } } }
     if (interest) this.ui.toast(`The treasury pays ${interest} gold in interest`, 'good');
@@ -835,6 +924,7 @@ class Game {
   }
   update(dt) {
     this.time += dt;
+    if (this.revives && this.revives.length) this.tickRevives();
     const prof = this.prof || (this.prof = { hash: 0, flow: 0, waves: 0, units: 0, buildings: 0, projectiles: 0, zones: 0, astar: 0, astarN: 0, flowN: 0 });
     let t0 = performance.now();
     // spatial hash
@@ -1250,7 +1340,7 @@ function runSelfTest(game, params) {
         // wonders, all five, and a storm + beam firing at a crowd
         game.gold = 99999;
         const hh = game.grid.half;
-        for (const [key, di, dj] of [['royal_treasury', -14, 16], ['sun_altar', 12, 16], ['arcane_spire', -10, 10], ['dragon_roost', 14, 8], ['titan_forge', -16, 6]]) {
+        for (const [key, di, dj] of [['royal_treasury', -14, 16], ['sun_altar', 12, 16], ['arcane_spire', -10, 10], ['dragon_roost', 14, 8], ['titan_forge', -16, 6], ['world_tree', 18, 16], ['celestial_gate', -20, 12], ['throne_of_ages', 4, 22], ['doomsday_engine', 20, -2]]) {
           let b = null; for (let r = 0; r <= 6 && !b; r++) for (let a = -r; a <= r && !b; a++) for (let c = -r; c <= r && !b; c++) if (Math.max(Math.abs(a), Math.abs(c)) === r && game.grid.canPlace(DATA.buildings[key], hh + di + a, hh + dj + c, 0, game).ok) b = game.placeBuilding(key, hh + di + a, hh + dj + c, 0, true);
           if (!b) say('probe: could not place ' + key); }
         for (let k = 0; k < 8; k++) game.spawnEnemy('brute', 6 + k * 1.5, 40 + (k % 3) * 2, {});

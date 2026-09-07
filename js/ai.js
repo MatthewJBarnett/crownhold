@@ -244,6 +244,16 @@ Unit.prototype.medicThink = function () {
   this.healTarget = best;
 };
 
+Unit.prototype.landCharge = function () {
+  if (!this.chargeHit || this.game.time < this.chargeHit) return;
+  this.chargeHit = 0;
+  const game = this.game;
+  game.areaDamage(this.pos.x, this.pos.z, 4, this.dmg * 1.2, 'enemy', this, { stun: 1.4 });
+  game.effects.spawn('ring', this.pos.x, 0.3, this.pos.z, { radius: 4, color: 0xffb060, dur: 0.6 });
+  game.effects.spawn('explosion', this.pos.x, 0.6, this.pos.z, { radius: 2.2, color: 0xc08040 });
+  SFX.play('slam');
+};
+
 Unit.prototype.playerThink = function () {
   const game = this.game;
   if (this.def.repair) { this.engineerThink(); return; }
@@ -401,16 +411,21 @@ Unit.prototype.updateSpecials = function (dt) {
   if (def.aura && def.aura.dmgMul && this.team === 'player') {
     for (const u of game.unitsNear(this.pos.x, this.pos.z, def.aura.radius, 'player')) if (u !== this && !u.isHero && !u.isKing) { u.auraDmgMul = def.aura.dmgMul; u.auraUntil = game.time + 0.3; }
   }
+  if (def.warAura && this.team === 'enemy') {
+    for (const u of game.unitsNear(this.pos.x, this.pos.z, def.warAura.radius, 'enemy')) if (u !== this) { u.auraDmgMul = def.warAura.dmgMul; u.auraUntil = game.time + 0.3; u.addBuff({ tag: 'warlead', speedMul: def.warAura.speedMul, until: game.time + 0.4 }); }
+    if (Math.random() < dt * 2) game.effects.spawn('ember', this.pos.x + U.rand(-0.6, 0.6), this.height + 0.6, this.pos.z + U.rand(-0.6, 0.6), { color: 0xff4020 });
+  }
   if (this.auraDmgMul && game.time > this.auraUntil) this.auraDmgMul = 0;
   // dragon breath in progress
   if (this.breathing > 0) {
     this.breathing -= dt;
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
-    for (const u of game.unitsNear(this.pos.x, this.pos.z, def.breath.range, 'player')) {
+    const foe = this.team === 'enemy' ? 'player' : 'enemy';
+    for (const u of game.unitsNear(this.pos.x, this.pos.z, def.breath.range, foe)) {
       const dx = u.pos.x - this.pos.x, dz = u.pos.z - this.pos.z; const d = Math.hypot(dx, dz) || 1;
       if ((dx * fx + dz * fz) / d > 0.75) { u.takeDamage(def.breath.dps * dt, this, { magic: true }); u.applyBurn(6, 2, this); }
     }
-    for (const b of game.buildingsNear(this.pos.x, this.pos.z, def.breath.range)) {
+    if (this.team === 'enemy') for (const b of game.buildingsNear(this.pos.x, this.pos.z, def.breath.range)) {
       const dx = b.pos.x - this.pos.x, dz = b.pos.z - this.pos.z; const d = Math.hypot(dx, dz) || 1;
       if ((dx * fx + dz * fz) / d > 0.75) b.takeDamage(def.breath.dps * 1.5 * dt, this);
     }
@@ -421,6 +436,7 @@ Unit.prototype.updateSpecials = function (dt) {
     }
   }
   if (this.team !== 'enemy') return;
+  if (this.chargeHit) this.landCharge();
   this.specialTimer -= dt;
   if (this.specialTimer > 0) return;
   const king = game.king;
@@ -464,6 +480,35 @@ Unit.prototype.updateSpecials = function (dt) {
       SFX.play('breath');
       this.specialTimer = def.breath.every;
     } else this.specialTimer = 1;
+  } else if (def.warhorn && (!def.charge || this.hornNext !== false)) {
+    // warbringer: a horn that drives every enemy in earshot into a fury, then a charge on the next beat
+    if (distKing < 90) {
+      for (const u of game.unitsNear(this.pos.x, this.pos.z, def.warhorn.radius, 'enemy')) u.addBuff({ tag: 'warhorn', speedMul: 1.3, attackSpeedMul: 1.3, dmgMul: 1.2, until: game.time + def.warhorn.dur });
+      game.effects.spawn('ring', this.pos.x, 0.3, this.pos.z, { radius: def.warhorn.radius, color: 0xff6040, dur: 1.2 });
+      game.ui.toast(`${this.name} sounds the war horn!`, 'boss'); SFX.play('horn', 0.8);
+    }
+    this.hornNext = false; this.specialTimer = def.charge ? def.charge.every : def.warhorn.every;
+  } else if (def.charge) {
+    const t = this.target;
+    if (t && t instanceof Unit && !t.dead && this.distTo(t) > 5 && this.distTo(t) < def.charge.range) {
+      this.addBuff({ tag: 'charge', speedMul: 3.2, until: game.time + 0.9 });
+      game.effects.spawn('ring', this.pos.x, 0.3, this.pos.z, { radius: 3, color: 0xffa040, dur: 0.5 });
+      this.chargeHit = game.time + 0.9;
+    }
+    this.hornNext = true; this.specialTimer = def.warhorn ? def.warhorn.every : def.charge.every;
+  } else if (def.lightning) {
+    // stormcaller: a bolt from the sky on a tower or wall within range, and on anyone standing beside it
+    const list = game.buildingsNear(this.pos.x, this.pos.z, def.lightning.range).filter(b => !b.dead);
+    if (list.length) {
+      list.sort((a, b) => (b.def.tower ? 1 : 0) - (a.def.tower ? 1 : 0) || Math.random() - 0.5);
+      const b = list[0];
+      game.effects.spawn('bolt', b.pos.x + U.rand(-1, 1), b.height + 26, b.pos.z + U.rand(-1, 1), { to: { x: b.pos.x, y: b.height * 0.5, z: b.pos.z } });
+      game.effects.spawn('explosion', b.pos.x, b.height * 0.6, b.pos.z, { radius: 2.5, color: 0xa0d0ff });
+      b.takeDamage(def.lightning.dmg * this.dmgMul, this);
+      game.areaDamage(b.pos.x, b.pos.z, def.lightning.radius, def.lightning.dmg * 0.4 * this.dmgMul, 'enemy', this, { magic: true, stun: 0.8 });
+      SFX.play('cast', 0.9);
+      this.specialTimer = def.lightning.every;
+    } else this.specialTimer = 2;
   } else if (def.blink) {
     if (king && distKing > 26) {
       const dx = king.pos.x - this.pos.x, dz = king.pos.z - this.pos.z; const d = Math.hypot(dx, dz) || 1;

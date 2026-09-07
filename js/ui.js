@@ -388,7 +388,9 @@ class UI {
       const g = this.game;
       const ownerLine = g.coop && u.team === 'player' ? `<div class="owner"><span class="sw" style="background:${g.cssColor(g.ownerColor(u))}"></span>${!u.owner ? 'Shared: any defender can command or control the King.' : (mine ? 'Yours: only you can command them.' : `${g.playerName(u.owner)}'s: only they can command them.`)}</div>` : '';
       const abil = u.abilities.length ? `<div class="abil">${u.abilities.map(a => `<span data-ab="${a.key}"><b>${a.def.key}</b> ${a.def.name}</span>`).join('')}</div>` : '';
-      panel.innerHTML = `<div><div class="nm">${u.name}${u.isHero ? ` · ${u.def.title}` : ''}${ownerNote}</div><div class="sub">${u.def.desc || u.def.passive || (u.isKing ? 'If he falls, the game is lost.' : (u.team === 'player' ? '' : 'Enemy'))}</div>${ownerLine}
+      const lvl = u.isHero ? ` · Level ${u.level}${u.level < DATA.heroMaxLevel ? ` (${u.xp}/${DATA.heroXp(u.level)} xp)` : ''}` : '';
+      const affix = u.affix ? `<div class="owner"><span class="sw" style="background:${g.cssColor(u.affix.color)}"></span>Elite: ${u.affix.desc} Double bounty.</div>` : '';
+      panel.innerHTML = `<div><div class="nm">${u.name}${u.isHero ? ` · ${u.def.title}` : ''}${lvl}${ownerNote}</div><div class="sub">${u.def.desc || u.def.passive || (u.isKing ? 'If he falls, the game is lost.' : (u.team === 'player' ? '' : 'Enemy'))}</div>${affix}${ownerLine}
         <div class="bar"><div class="fill" id="selhp"></div></div>
         <div class="stats" id="selstats"></div>${abil}
         ${own ? `<div class="row"><button class="ctl" data-a="control">Take control <kbd>C</kbd></button><button data-a="hold">Hold <kbd>H</kbd></button><button data-a="follow">Follow hero <kbd>F</kbd></button></div>` : ''}</div>`;
@@ -452,7 +454,7 @@ class UI {
     this.$('selpanel').classList.toggle('hidden', fps || (!c.selected.size && !c.selectedBuilding));
     if (fps) {
       const u = c.controlled;
-      this.$('fpsname').textContent = u.name + (u.isHero ? ` · ${u.def.title}` : '') + (u.def.repair ? ' · hold LMB at a damaged building to repair it' : '');
+      this.$('fpsname').textContent = u.name + (u.isHero ? ` · ${u.def.title} · Lv ${u.level}` : '') + (u.def.repair ? ' · hold LMB at a damaged building to repair it' : '');
       this.$('fpsabil').innerHTML = u.abilities.map(a => `<div class="abbox" data-ab="${a.key}"><div class="cdfill"></div><div class="n"><kbd>${a.def.key}</kbd>${a.def.name}</div></div>`).join('');
     }
     this.dirty = true;
@@ -552,7 +554,10 @@ class UI {
     nw.classList.toggle('on', coop && !g.waves.active && g.isReady(g.localPlayer));
     if (this.dirty || this.tick === 0) {
       const d = g.waves.describe(g.waves.preview);
-      this.$('wavepreview').innerHTML = g.waves.active ? `<b>Wave ${g.waves.number}</b>: ${g.waves.total} enemies` : `<b>Next: wave ${g.waves.preview.n}</b> from the ${d.from.join(', ')}<br>${d.units.map(u => u.startsWith('BOSS') ? `<span class="boss">${u}</span>` : u).join(', ')}`;
+      const modLine = d.mod ? `<br><span class="mod">${d.mod}</span>` : '', ctLine = d.contract ? `<br><span class="contract">Contract. ${d.contract}</span>` : '';
+      const live = g.contract ? `<br><span class="contract">${DATA.contracts[g.contract.key].name}: ${g.contract.failed ? 'failed' : (g.contract.need ? `${g.contract.progress}/${g.contract.need}` : 'on track')}</span>` : '';
+      const liveMod = g.waveMod ? `<br><span class="mod">${g.waveMod.name}</span>` : '';
+      this.$('wavepreview').innerHTML = g.waves.active ? `<b>Wave ${g.waves.number}</b>: ${g.waves.total} enemies${liveMod}${live}` : `<b>Next: wave ${g.waves.preview.n}</b> from the ${d.from.join(', ')}<br>${d.units.map(u => u.startsWith('BOSS') ? `<span class="boss">${u}</span>` : u).join(', ')}${modLine}${ctLine}`;
     }
     this.$('speed').querySelectorAll('button').forEach(b => b.classList.toggle('on', parseInt(b.dataset.s, 10) === g.timeScale));
     { const total = g.repairTotal(), ra = this.$('repairall');
@@ -593,7 +598,7 @@ class UI {
       const cs = DATA.CELL * s;
       for (let j = 0; j < g.world.n; j++) for (let i = 0; i < g.world.n; i++) {
         const k = g.world.kind[g.world.idx(i, j)]; if (!k) continue;
-        ctx.fillStyle = k === CELL_WATER ? '#3a7fc0' : (k === CELL_ROCK ? '#6a6a64' : (k === 6 ? '#8a7048' : (k === 7 ? '#3a4a24' : (k === 8 ? '#ff6a10' : (k === 9 ? '#c8b070' : (k === 12 ? '#8a8078' : (k === 10 ? '#a07040' : '#1f4a25')))))));
+        ctx.fillStyle = k === CELL_WATER ? '#3a7fc0' : (k === CELL_ROCK ? '#6a6a64' : (k === 6 ? '#8a7048' : (k === 7 ? '#3a4a24' : (k === 8 ? '#ff6a10' : (k === 9 ? '#c8b070' : (k === 12 ? '#8a8078' : (k === 10 ? '#a07040' : (k === 11 ? '#15151c' : '#1f4a25'))))))));
         const c = g.world.cellCenter(i, j); ctx.fillRect(px(c.x - 1), pz(c.z - 1), cs + 0.5, cs + 0.5);
       }
     }
