@@ -555,6 +555,7 @@ class Controls {
       u.breathHeat = (u.breathHeat || 0);
       if (u.breathCool > 0) return;
       u.yaw = Math.atan2(fx, fz);
+      u.breathPitch = aim ? (aim.pitch || 0) : Math.atan2(ad.y, hl || 1e-6);
       u.breathing = Math.max(u.breathing || 0, 0.2);
       u.breathHeat += aim ? 0.25 : dt;
       if (u.breathHeat > 3) { u.breathHeat = 0; u.breathCool = 2.5; }

@@ -1156,7 +1156,15 @@ function runSelfTest(game, params) {
       const hp1 = foes.reduce((a, u) => a + (u.dead ? 0 : u.hp), 0);
       say(`dragon: possessed=${d.possessed} breathing=${d.breathing > 0} heat=${(d.breathHeat || 0).toFixed(2)} foes hp ${Math.round(hp0)} -> ${Math.round(hp1)} (expect a big drop) viewWeapon=${!!game.controls.viewWeapon} (expect false)`);
       { const aim = game.controls.aimDir(); const flames = game.effects.list.filter(e => e.sprite && e.vel); let sx = 0, sz = 0; for (const f of flames) { sx += f.vel.x; sz += f.vel.z; } const fl = Math.hypot(sx, sz) || 1; const dotv = (sx / fl) * aim.x + (sz / fl) * aim.z; say(`dragon: aim=(${aim.x.toFixed(2)},${aim.z.toFixed(2)}) yaw=${d.yaw.toFixed(2)} fpsYaw=${game.controls.fpsYaw.toFixed(2)} flames=${flames.length} flameDir.aim=${dotv.toFixed(2)} (expect ~1)`); }
-      // third person too
+      // aim downward from the air: flames must descend
+      for (const e of game.effects.list) game.scene.remove(e.mesh); game.effects.list.length = 0;
+      { const foes2 = []; for (let k = 0; k < 3; k++) foes2.push(game.spawnEnemy('brute', d.pos.x + (k - 1) * 1.2, d.pos.z + 5, { hpMul: 1 }));
+        game.controls.fpsYaw = Math.atan2(foes2[0].pos.x - d.pos.x, foes2[0].pos.z - d.pos.z); game.controls.fpsPitch = -0.9; game.controls.attackHeld = true;
+        const h0 = foes2.reduce((a, u) => a + u.hp, 0);
+        for (let k = 0; k < 60; k++) { game.controls.update(1 / 60, 1 / 60); game.update(1 / 60); }
+        const fl = game.effects.list.filter(e => e.sprite && e.vel); let sy = 0; for (const f of fl) sy += f.vel.y; 
+        say(`dragon down: pitch=${(d.breathPitch || 0).toFixed(2)} flames=${fl.length} meanVy=${(sy / Math.max(1, fl.length)).toFixed(2)} (expect negative) foes hp ${Math.round(h0)} -> ${Math.round(foes2.reduce((a, u) => a + (u.dead ? 0 : u.hp), 0))}`);
+        game.controls.fpsPitch = 0; }
       for (const e of game.effects.list) game.scene.remove(e.mesh); game.effects.list.length = 0;
       game.controls.attackHeld = true; game.controls.firstPerson = false; game.controls.fpsYaw += 1.3;
       for (let k = 0; k < 40; k++) { game.controls.update(1 / 60, 1 / 60); game.update(1 / 60); }

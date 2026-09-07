@@ -419,20 +419,22 @@ Unit.prototype.updateSpecials = function (dt) {
   // dragon breath in progress
   if (this.breathing > 0) {
     this.breathing -= dt;
-    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    const pitch = this.breathPitch || 0, cp = Math.cos(pitch), sp0 = Math.sin(pitch);
+    const fx = Math.sin(this.yaw) * cp, fy = sp0, fz = Math.cos(this.yaw) * cp;     // the breath's direction, pitched up or down
+    const oy = this.pos.y + (this.def.model === 'dragon' ? 1.5 : this.height * 0.6);
+    const R = def.breath.range;
+    const inCone = (x, y, z) => { const dx = x - this.pos.x, dy = y - oy, dz = z - this.pos.z; const d = Math.hypot(dx, dy, dz) || 1; return d <= R + 1 && (dx * fx + dy * fy + dz * fz) / d > 0.72; };
     const foe = this.team === 'enemy' ? 'player' : 'enemy';
-    for (const u of game.unitsNear(this.pos.x, this.pos.z, def.breath.range, foe)) {
-      const dx = u.pos.x - this.pos.x, dz = u.pos.z - this.pos.z; const d = Math.hypot(dx, dz) || 1;
-      if ((dx * fx + dz * fz) / d > 0.75) { u.takeDamage(def.breath.dps * dt, this, { magic: true }); u.applyBurn(6, 2, this); }
+    for (const u of game.unitsNear(this.pos.x, this.pos.z, R + 2, foe)) {
+      if (inCone(u.pos.x, u.centerY, u.pos.z) || inCone(u.pos.x, u.pos.y + 0.2, u.pos.z)) { u.takeDamage(def.breath.dps * dt, this, { magic: true }); u.applyBurn(6, 2, this); }
     }
-    if (this.team === 'enemy') for (const b of game.buildingsNear(this.pos.x, this.pos.z, def.breath.range)) {
-      const dx = b.pos.x - this.pos.x, dz = b.pos.z - this.pos.z; const d = Math.hypot(dx, dz) || 1;
-      if ((dx * fx + dz * fz) / d > 0.75) b.takeDamage(def.breath.dps * 1.5 * dt, this);
+    if (this.team === 'enemy') for (const b of game.buildingsNear(this.pos.x, this.pos.z, R + 2)) {
+      if (inCone(b.pos.x, b.pos.y + b.height * 0.5, b.pos.z)) b.takeDamage(def.breath.dps * 1.5 * dt, this);
     }
     for (let k = 0; k < 2; k++) {
-      const sp = U.rand(8, 16), spread = U.rand(-0.35, 0.35);
-      const vx = Math.sin(this.yaw + spread) * sp, vz = Math.cos(this.yaw + spread) * sp;
-      game.effects.spawn('flame', this.pos.x + fx * 3.5, this.pos.y + 1.5, this.pos.z + fz * 3.5, { vel: new THREE.Vector3(vx, U.rand(-3, 0), vz) });
+      const sp = U.rand(8, 16), yawS = this.yaw + U.rand(-0.3, 0.3), pitchS = pitch + U.rand(-0.15, 0.15);
+      const vx = Math.sin(yawS) * Math.cos(pitchS) * sp, vy = Math.sin(pitchS) * sp, vz = Math.cos(yawS) * Math.cos(pitchS) * sp;
+      game.effects.spawn('flame', this.pos.x + fx * 3.5, oy + fy * 3.5, this.pos.z + fz * 3.5, { vel: new THREE.Vector3(vx, vy - 0.5, vz), grounded: true });
     }
   }
   if (this.team !== 'enemy') return;
@@ -476,6 +478,7 @@ Unit.prototype.updateSpecials = function (dt) {
     const t = this.target;
     if (t && !t.dead && this.distTo(t) < def.breath.range) {
       this.faceToward(t.pos.x, t.pos.z, 1, 100);
+      { const oy = this.pos.y + 1.5, ty = t instanceof Unit ? t.centerY : t.pos.y + t.height * 0.5; this.breathPitch = Math.atan2(ty - oy, Math.max(0.5, this.distTo(t))); }
       this.breathing = def.breath.dur;
       SFX.play('breath');
       this.specialTimer = def.breath.every;
