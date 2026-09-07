@@ -470,9 +470,20 @@ class Game {
     return { x, z };
   }
   musterPoint(pid) {
-    const barracks = this.buildings.filter(b => b.def.key === 'barracks' && b.active && (!b.owner || b.owner === pid));
+    const w = this.players[pid];
+    const chosen = w && w.musterId ? this.buildings.find(b => b.id === w.musterId && !b.dead && b.active) : null;
+    const barracks = chosen ? [chosen] : this.buildings.filter(b => b.def.key === 'barracks' && b.active && (!b.owner || b.owner === pid));
     if (barracks.length) { const b = barracks[barracks.length - 1]; return { x: b.pos.x, z: b.pos.z + b.radius + 1.5 }; }
     return { x: 0, z: 5 };
+  }
+  isMuster(b, pid) { const w = this.players[pid || this.actor]; return !!(w && w.musterId === b.id); }
+  setMuster(b) {
+    if (!b || !b.def.soldierCap) return;
+    if (this.replica) { this.net.send({ t: 'muster', id: b.id }); return; }
+    if (!this.ownsOrShared(b)) { this.ui.toast(`That belongs to ${this.playerName(b.owner)}`, 'error'); return; }
+    const w = this.wallet(this.actor); w.musterId = w.musterId === b.id ? null : b.id;
+    this.ui.toast(w.musterId ? `Recruits will muster at this ${b.name}` : 'Recruits muster at the newest barracks again', 'good');
+    this.ui.dirty = true;
   }
 
   // ------------------------------------------------------------------ economy (one wallet per player)
@@ -680,10 +691,11 @@ class Game {
     this.refreshStats();
     this.ui.dirty = true;
   }
-  buyUnit(key) {
+  buyUnit(key, count = 1) {
     const def = DATA.units[key];
     if (!def) return;
-    if (this.replica) { this.net.send({ t: 'buy', key }); return; }
+    if (this.replica) { this.net.send({ t: 'buy', key, n: Math.max(1, Math.min(10, count | 0)) }); return; }
+    if (count > 1) { let n = 0; for (let k = 0; k < count; k++) { if (!this.buyUnit(key, 1)) break; n++; } if (n > 1) this.ui.toast(`${n} ${def.name}s recruited`, 'good'); return n; }
     if (def.noCap) { if (this.engineerCount() >= def.maxCount) { this.ui.toast(`You can have at most ${def.maxCount} engineers`, 'error'); SFX.play('error'); return; } }
     else if (this.soldierCount() >= this.soldierCap()) { this.ui.toast('Soldier capacity reached. Build a Barracks or research Garrison.', 'error'); SFX.play('error'); return; }
     if (!this.canAfford(def.cost)) { this.ui.toast('Not enough gold', 'error'); SFX.play('error'); return; }

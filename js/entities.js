@@ -627,7 +627,13 @@ class Building {
     }
     this.ownerMark.visible = true;
   }
+  tickMusterFlag() {
+    const is = this.def.soldierCap && !this.def.keep && this.game.isMuster(this, this.game.localPlayer);
+    if (is && !this.musterFlag) { this.musterFlag = new THREE.Group(); Models.flag(this.musterFlag, 0, 0, 0, 0x50ff80); this.musterFlag.position.set(0, this.height + 0.2, -this.radius * 0.5); this.group.add(this.musterFlag); }
+    if (this.musterFlag) this.musterFlag.visible = !!is;
+  }
   tickOwnerMark() {
+    this.tickMusterFlag();
     if (!this.game.coop) return;
     if (this.ownerMark && this.ownerMark.userData.cloth) this.ownerMark.userData.cloth.rotation.y = Math.sin(this.game.time * 3 + this.id) * 0.25;
     if (this.markColor !== this.game.ownerColor(this) || this.markShared !== !this.owner) this.syncOwnerMark();

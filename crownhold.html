@@ -350,6 +350,7 @@ button.mini { padding: 3px 8px; font-size: 11px; }
           <li><kbd>B</kbd> build panel. Pick a building, <kbd>R</kbd> rotates, click places. Drag to lay walls. Right click / <kbd>Esc</kbd> cancels</li>
           <li>Click a building to repair, upgrade or sell it (<kbd>Del</kbd>). <kbd>R</kbd> repairs everything, or tick auto-repair. Engineers repair for free</li>
           <li><kbd>N</kbd> / <kbd>Space</kbd> next wave, <kbd>P</kbd> pause, <kbd>=</kbd> fast forward, <kbd>M</kbd> mute</li>
+          <li><kbd>Shift</kbd>+click a recruit buys five. Select a Barracks or Tavern and press "Muster recruits here" to choose where they appear</li>
         </ul>
       </div>
       <div>
@@ -3964,7 +3965,13 @@ class Building {
     }
     this.ownerMark.visible = true;
   }
+  tickMusterFlag() {
+    const is = this.def.soldierCap && !this.def.keep && this.game.isMuster(this, this.game.localPlayer);
+    if (is && !this.musterFlag) { this.musterFlag = new THREE.Group(); Models.flag(this.musterFlag, 0, 0, 0, 0x50ff80); this.musterFlag.position.set(0, this.height + 0.2, -this.radius * 0.5); this.group.add(this.musterFlag); }
+    if (this.musterFlag) this.musterFlag.visible = !!is;
+  }
   tickOwnerMark() {
+    this.tickMusterFlag();
     if (!this.game.coop) return;
     if (this.ownerMark && this.ownerMark.userData.cloth) this.ownerMark.userData.cloth.rotation.y = Math.sin(this.game.time * 3 + this.id) * 0.25;
     if (this.markColor !== this.game.ownerColor(this) || this.markShared !== !this.owner) this.syncOwnerMark();
@@ -6648,7 +6655,8 @@ class NetHost {
     const orderable = (ids) => ids.map(unit).filter(u => u && !u.dead && u.team === 'player' && !u.possessed && !u.possessedBy && (!u.owner || u.owner === id));
     switch (m.t) {
       case 'build': if (!g.placeBuilding(m.key, m.i, m.j, m.rot, true)) this.sendTo(id, { t: 'toast', msg: 'Could not build there (blocked, too far, or not enough gold)', type: 'error' }); break;
-      case 'buy': g.buyUnit(m.key); break;
+      case 'buy': g.buyUnit(m.key, m.n || 1); break;
+      case 'muster': { const b = g.buildings.find(x => x.id === m.id); if (b) g.setMuster(b); break; }
       case 'hero': g.buyHero(m.key); break;
       case 'upg': g.buyUpgrade(m.key); break;
       case 'wave': if (!g.waves.active) this.toggleReady(id); break;
@@ -7140,7 +7148,7 @@ class UI {
       const b = document.createElement('button');
       b.className = 'item'; b.dataset.unit = key;
       b.innerHTML = `<span class="sw" style="background:#${d.cloth.toString(16).padStart(6, '0')}"></span><span class="nm">${d.name}</span><span class="cost">${d.cost}</span>`;
-      b.addEventListener('click', () => this.game.buyUnit(key));
+      b.addEventListener('click', (e) => this.game.buyUnit(key, e.shiftKey ? 5 : 1));
       this.tip(b, () => this.unitTip(d));
       pr.appendChild(b);
     }
@@ -7273,15 +7281,17 @@ class UI {
       const canUp = b.canUpgrade();
       const g = this.game, coop = g.coop, mine = g.ownsOrShared(b);
       const ownerLine = coop ? `<div class="owner"><span class="sw" style="background:${g.cssColor(g.ownerColor(b))}"></span>${!b.owner ? 'Shared: any defender can repair or upgrade it. Upgrades use the best level among you.' : (mine ? 'Yours: only you can repair, upgrade or sell it.' : `${g.playerName(b.owner)}'s: only they can repair, upgrade or sell it.`)}</div>` : '';
-      panel.innerHTML = `<div><div class="nm">${b.name}${b.def.tower ? ` · Level ${b.level}` : ''}${b.high ? ' · high ground (+30% range, +15% damage, out of melee reach)' : ''}${b.underConstruction ? ' · under construction' : ''}</div><div class="sub">${b.underConstruction ? 'Engineers finish it during the wave; it completes on its own when the wave ends.' : b.def.desc}</div>${ownerLine}
+      panel.innerHTML = `<div><div class="nm">${b.name}${b.def.tower ? ` · Level ${b.level}` : ''}${b.high ? ' · high ground (+30% range, +15% damage, out of melee reach)' : ''}${g.isMuster(b, g.localPlayer) ? ' · muster point' : ''}${b.underConstruction ? ' · under construction' : ''}</div><div class="sub">${b.underConstruction ? 'Engineers finish it during the wave; it completes on its own when the wave ends.' : b.def.desc}</div>${ownerLine}
         <div class="bar"><div class="fill" id="selhp"></div></div>
         <div class="stats" id="selstats"></div>
         <div class="row">
           <button data-a="repair"${mine ? '' : ' class="disabled" title="Not yours"'}>Repair (${b.repairCost()})</button>
           ${canUp ? `<button data-a="upgrade"${mine ? '' : ' class="disabled" title="Not yours"'}>Upgrade (${b.upgradeCost()})</button>` : ''}
+          ${b.def.soldierCap && !b.def.keep ? `<button data-a="muster"${mine ? '' : ' class="disabled" title="Not yours"'}>${g.isMuster(b, g.localPlayer) ? 'Muster point (click to unset)' : 'Muster recruits here'}</button>` : ''}
           ${b.def.keep ? '' : `<button data-a="sell"${mine ? '' : ' class="disabled" title="Not yours"'}>Sell (+${b.sellValue()})</button>`}
         </div></div>`;
       if (mine) {
+        const mb = panel.querySelector('[data-a=muster]'); if (mb) mb.addEventListener('click', () => { this.game.setMuster(b); this.onSelectionChanged(); });
         panel.querySelector('[data-a=repair]').addEventListener('click', () => this.game.repairBuilding(b));
         if (canUp) panel.querySelector('[data-a=upgrade]').addEventListener('click', () => this.game.upgradeBuilding(b));
         if (!b.def.keep) panel.querySelector('[data-a=sell]').addEventListener('click', () => this.game.sellBuilding(b));
@@ -8011,9 +8021,20 @@ class Game {
     return { x, z };
   }
   musterPoint(pid) {
-    const barracks = this.buildings.filter(b => b.def.key === 'barracks' && b.active && (!b.owner || b.owner === pid));
+    const w = this.players[pid];
+    const chosen = w && w.musterId ? this.buildings.find(b => b.id === w.musterId && !b.dead && b.active) : null;
+    const barracks = chosen ? [chosen] : this.buildings.filter(b => b.def.key === 'barracks' && b.active && (!b.owner || b.owner === pid));
     if (barracks.length) { const b = barracks[barracks.length - 1]; return { x: b.pos.x, z: b.pos.z + b.radius + 1.5 }; }
     return { x: 0, z: 5 };
+  }
+  isMuster(b, pid) { const w = this.players[pid || this.actor]; return !!(w && w.musterId === b.id); }
+  setMuster(b) {
+    if (!b || !b.def.soldierCap) return;
+    if (this.replica) { this.net.send({ t: 'muster', id: b.id }); return; }
+    if (!this.ownsOrShared(b)) { this.ui.toast(`That belongs to ${this.playerName(b.owner)}`, 'error'); return; }
+    const w = this.wallet(this.actor); w.musterId = w.musterId === b.id ? null : b.id;
+    this.ui.toast(w.musterId ? `Recruits will muster at this ${b.name}` : 'Recruits muster at the newest barracks again', 'good');
+    this.ui.dirty = true;
   }
 
   // ------------------------------------------------------------------ economy (one wallet per player)
@@ -8221,10 +8242,11 @@ class Game {
     this.refreshStats();
     this.ui.dirty = true;
   }
-  buyUnit(key) {
+  buyUnit(key, count = 1) {
     const def = DATA.units[key];
     if (!def) return;
-    if (this.replica) { this.net.send({ t: 'buy', key }); return; }
+    if (this.replica) { this.net.send({ t: 'buy', key, n: Math.max(1, Math.min(10, count | 0)) }); return; }
+    if (count > 1) { let n = 0; for (let k = 0; k < count; k++) { if (!this.buyUnit(key, 1)) break; n++; } if (n > 1) this.ui.toast(`${n} ${def.name}s recruited`, 'good'); return n; }
     if (def.noCap) { if (this.engineerCount() >= def.maxCount) { this.ui.toast(`You can have at most ${def.maxCount} engineers`, 'error'); SFX.play('error'); return; } }
     else if (this.soldierCount() >= this.soldierCap()) { this.ui.toast('Soldier capacity reached. Build a Barracks or research Garrison.', 'error'); SFX.play('error'); return; }
     if (!this.canAfford(def.cost)) { this.ui.toast('Not enough gold', 'error'); SFX.play('error'); return; }

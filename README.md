@@ -17,6 +17,8 @@ Three.js and the PeerJS networking library load from cdnjs, so an internet conne
 ## How a round works
 
 - Between waves you build and repair instantly, recruit and research upgrades. Press Next Wave (N) when ready.
+  Shift-click a recruit to buy five. Recruits appear at the newest barracks unless you select a Barracks or Tavern and
+  press "Muster recruits here" (each defender picks their own).
 - During a wave, a newly placed building is only a construction site. Engineers build it; anything still
   unfinished completes when the wave ends. During a wave only Engineers can repair (for free, over time); paid
   repairs and auto-repair happen between waves. Engineers run from enemies.

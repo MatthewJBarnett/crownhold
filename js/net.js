@@ -165,7 +165,8 @@ class NetHost {
     const orderable = (ids) => ids.map(unit).filter(u => u && !u.dead && u.team === 'player' && !u.possessed && !u.possessedBy && (!u.owner || u.owner === id));
     switch (m.t) {
       case 'build': if (!g.placeBuilding(m.key, m.i, m.j, m.rot, true)) this.sendTo(id, { t: 'toast', msg: 'Could not build there (blocked, too far, or not enough gold)', type: 'error' }); break;
-      case 'buy': g.buyUnit(m.key); break;
+      case 'buy': g.buyUnit(m.key, m.n || 1); break;
+      case 'muster': { const b = g.buildings.find(x => x.id === m.id); if (b) g.setMuster(b); break; }
       case 'hero': g.buyHero(m.key); break;
       case 'upg': g.buyUpgrade(m.key); break;
       case 'wave': if (!g.waves.active) this.toggleReady(id); break;

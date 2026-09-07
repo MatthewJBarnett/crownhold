@@ -232,7 +232,7 @@ class UI {
       const b = document.createElement('button');
       b.className = 'item'; b.dataset.unit = key;
       b.innerHTML = `<span class="sw" style="background:#${d.cloth.toString(16).padStart(6, '0')}"></span><span class="nm">${d.name}</span><span class="cost">${d.cost}</span>`;
-      b.addEventListener('click', () => this.game.buyUnit(key));
+      b.addEventListener('click', (e) => this.game.buyUnit(key, e.shiftKey ? 5 : 1));
       this.tip(b, () => this.unitTip(d));
       pr.appendChild(b);
     }
@@ -365,15 +365,17 @@ class UI {
       const canUp = b.canUpgrade();
       const g = this.game, coop = g.coop, mine = g.ownsOrShared(b);
       const ownerLine = coop ? `<div class="owner"><span class="sw" style="background:${g.cssColor(g.ownerColor(b))}"></span>${!b.owner ? 'Shared: any defender can repair or upgrade it. Upgrades use the best level among you.' : (mine ? 'Yours: only you can repair, upgrade or sell it.' : `${g.playerName(b.owner)}'s: only they can repair, upgrade or sell it.`)}</div>` : '';
-      panel.innerHTML = `<div><div class="nm">${b.name}${b.def.tower ? ` · Level ${b.level}` : ''}${b.high ? ' · high ground (+30% range, +15% damage, out of melee reach)' : ''}${b.underConstruction ? ' · under construction' : ''}</div><div class="sub">${b.underConstruction ? 'Engineers finish it during the wave; it completes on its own when the wave ends.' : b.def.desc}</div>${ownerLine}
+      panel.innerHTML = `<div><div class="nm">${b.name}${b.def.tower ? ` · Level ${b.level}` : ''}${b.high ? ' · high ground (+30% range, +15% damage, out of melee reach)' : ''}${g.isMuster(b, g.localPlayer) ? ' · muster point' : ''}${b.underConstruction ? ' · under construction' : ''}</div><div class="sub">${b.underConstruction ? 'Engineers finish it during the wave; it completes on its own when the wave ends.' : b.def.desc}</div>${ownerLine}
         <div class="bar"><div class="fill" id="selhp"></div></div>
         <div class="stats" id="selstats"></div>
         <div class="row">
           <button data-a="repair"${mine ? '' : ' class="disabled" title="Not yours"'}>Repair (${b.repairCost()})</button>
           ${canUp ? `<button data-a="upgrade"${mine ? '' : ' class="disabled" title="Not yours"'}>Upgrade (${b.upgradeCost()})</button>` : ''}
+          ${b.def.soldierCap && !b.def.keep ? `<button data-a="muster"${mine ? '' : ' class="disabled" title="Not yours"'}>${g.isMuster(b, g.localPlayer) ? 'Muster point (click to unset)' : 'Muster recruits here'}</button>` : ''}
           ${b.def.keep ? '' : `<button data-a="sell"${mine ? '' : ' class="disabled" title="Not yours"'}>Sell (+${b.sellValue()})</button>`}
         </div></div>`;
       if (mine) {
+        const mb = panel.querySelector('[data-a=muster]'); if (mb) mb.addEventListener('click', () => { this.game.setMuster(b); this.onSelectionChanged(); });
         panel.querySelector('[data-a=repair]').addEventListener('click', () => this.game.repairBuilding(b));
         if (canUp) panel.querySelector('[data-a=upgrade]').addEventListener('click', () => this.game.upgradeBuilding(b));
         if (!b.def.keep) panel.querySelector('[data-a=sell]').addEventListener('click', () => this.game.sellBuilding(b));
