@@ -803,21 +803,21 @@ DATA.buildings = {
               desc: 'Sturdy stone. Drag to build long stretches. Enemies hack at walls twice as hard as at anything else.' },
   gate:     { key: 'gate', name: 'Gate', cost: 95, hp: 500, w: 1, d: 1, cat: 'defense', gate: true,
               desc: 'Your units pass through; enemies must break it.' },
-  arrow_tower:   { key: 'arrow_tower', name: 'Arrow Tower', cost: 160, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
+  arrow_tower:   { key: 'arrow_tower', name: 'Arrow Tower', cost: 200, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 20, dmg: 18, cd: 1.1, projectile: 'arrow', desc: 'Fast-firing tower. Good all-rounder.' },
-  ballista_tower:{ key: 'ballista_tower', name: 'Ballista Tower', cost: 290, hp: 1000, w: 2, d: 2, cat: 'tower', tower: true,
+  ballista_tower:{ key: 'ballista_tower', name: 'Ballista Tower', cost: 360, hp: 1000, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 28, dmg: 86, cd: 2.8, projectile: 'ballista', bonusVsLarge: 1.7, desc: 'Slow, huge single hits. +70% damage to large enemies.' },
-  mage_tower:    { key: 'mage_tower', name: 'Mage Tower', cost: 380, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
+  mage_tower:    { key: 'mage_tower', name: 'Mage Tower', cost: 480, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 22, dmg: 45, cd: 2.2, projectile: 'magic', desc: 'Lobs exploding fire that splashes in 3.5m and burns.' },
-  frost_tower:   { key: 'frost_tower', name: 'Frost Tower', cost: 310, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
+  frost_tower:   { key: 'frost_tower', name: 'Frost Tower', cost: 390, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 18, dmg: 14, cd: 0.9, projectile: 'frost', desc: 'Weak damage but slows targets by 50%.' },
-  cannon_tower:  { key: 'cannon_tower', name: 'Cannon Tower', cost: 460, hp: 1100, w: 2, d: 2, cat: 'tower', tower: true,
+  cannon_tower:  { key: 'cannon_tower', name: 'Cannon Tower', cost: 580, hp: 1100, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 24, dmg: 120, cd: 4.0, projectile: 'cannon', minRange: 6, desc: 'Lobs iron shot that splashes in 3m. Cannot hit anything closer than 6m.' },
-  lightning_tower:{ key: 'lightning_tower', name: 'Lightning Tower', cost: 410, hp: 850, w: 2, d: 2, cat: 'tower', tower: true,
+  lightning_tower:{ key: 'lightning_tower', name: 'Lightning Tower', cost: 510, hp: 850, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 18, dmg: 28, cd: 1.7, chain: { count: 4, radius: 6 }, desc: 'Chain lightning that arcs to four enemies and ignores armour.' },
-  poison_tower:  { key: 'poison_tower', name: 'Poison Tower', cost: 290, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
+  poison_tower:  { key: 'poison_tower', name: 'Poison Tower', cost: 360, hp: 800, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 18, dmg: 8, cd: 1.1, projectile: 'poison', desc: 'Darts that poison for 12 damage/s over 4s. Stacks nothing, but never misses.' },
-  watchtower:    { key: 'watchtower', name: 'Watchtower', cost: 380, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
+  watchtower:    { key: 'watchtower', name: 'Watchtower', cost: 480, hp: 900, w: 2, d: 2, cat: 'tower', tower: true,
                    range: 32, dmg: 62, cd: 3.6, projectile: 'sniper', prefersCasters: true, desc: 'Marksmen with a 32m reach who pick off casters and catapults first. Trebuchets still outrange them.' },
   barricade: { key: 'barricade', name: 'Spiked Barricade', cost: 30, hp: 240, w: 1, d: 1, cat: 'defense', drag: true, spikes: 3,
               desc: 'Cheap and weak, but every melee blow against it wounds the attacker for 3.' },
@@ -2409,6 +2409,32 @@ const Models = {
     m.userData.isWater = true;
     return m;
   },
+  // the build area: a grid clipped to the circle and a ring, both draped over the terrain
+  circleGrid(R, step, heightFn) {
+    const pts = [];
+    const push = (x1, z1, x2, z2) => {
+      const len = Math.hypot(x2 - x1, z2 - z1), n = Math.max(1, Math.ceil(len / 4));
+      for (let k = 0; k < n; k++) {
+        const ax = x1 + (x2 - x1) * k / n, az = z1 + (z2 - z1) * k / n, bx = x1 + (x2 - x1) * (k + 1) / n, bz = z1 + (z2 - z1) * (k + 1) / n;
+        pts.push(ax, heightFn(ax, az) + 0.12, az, bx, heightFn(bx, bz) + 0.12, bz);
+      }
+    };
+    for (let v = -Math.floor(R / step) * step; v <= R; v += step) {
+      const half = Math.sqrt(Math.max(0, R * R - v * v));
+      if (half < 1) continue;
+      push(-half, v, half, v); push(v, -half, v, half);
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    const m = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x335533, transparent: true, opacity: 0.35, depthWrite: false }));
+    m.renderOrder = 2; return m;
+  },
+  circleOutline(R, heightFn, color = 0x8fe89f) {
+    const pts = [], N = 240;
+    for (let k = 0; k <= N; k++) { const a = k / N * Math.PI * 2, x = Math.cos(a) * R, z = Math.sin(a) * R; pts.push(x, heightFn(x, z) + 0.25, z); }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    const m = new THREE.Line(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false }));
+    m.renderOrder = 3; return m;
+  },
   missionObject(kind) {
     const g = new THREE.Group(), gold = this.mat(0xe8c060, { emissive: 0x604000, emissiveIntensity: 0.4 }), wood = this.mat(0x6a4a2a), stone = this.mat(0x7a7a72);
     switch (kind) {
@@ -3675,7 +3701,7 @@ class Unit {
       // decide movement
       this.moveIntent.x = 0; this.moveIntent.z = 0;
       if (!this.possessed) this.aiUpdate(dt);
-      else this.possessedUpdate(dt);
+      else { this.possessedUpdate(dt); if (this.def.breath || this.def.medic || this.def.aura) this.updateSpecials(dt); }
       this.integrateMovement(dt);
       if (this.moving && !this.possessed) this.faceToward(this.pos.x + this.moveIntent.x, this.pos.z + this.moveIntent.z, dt, 14);
       if (this.moving) this.trackHeading(dt);
@@ -6080,7 +6106,7 @@ class Controls {
     this.buildDef = def; this.buildRot = 0;
     this.ghost = Models.ghost(def, 0);
     this.game.scene.add(this.ghost);
-    this.game.gridHelper.visible = true;
+    this.game.gridHelper.visible = true; this.game.buildOutline.visible = true;
     this.clearSelection();
     this.updateGhost();
     this.game.ui.onBuildModeChanged();
@@ -6089,7 +6115,7 @@ class Controls {
     if (this.ghost) { this.game.scene.remove(this.ghost); this.ghost = null; }
     this.clearDragGhosts();
     this.buildDef = null; this.dragStart = null;
-    this.game.gridHelper.visible = false;
+    this.game.gridHelper.visible = false; this.game.buildOutline.visible = false;
     this.game.showRange(null);
     this.game.ui.onBuildModeChanged();
   }
@@ -7583,13 +7609,7 @@ class Game {
     this.sunDisc = Models.sunDisc(); this.sunDisc.position.copy(this.sunOffset).normalize().multiplyScalar(820); scene.add(this.sunDisc);
     this.decor = new THREE.Group(); scene.add(this.decor);
     this.buildDecor();
-    const gh = new THREE.GridHelper(DATA.BUILD_RANGE * 2 + 2, DATA.BUILD_RANGE + 1, 0x335533, 0x335533);
-    gh.material.transparent = true; gh.material.opacity = 0.35; gh.position.y = 0.04; gh.visible = false;
-    scene.add(gh); this.gridHelper = gh;
-    // buildable-area outline
-    const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.RingGeometry(DATA.BUILD_RANGE - 0.15, DATA.BUILD_RANGE + 0.15, 96)), new THREE.LineBasicMaterial({ color: 0x224422, transparent: true, opacity: 0.5 }));
-    outline.rotation.x = -Math.PI / 2; outline.position.y = 0.05; outline.visible = false;
-    scene.add(outline); this.buildOutline = outline;
+    this.buildAreaHelpers();
     // command marker
     this.marker = Models.ring(0.9, 0x50ff80); this.marker.visible = false; scene.add(this.marker); this.markerT = 0;
     // tower range indicator (selected tower, or a tower being placed): rebuilt to follow the terrain
@@ -7711,6 +7731,7 @@ class Game {
     this.world.applyToGrid(this.grid);
     this.world.buildScene(this.scene);
     this.scene.remove(this.decor); this.decor = new THREE.Group(); this.scene.add(this.decor); this.buildDecor();
+    this.buildAreaHelpers();
     this.worldSeed = seed;
   }
   tickRevives() {
@@ -7760,6 +7781,14 @@ class Game {
       p[k * 3] = x; p[k * 3 + 1] = y; p[k * 3 + 2] = z;
     }
     m.geometry.attributes.position.needsUpdate = true;
+  }
+  // the buildable circle, drawn on the terrain: rebuilt whenever the world changes
+  buildAreaHelpers() {
+    const wasVisible = this.gridHelper ? this.gridHelper.visible : false;
+    for (const o of [this.gridHelper, this.buildOutline]) if (o) { this.scene.remove(o); o.geometry.dispose(); o.material.dispose(); }
+    const hf = (x, z) => this.groundY(x, z);
+    this.gridHelper = Models.circleGrid(DATA.BUILD_RANGE, DATA.CELL, hf); this.gridHelper.visible = wasVisible; this.scene.add(this.gridHelper);
+    this.buildOutline = Models.circleOutline(DATA.BUILD_RANGE, hf); this.buildOutline.visible = wasVisible; this.scene.add(this.buildOutline);
   }
   savePref(k, v) { try { localStorage.setItem('crownhold_' + k, v); } catch (e) {} }
   loadPref(k) { try { return localStorage.getItem('crownhold_' + k); } catch (e) { return null; } }
@@ -8642,6 +8671,20 @@ function runSelfTest(game, params) {
         game.buyUpgrade('walls');
         game.controls.setBuild('wall'); game.controls.cancelBuild();
       }
+    }
+    if (params.get('dragontest')) {
+      const sp = game.findSpawnSpot(0, 30);
+      const d = game.spawnUnit(DATA.units.tamedragon, 'player', sp.x, sp.z, { owner: 'host' });
+      game.controls.setSelection([d]); game.controls.enterControl(d);
+      game.controls.fpsYaw = Math.PI;   // facing +z? the breath follows the aim direction below
+      const foes = []; for (let k = 0; k < 4; k++) foes.push(game.spawnEnemy('brute', sp.x + (k - 1.5) * 1.2, sp.z + 6, { hpMul: 1 }));
+      const hp0 = foes.reduce((a, u) => a + u.hp, 0);
+      game.controls.fpsYaw = Math.atan2(foes[0].pos.x - d.pos.x, foes[0].pos.z - d.pos.z);
+      game.controls.attackHeld = true;
+      for (let k = 0; k < 120; k++) { game.controls.update(1 / 60, 1 / 60); game.update(1 / 60); }
+      const hp1 = foes.reduce((a, u) => a + (u.dead ? 0 : u.hp), 0);
+      say(`dragon: possessed=${d.possessed} breathing=${d.breathing > 0} heat=${(d.breathHeat || 0).toFixed(2)} foes hp ${Math.round(hp0)} -> ${Math.round(hp1)} (expect a big drop) viewWeapon=${!!game.controls.viewWeapon} (expect false)`);
+      game.controls.attackHeld = false; game.controls.exitControl();
     }
     if (params.get('missiontest')) {
       const king = game.king, keep = game.buildings.find(b => b.def.keep);

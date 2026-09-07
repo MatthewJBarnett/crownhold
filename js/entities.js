@@ -364,7 +364,7 @@ class Unit {
       // decide movement
       this.moveIntent.x = 0; this.moveIntent.z = 0;
       if (!this.possessed) this.aiUpdate(dt);
-      else this.possessedUpdate(dt);
+      else { this.possessedUpdate(dt); if (this.def.breath || this.def.medic || this.def.aura) this.updateSpecials(dt); }
       this.integrateMovement(dt);
       if (this.moving && !this.possessed) this.faceToward(this.pos.x + this.moveIntent.x, this.pos.z + this.moveIntent.z, dt, 14);
       if (this.moving) this.trackHeading(dt);

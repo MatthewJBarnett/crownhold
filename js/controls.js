@@ -620,7 +620,7 @@ class Controls {
     this.buildDef = def; this.buildRot = 0;
     this.ghost = Models.ghost(def, 0);
     this.game.scene.add(this.ghost);
-    this.game.gridHelper.visible = true;
+    this.game.gridHelper.visible = true; this.game.buildOutline.visible = true;
     this.clearSelection();
     this.updateGhost();
     this.game.ui.onBuildModeChanged();
@@ -629,7 +629,7 @@ class Controls {
     if (this.ghost) { this.game.scene.remove(this.ghost); this.ghost = null; }
     this.clearDragGhosts();
     this.buildDef = null; this.dragStart = null;
-    this.game.gridHelper.visible = false;
+    this.game.gridHelper.visible = false; this.game.buildOutline.visible = false;
     this.game.showRange(null);
     this.game.ui.onBuildModeChanged();
   }

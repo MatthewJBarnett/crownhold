@@ -176,6 +176,32 @@ const Models = {
     m.userData.isWater = true;
     return m;
   },
+  // the build area: a grid clipped to the circle and a ring, both draped over the terrain
+  circleGrid(R, step, heightFn) {
+    const pts = [];
+    const push = (x1, z1, x2, z2) => {
+      const len = Math.hypot(x2 - x1, z2 - z1), n = Math.max(1, Math.ceil(len / 4));
+      for (let k = 0; k < n; k++) {
+        const ax = x1 + (x2 - x1) * k / n, az = z1 + (z2 - z1) * k / n, bx = x1 + (x2 - x1) * (k + 1) / n, bz = z1 + (z2 - z1) * (k + 1) / n;
+        pts.push(ax, heightFn(ax, az) + 0.12, az, bx, heightFn(bx, bz) + 0.12, bz);
+      }
+    };
+    for (let v = -Math.floor(R / step) * step; v <= R; v += step) {
+      const half = Math.sqrt(Math.max(0, R * R - v * v));
+      if (half < 1) continue;
+      push(-half, v, half, v); push(v, -half, v, half);
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    const m = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x335533, transparent: true, opacity: 0.35, depthWrite: false }));
+    m.renderOrder = 2; return m;
+  },
+  circleOutline(R, heightFn, color = 0x8fe89f) {
+    const pts = [], N = 240;
+    for (let k = 0; k <= N; k++) { const a = k / N * Math.PI * 2, x = Math.cos(a) * R, z = Math.sin(a) * R; pts.push(x, heightFn(x, z) + 0.25, z); }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    const m = new THREE.Line(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false }));
+    m.renderOrder = 3; return m;
+  },
   missionObject(kind) {
     const g = new THREE.Group(), gold = this.mat(0xe8c060, { emissive: 0x604000, emissiveIntensity: 0.4 }), wood = this.mat(0x6a4a2a), stone = this.mat(0x7a7a72);
     switch (kind) {

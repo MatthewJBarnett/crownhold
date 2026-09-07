@@ -68,13 +68,7 @@ class Game {
     this.sunDisc = Models.sunDisc(); this.sunDisc.position.copy(this.sunOffset).normalize().multiplyScalar(820); scene.add(this.sunDisc);
     this.decor = new THREE.Group(); scene.add(this.decor);
     this.buildDecor();
-    const gh = new THREE.GridHelper(DATA.BUILD_RANGE * 2 + 2, DATA.BUILD_RANGE + 1, 0x335533, 0x335533);
-    gh.material.transparent = true; gh.material.opacity = 0.35; gh.position.y = 0.04; gh.visible = false;
-    scene.add(gh); this.gridHelper = gh;
-    // buildable-area outline
-    const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.RingGeometry(DATA.BUILD_RANGE - 0.15, DATA.BUILD_RANGE + 0.15, 96)), new THREE.LineBasicMaterial({ color: 0x224422, transparent: true, opacity: 0.5 }));
-    outline.rotation.x = -Math.PI / 2; outline.position.y = 0.05; outline.visible = false;
-    scene.add(outline); this.buildOutline = outline;
+    this.buildAreaHelpers();
     // command marker
     this.marker = Models.ring(0.9, 0x50ff80); this.marker.visible = false; scene.add(this.marker); this.markerT = 0;
     // tower range indicator (selected tower, or a tower being placed): rebuilt to follow the terrain
@@ -196,6 +190,7 @@ class Game {
     this.world.applyToGrid(this.grid);
     this.world.buildScene(this.scene);
     this.scene.remove(this.decor); this.decor = new THREE.Group(); this.scene.add(this.decor); this.buildDecor();
+    this.buildAreaHelpers();
     this.worldSeed = seed;
   }
   tickRevives() {
@@ -245,6 +240,14 @@ class Game {
       p[k * 3] = x; p[k * 3 + 1] = y; p[k * 3 + 2] = z;
     }
     m.geometry.attributes.position.needsUpdate = true;
+  }
+  // the buildable circle, drawn on the terrain: rebuilt whenever the world changes
+  buildAreaHelpers() {
+    const wasVisible = this.gridHelper ? this.gridHelper.visible : false;
+    for (const o of [this.gridHelper, this.buildOutline]) if (o) { this.scene.remove(o); o.geometry.dispose(); o.material.dispose(); }
+    const hf = (x, z) => this.groundY(x, z);
+    this.gridHelper = Models.circleGrid(DATA.BUILD_RANGE, DATA.CELL, hf); this.gridHelper.visible = wasVisible; this.scene.add(this.gridHelper);
+    this.buildOutline = Models.circleOutline(DATA.BUILD_RANGE, hf); this.buildOutline.visible = wasVisible; this.scene.add(this.buildOutline);
   }
   savePref(k, v) { try { localStorage.setItem('crownhold_' + k, v); } catch (e) {} }
   loadPref(k) { try { return localStorage.getItem('crownhold_' + k); } catch (e) { return null; } }
@@ -1127,6 +1130,20 @@ function runSelfTest(game, params) {
         game.buyUpgrade('walls');
         game.controls.setBuild('wall'); game.controls.cancelBuild();
       }
+    }
+    if (params.get('dragontest')) {
+      const sp = game.findSpawnSpot(0, 30);
+      const d = game.spawnUnit(DATA.units.tamedragon, 'player', sp.x, sp.z, { owner: 'host' });
+      game.controls.setSelection([d]); game.controls.enterControl(d);
+      game.controls.fpsYaw = Math.PI;   // facing +z? the breath follows the aim direction below
+      const foes = []; for (let k = 0; k < 4; k++) foes.push(game.spawnEnemy('brute', sp.x + (k - 1.5) * 1.2, sp.z + 6, { hpMul: 1 }));
+      const hp0 = foes.reduce((a, u) => a + u.hp, 0);
+      game.controls.fpsYaw = Math.atan2(foes[0].pos.x - d.pos.x, foes[0].pos.z - d.pos.z);
+      game.controls.attackHeld = true;
+      for (let k = 0; k < 120; k++) { game.controls.update(1 / 60, 1 / 60); game.update(1 / 60); }
+      const hp1 = foes.reduce((a, u) => a + (u.dead ? 0 : u.hp), 0);
+      say(`dragon: possessed=${d.possessed} breathing=${d.breathing > 0} heat=${(d.breathHeat || 0).toFixed(2)} foes hp ${Math.round(hp0)} -> ${Math.round(hp1)} (expect a big drop) viewWeapon=${!!game.controls.viewWeapon} (expect false)`);
+      game.controls.attackHeld = false; game.controls.exitControl();
     }
     if (params.get('missiontest')) {
       const king = game.king, keep = game.buildings.find(b => b.def.keep);
