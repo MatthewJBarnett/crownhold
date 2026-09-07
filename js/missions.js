@@ -65,15 +65,16 @@ class MissionManager {
     const m = this.active; if (!m) return;
     const g = new THREE.Group();
     g.add(Models.missionObject(m.def.model));
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.9, 40, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0xffe080, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
-    beam.position.y = 20; g.add(beam); g.userData.beam = beam;
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.0, 110, 12, 1, true), new THREE.MeshBasicMaterial({ color: 0xffe080, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+    beam.position.y = 55; g.add(beam); g.userData.beam = beam;
+    for (const [y, sc] of [[6, 10], [40, 16], [90, 22]]) { const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: Models.softDot(), color: 0xffe080, transparent: true, opacity: 0.6, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending })); halo.scale.setScalar(sc); halo.position.y = y; halo.renderOrder = 9; g.add(halo); }
     const ring = Models.ring(3.2, 0xffe080, 0.7); ring.position.y = 0.08; g.add(ring); g.userData.ring = ring;
     g.position.set(m.x, this.game.groundY(m.x, m.z), m.z);
     this.game.scene.add(g); this.marker = g;
   }
   update(dt) {
     const m = this.active, game = this.game;
-    if (this.marker) { this.marker.userData.ring.scale.setScalar(1 + 0.15 * Math.sin(game.time * 3)); this.marker.rotation.y += dt * 0.6; this.marker.userData.beam.material.opacity = 0.16 + 0.08 * Math.sin(game.time * 2.2); }
+    if (this.marker) { this.marker.userData.ring.scale.setScalar(1 + 0.15 * Math.sin(game.time * 3)); this.marker.rotation.y += dt * 0.6; this.marker.userData.beam.material.opacity = 0.26 + 0.12 * Math.sin(game.time * 2.2); }
     if (!m || game.replica) return;
     const king = game.king; if (!king || king.dead) return;
     if (m.def.type === 'fetch' && m.carried) {

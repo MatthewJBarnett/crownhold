@@ -429,7 +429,7 @@ Unit.prototype.updateSpecials = function (dt) {
       const dx = b.pos.x - this.pos.x, dz = b.pos.z - this.pos.z; const d = Math.hypot(dx, dz) || 1;
       if ((dx * fx + dz * fz) / d > 0.75) b.takeDamage(def.breath.dps * 1.5 * dt, this);
     }
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 2; k++) {
       const sp = U.rand(8, 16), spread = U.rand(-0.35, 0.35);
       const vx = Math.sin(this.yaw + spread) * sp, vz = Math.cos(this.yaw + spread) * sp;
       game.effects.spawn('flame', this.pos.x + fx * 3.5, this.pos.y + 1.5, this.pos.z + fz * 3.5, { vel: new THREE.Vector3(vx, U.rand(-3, 0), vz) });

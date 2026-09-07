@@ -1155,6 +1155,12 @@ function runSelfTest(game, params) {
       for (let k = 0; k < 120; k++) { game.controls.update(1 / 60, 1 / 60); game.update(1 / 60); }
       const hp1 = foes.reduce((a, u) => a + (u.dead ? 0 : u.hp), 0);
       say(`dragon: possessed=${d.possessed} breathing=${d.breathing > 0} heat=${(d.breathHeat || 0).toFixed(2)} foes hp ${Math.round(hp0)} -> ${Math.round(hp1)} (expect a big drop) viewWeapon=${!!game.controls.viewWeapon} (expect false)`);
+      { const aim = game.controls.aimDir(); const flames = game.effects.list.filter(e => e.sprite && e.vel); let sx = 0, sz = 0; for (const f of flames) { sx += f.vel.x; sz += f.vel.z; } const fl = Math.hypot(sx, sz) || 1; const dotv = (sx / fl) * aim.x + (sz / fl) * aim.z; say(`dragon: aim=(${aim.x.toFixed(2)},${aim.z.toFixed(2)}) yaw=${d.yaw.toFixed(2)} fpsYaw=${game.controls.fpsYaw.toFixed(2)} flames=${flames.length} flameDir.aim=${dotv.toFixed(2)} (expect ~1)`); }
+      // third person too
+      for (const e of game.effects.list) game.scene.remove(e.mesh); game.effects.list.length = 0;
+      game.controls.attackHeld = true; game.controls.firstPerson = false; game.controls.fpsYaw += 1.3;
+      for (let k = 0; k < 40; k++) { game.controls.update(1 / 60, 1 / 60); game.update(1 / 60); }
+      { const aim = game.controls.aimDir(); const flames = game.effects.list.filter(e => e.sprite && e.vel); let sx = 0, sz = 0; for (const f of flames) { sx += f.vel.x; sz += f.vel.z; } const fl = Math.hypot(sx, sz) || 1; const dotv = (sx / fl) * aim.x + (sz / fl) * aim.z; say(`dragon 3rd: aim=(${aim.x.toFixed(2)},${aim.z.toFixed(2)}) yaw=${d.yaw.toFixed(2)} flames=${flames.length} flameDir.aim=${dotv.toFixed(2)} (expect ~1)`); }
       game.controls.attackHeld = false; game.controls.exitControl();
     }
     if (params.get('missiontest')) {

@@ -557,7 +557,7 @@ class Controls {
       u.yaw = Math.atan2(fx, fz);
       u.breathing = Math.max(u.breathing || 0, 0.2);
       u.breathHeat += aim ? 0.25 : dt;
-      if (u.breathHeat > 3) { u.breathHeat = 0; u.breathCool = 2.5; game.ui.toast('The dragon draws breath', 'warn', 1500); }
+      if (u.breathHeat > 3) { u.breathHeat = 0; u.breathCool = 2.5; }
       if (!u.breathSfx || game.time > u.breathSfx) { SFX.play('breath'); u.breathSfx = game.time + 1.2; }
       return;
     }

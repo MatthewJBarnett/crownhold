@@ -248,6 +248,12 @@ class Unit {
     this.attackAnim = 1;
     const dmg = this.effDmg;
     const game = this.game;
+    if (def.breathOnly && def.breath) {
+      this.faceToward(target.pos.x, target.pos.z, 1, 100);
+      this.breathing = def.breath.dur;
+      SFX.play('breath');
+      return true;
+    }
     if (this.attackKind === 'melee') {
       if (def.cleave) {
         // hit everything in reach in a forward cone
@@ -1131,7 +1137,7 @@ class Effects {
   }
   spawn(type, x, y, z, o = {}) {
     if (this.game.netHost) this.game.netHost.fx(type, x, y, z, o);
-    if (this.list.length > 220) return;
+    if (this.list.length > 600) return;
     const scene = this.game.scene;
     if (type === 'ember' || type === 'flame') {
       // fire is a soft additive sprite that rises, flickers and fades, not a box
